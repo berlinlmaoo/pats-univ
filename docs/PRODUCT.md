@@ -224,6 +224,16 @@ Urutan menu di dashboard. Halaman 1–6 adalah bagian dari **fokus sistem absens
 | 11 | Pengaturan | Semua key §9 | 0–2 (key absensi) / Lanjut (key XP, roaming) |
 | 12 | Audit log | Aksi admin: bind/revoke kartu, manual check-in, approval, export | 0–2 (dasar) / Lanjut (lengkap) |
 
+### 5.4 Standar desain
+
+App dan dashboard harus **bersih, setara Notion/Linear, dan memakai bahasa visual yang sama dengan NEXUS** (produk owner yang sudah jalan):
+
+- Warna netral yang tenang, **satu warna aksen**, hierarki jelas (judul → isi → meta), jarak lega; tidak ada teks terpotong; ikon dari satu set yang konsisten.
+- Setiap layar punya **empty state** (kenapa kosong + langkah berikutnya + tombol), loading state, dan error state dengan aksi.
+- Format angka `3.800`, mata uang `Rp 6.000.000`, tanggal `14 Oct` (helper tunggal di `packages/shared`, lihat PLAN.md §6).
+- **Design token** (warna, skala tipografi, radius, spasi) didefinisikan **sekali** di `packages/shared` dan dipakai oleh app Expo maupun dashboard web; tidak ada nilai warna/spasi hardcode di komponen.
+- Sebelum layar pertama dibangun, tim menurunkan **`DESIGN.md`** untuk pats-univ (memakai ulang konvensi token NEXUS bila masuk akal), dan setiap layar diperiksa terhadap **checklist craft Impeccable** sebelum masuk `dev`.
+
 ---
 
 ## 6. Aturan
@@ -525,6 +535,7 @@ Prototype mencakup seluruh visi PRD, tetapi beberapa bagian dibangun pada **demo
 17. **Domain final: `patsuniv.znetworks.id`**. URL kartu `https://patsuniv.znetworks.id/c/<token>` permanen (tertulis di NTAG213), subdomain dipertahankan selamanya, redirect bila kelak ada domain khusus; AASA/assetlinks di domain ini. DNS + tunnel dipasang sesi server utama di akhir Phase 0. Menghapus keputusan D5 di PLAN.md. Lihat §10.7.
 18. **Cetak kartu = vendor eksternal, kartu NTAG213 kosong disuplai perusahaan, cetak dulu baru encode** (menutup T8). Dashboard mendapat halaman **Kartu**: antrean member tanpa kartu, pembuatan batch, unduh file cetak (PDF per member CR80 85,6 × 54 mm + bleed 3 mm, 300 dpi, depan + belakang, isi hanya nama, NIM, dan QR berisi token kartu di atas artwork — song & genre dan quotes tidak dicetak, hanya di profil digital; PDF batch; CSV manifest; render HTML/SVG → PDF). Status kartu: `NOT_PRINTED` → `IN_BATCH` → `SENT_TO_VENDOR` → `RECEIVED_HQ` → `ENCODED` → `DELIVERED` (+ `REVOKED`). Card Station mengidentifikasi member lewat scan QR cetakan (kamera Mac) atau ketik NIM sebelum tap + tulis NDEF + kunci + bind UID. Alasan: nama tercetak harus sama dengan chip; encode sebelum cetak berisiko tertukar di vendor. Masih TBD: file artwork dari tim (T8c) dan satu desain vs per kota (T8b). Memperbarui poin 3, 9, 11.
 19. **Login = email + kode OTP 6 digit lewat email (SMTP)** untuk saat ini — membatalkan poin 16. Registrasi: email wajib (identitas login), nomor WhatsApp tetap wajib (untuk grup WA kota, bukan login). `OTP_PROVIDER` tetap pluggable (§10.6): `email` dipakai sekarang, `demo` (kode di layar) untuk showcase, provider HP (`whatsapp-bridge`, `cloud-api`/Firebase) tercatat sebagai jalur pindah nanti. Dashboard super admin mendapat daftar halaman tetap (§5.3): Ringkasan, Member, Kartu, Kota & venue, Admin lokal, Event sebagai fokus Phase 0–2; Broadcast, Reward & XP, Roaming, Rekap traffic, Pengaturan, Audit log menyusul.
+20. **Standar desain** (§5.4): app + dashboard bersih setara Notion/Linear dengan bahasa visual NEXUS — netral tenang, satu aksen, hierarki jelas, spasi lega, tanpa teks terpotong, ikon konsisten, empty/error state wajib, angka `Rp 6.000.000` / `3.800`, tanggal `14 Oct`. Token desain sekali di `packages/shared` untuk Expo + web. Sebelum layar pertama: `DESIGN.md` pats-univ (konvensi token NEXUS) dan tiap layar dicek dengan checklist craft Impeccable.
 
 ### Sebelum 16 Oktober 2026
 

@@ -187,6 +187,7 @@ pats-univ/
 ├── docs/
 │   ├── PRODUCT.md
 │   ├── PLAN.md
+│   ├── DESIGN.md          # token, tipografi, pola komponen (diturunkan sebelum layar pertama)
 │   └── STATUS.md          # progres per fase (diisi saat build)
 ├── infra/
 │   ├── docker-compose.yml # web, realtime, postgres, minio
@@ -332,12 +333,13 @@ Perkiraan total **9–12 minggu** satu engineer; dua engineer (mobile + server) 
 2. **Branch**: `master` = rilis, `dev` = integrasi, branch fitur pendek (`feat/<nama>`) dihapus setelah merge. PR `dev → master` + tag saat rilis.
 3. **String UI dua bahasa** (EN/ID) sejak awal; tidak ada teks hardcode di komponen. Komentar kode dalam bahasa Inggris.
 4. **Paritas platform**: fitur member/admin harus ada di iOS dan Android di PR yang sama; fitur yang menyentuh HQ harus punya padanan di dashboard.
-5. **Polish setara Notion/Linear**: empty state (kenapa kosong + langkah berikutnya + tombol), loading state, error state dengan aksi, konfirmasi memakai dialog standar platform, tidak ada layar setengah jadi di `dev`.
+5. **Polish setara Notion/Linear, bahasa visual sama dengan NEXUS** (PRODUCT.md §5.4): netral tenang, satu warna aksen, hierarki jelas, spasi lega, tidak ada teks terpotong, ikon dari satu set; empty state (kenapa kosong + langkah berikutnya + tombol), loading state, error state dengan aksi, konfirmasi memakai dialog standar platform, tidak ada layar setengah jadi di `dev`.
 6. **Format angka**: ribuan dengan titik (`3.800`), mata uang `Rp 6.000.000` (spasi setelah Rp, tanpa desimal); tanggal `16 Okt 2026`, jam `19.30 WIB`. Helper tunggal di `packages/shared`.
 7. **Server sebagai sumber kebenaran**; klien tidak menghitung XP, hasil spin, atau expiry.
 8. **Setiap perubahan harus benar-benar jalan**: dicoba pada jalur yang dipakai pengguna (device fisik untuk NFC/push), bukan hanya lolos typecheck. QA per fase menjalankan skenario power-user, bukan hanya happy path.
 9. **Remote config**: aturan angka/teks baru masuk `Setting`, bukan konstanta.
 10. **Status**: `docs/STATUS.md` diperbarui tiap fase selesai; keputusan baru masuk changelog PRODUCT.md.
+11. **Design token & DESIGN.md**: warna, skala tipografi, radius, spasi didefinisikan sekali di `packages/shared` (`ui-tokens`) dan dipakai app Expo + dashboard web; tidak ada nilai hardcode di komponen. Sebelum layar pertama Phase 0 dibangun, tim menurunkan `docs/DESIGN.md` untuk pats-univ (pakai ulang konvensi token NEXUS bila masuk akal); setiap layar diperiksa terhadap checklist craft Impeccable sebelum merge ke `dev`.
 
 ---
 
