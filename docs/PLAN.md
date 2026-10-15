@@ -9,10 +9,10 @@ Tujuan plan ini: membangun prototype yang bisa didemokan end-to-end sesuai visi 
 Keputusan owner 16 Oktober 2026: **Phase 0–2 harus menghasilkan sistem absensi kartu yang jalan end-to-end** sebelum fitur lain disentuh:
 
 1. Registrasi web → NIM → akun.
-2. Kartu NFC: Card Station di Mac (tulis NDEF, kunci, bind UID) → cetak → kirim → konfirmasi serah terima oleh admin lokal.
+2. Kartu NFC: HQ antrean kartu → batch → file cetak (PDF + CSV) → **vendor cetak** di NTAG213 kosong milik perusahaan → kartu kembali ke HQ → Card Station di Mac (identifikasi via QR cetakan / NIM, tulis NDEF, kunci, bind UID) → kirim ke kota → konfirmasi serah terima oleh admin lokal.
 3. Kartu digital (QR berputar) sebagai fallback.
 4. Scan admin (NFC / QR app / manual) + check-in + riwayat kehadiran.
-5. Dasar super admin: kota, admin, member, event, card batch, settings.
+5. Dasar super admin: kota, admin, member, event, halaman Kartu (antrean, batch, file cetak), settings.
 
 XP/leaderboard/reward, laporan PR, social hub, reservasi, dan roaming **menyusul** di Phase 3–4. Tidak ada pekerjaan fase lanjut yang dimulai sebelum demo Phase 2 lolos.
 
@@ -106,7 +106,7 @@ sequenceDiagram
   participant DB as PostgreSQL
   A->>S: POST /api/admin/check-in {eventId, method:"NFC", ndefToken, nfcUid}
   S->>S: verifikasi tanda tangan token
-  S->>DB: cari Card ACTIVE by token, cocokkan nfcUid, cek event OPEN, cek kota admin
+  S->>DB: cari Card DELIVERED by token, cocokkan nfcUid, cek event OPEN, cek kota admin
   S->>DB: cek roaming jika beda kota
   S->>DB: insert CheckIn (unique eventId+memberId), insert XpLedger
   S-->>A: 200 {member, xpAwarded}
@@ -123,12 +123,15 @@ sequenceDiagram
   participant CS as Card Station (Mac)
   participant R as ACR122U
   participant S as API
-  O->>CS: pilih member dari batch
-  CS->>S: POST /api/hq/cards/prepare {memberId}
-  S-->>CS: {cardId, ndefUrl, pwd, pack}
-  O->>R: tempel NTAG213 kosong
+  O->>CS: scan QR kartu cetakan (kamera Mac) atau ketik NIM
+  CS->>S: POST /api/hq/cards/prepare {cardToken | nim}
+  S-->>CS: {cardId, member (nama, NIM), ndefUrl, status RECEIVED_HQ}
+  O->>CS: cocokkan nama/NIM di layar dengan cetakan → konfirmasi
+  O->>R: tempel kartu cetakan itu (chip masih kosong)
   CS->>R: GET UID (FF CA 00 00 00)
   CS->>R: cek tag kosong & belum terkunci
+  CS->>S: POST /api/hq/cards/{cardId}/key {nfcUid}
+  S-->>CS: {pwd, pack}
   CS->>R: tulis NDEF URL (halaman 4..n)
   CS->>R: tulis PWD (hal. 43), PACK (hal. 44), AUTH0 (hal. 41) = 0x03, ACCESS (hal. 42) PROT=0
   CS->>R: baca ulang NDEF, verifikasi
@@ -143,6 +146,7 @@ Catatan teknis:
 - **Domain final `patsuniv.znetworks.id`** dan URL `/c/<token>` **permanen**: tertulis di tag yang dikunci, jadi subdomain ini harus dipertahankan selamanya (redirect bila kelak pindah domain). Lihat PRODUCT.md §10.7.
 - `AUTH0 = 0x03` berarti halaman 3 ke atas butuh autentikasi untuk **tulis** (`PROT = 0` = hanya tulis yang diproteksi; baca tetap bebas agar HP member bisa membaca NDEF). `AUTHLIM` diset 0 (tanpa batas percobaan) untuk menghindari kartu terkunci permanen akibat salah proses.
 - PWD per kartu diturunkan server dari kunci rahasia + UID (HMAC, 4 byte) sehingga HQ bisa menghitung ulang untuk re-encode; tidak disimpan di DB.
+- **Cetak dulu, encode belakangan**: token kartu dibuat saat batch (isi QR cetakan) dan token yang sama ditulis ke NDEF saat encode, jadi QR cetakan adalah kunci identifikasi kartu fisik di Card Station. Server menolak encode bila status kartu bukan `RECEIVED_HQ` (atau re-encode yang disetujui) dan bila UID sudah terpakai kartu lain.
 - Bit `Capability Container` dan `static lock` **tidak** disentuh, supaya kartu salah encode masih bisa diperbaiki dengan PWD.
 
 ---
@@ -166,7 +170,7 @@ pats-univ/
 │   │   │   ├── (admin)/            # dashboard HQ
 │   │   │   └── api/                # route handlers
 │   │   ├── prisma/schema.prisma
-│   │   └── src/lib/       # auth, xp, checkin, nim, push, export
+│   │   └── src/lib/       # auth, otp, xp, checkin, nim, push, export, card-print (template HTML/SVG → PDF)
 │   └── realtime/          # Socket.IO server (chat, timeline, live attendance)
 ├── packages/
 │   ├── shared/            # tipe, enum, validator (zod), konstanta, format angka/tanggal
@@ -175,9 +179,10 @@ pats-univ/
 │   └── card-station/      # Mac + ACR122U: encode NTAG213 (Rust, crate pcsc)
 │       ├── Cargo.toml
 │       ├── src/
-│       │   ├── main.rs    # CLI: login, pilih batch, loop encode, re-encode, verify
+│       │   ├── main.rs    # CLI: login, pilih batch, identifikasi (scan QR / NIM), loop encode, re-encode, verify
 │       │   ├── ntag213.rs # APDU: read/write/pwd_auth, NDEF encode, lock
-│       │   └── api.rs     # klien API (prepare, encoded)
+│       │   ├── qr.rs      # baca QR cetakan via kamera Mac (AVFoundation) atau input manual NIM
+│       │   └── api.rs     # klien API (prepare, key, encoded)
 │       └── README.md      # setup PC/SC + ACR122U di macOS
 ├── docs/
 │   ├── PRODUCT.md
@@ -229,20 +234,20 @@ Setiap fase diakhiri **demo yang bisa diperlihatkan** dan `docs/STATUS.md` diper
 
 **Effort**: 6–8 hari.
 
-### Phase 2 — Kartu NFC, card batch, push
+### Phase 2 — Kartu NFC, antrean & file cetak, push
 
 **Isi**
 
-- **Card Station** (`tools/card-station`, Rust + `pcsc`, Mac + ACR122U): login super admin → pilih batch → per kartu: tempel NTAG213 kosong → baca UID → tulis NDEF URL `https://patsuniv.znetworks.id/c/<token>` → set PWD/PACK + AUTH0 (kunci tulis) → verifikasi baca ulang → lapor `ENCODED` ke server. Mode re-encode untuk kartu salah/pengganti (PWD dihitung ulang dari UID). Lihat §2.2.
+- **Card Station** (`tools/card-station`, Rust + `pcsc`, Mac + ACR122U), dipakai saat kartu cetakan kembali dari vendor (`RECEIVED_HQ`): login super admin → pilih batch → per kartu: **identifikasi member dengan scan QR cetakan (kamera Mac) atau ketik NIM** → cocokkan nama di layar dengan cetakan → tempel kartu cetakan (chip kosong) → baca UID → tulis NDEF URL `https://patsuniv.znetworks.id/c/<token>` → set PWD/PACK + AUTH0 (kunci tulis) → verifikasi baca ulang → lapor `ENCODED` ke server. Mode re-encode untuk kartu salah/pengganti (PWD dihitung ulang dari UID). Lihat §2.2.
 - Endpoint `/api/hq/cards/prepare` dan `/api/hq/cards/{id}/encoded`; `/c/<token>` di web: jika app terpasang → universal link ke profil, jika tidak → halaman profil ringkas + link download.
-- NFC di app admin (`react-native-nfc-manager`): baca NDEF + UID dalam satu sesi; alur **Serah terima kartu** (tap → server cocokkan token+UID → `ACTIVE`, tanpa pilih member), **Lapor hilang** (`REVOKED`).
+- NFC di app admin (`react-native-nfc-manager`): baca NDEF + UID dalam satu sesi; alur **Serah terima kartu** (tap → server cocokkan token+UID → `DELIVERED`, tanpa pilih member), **Lapor hilang** (`REVOKED`).
 - `CheckIn` metode `NFC` dengan verifikasi token + UID; urutan fallback NFC → APP_QR → MANUAL tampil di UI admin.
 - Deep link `/c/<token>` di app member (universal link iOS + app link Android; AASA `/.well-known/apple-app-site-association` dan `/.well-known/assetlinks.json` disajikan dari `patsuniv.znetworks.id`): tap kartu sendiri di iPhone XS+ membuka profil.
-- Dashboard HQ: **Card batch** (pilih member `NOT_PRINTED` per kota → batch → progres encode → export CSV/XLSX file cetak dengan URL QR per kartu → `PRINTED` → `SHIPPED`), daftar kartu belum `ACTIVE`.
+- Dashboard HQ: halaman **Kartu** — antrean member tanpa kartu (`NOT_PRINTED`) per kota → buat batch (server membuat `Card` + token → `IN_BATCH`) → **unduh file cetak**: PDF per member (CR80 85,6 × 54 mm + bleed 3 mm, 300 dpi, depan + belakang: hanya nama, NIM, QR `https://patsuniv.znetworks.id/c/<token>` + artwork; song & genre dan quotes tidak dicetak), PDF gabungan batch, CSV manifest vendor; render template HTML/SVG → PDF di server (Chromium headless), hasil disimpan ke object storage → tandai `SENT_TO_VENDOR` → `RECEIVED_HQ` → progres encode → `SHIPPED_TO_CITY`; daftar kartu belum `DELIVERED`. Artwork dari tim (T8c) masuk sebagai template; sebelum ada, placeholder desain.
 - Push: registrasi device, Expo Push, pusat notifikasi, pengaturan kategori; cron reminder H-3/H-1/H dan follow-up 12.00 (terima kasih / FOMO); copy per kota dari `City.notificationCopy`; broadcast event dari dashboard (flyer + push).
 - Audit metode check-in di dashboard (persentase NFC / APP_QR / MANUAL per event).
 
-**Demo**: HQ membuat batch; di Mac, Card Station meng-encode kartu NTAG213 (tulis + kunci) → status `ENCODED`; mencoba menulis ulang kartu dengan app NFC umum → gagal; HQ ekspor file cetak; admin menerima kartu, tap saat serah terima → `ACTIVE`; di event, tap kartu → check-in `NFC`; kartu dilaporkan hilang → revoke, token+UID lama ditolak; member tap kartunya sendiri di iPhone → profil terbuka; push reminder dan FOMO sampai ke HP demo.
+**Demo**: HQ membuat batch dari antrean dan mengunduh PDF per member + PDF batch + CSV manifest (dicek ukuran CR80 + bleed); batch ditandai `SENT_TO_VENDOR` → `RECEIVED_HQ` (untuk demo: cetak stiker/label dengan QR di NTAG213 kosong); di Mac, Card Station memindai QR cetakan → nama & NIM tampil → tap kartu → tulis + kunci → `ENCODED`; scan QR kartu lain lalu tap kartu yang salah → ditolak; mencoba menulis ulang kartu dengan app NFC umum → gagal; admin menerima kartu, tap saat serah terima → `DELIVERED`; di event, tap kartu → check-in `NFC`; kartu dilaporkan hilang → revoke, token+UID lama ditolak; member tap kartunya sendiri di iPhone → profil terbuka; push reminder dan FOMO sampai ke HP demo.
 
 **Effort**: 9–11 hari (termasuk Card Station ±2–3 hari). Hardware sudah ada: NTAG213 PVC + ACR122U; perlu iPhone + Android fisik untuk uji.
 
@@ -302,7 +307,8 @@ Perkiraan total **9–12 minggu** satu engineer; dua engineer (mobile + server) 
 | Risiko | Dampak | Mitigasi |
 |---|---|---|
 | Core NFC iOS hanya membaca saat sesi aktif dan butuh entitlement; perilaku beda per model iPhone | Bind/scan tidak jalan di demo | Uji di device fisik sejak awal Phase 2; fallback APP_QR selalu tersedia |
-| Cetak per orang di PVC belum diputuskan (printer in-house vs vendor) | Kartu ter-encode tapi belum bisa dibagikan | Encode dulu, cetak menyusul; untuk demo cukup label/stiker; keputusan T8 sebelum Phase 2 selesai |
+| Vendor salah memasangkan file cetak dengan kartu, atau kartu tertukar saat kembali ke HQ | Nama tercetak tidak cocok dengan chip | Cetak dulu, encode belakangan: Card Station mengidentifikasi kartu dari QR cetakan dan operator mencocokkan nama sebelum tulis; token di QR = token di NDEF |
+| File cetak tidak sesuai spek vendor (ukuran, bleed, resolusi, warna) | Batch ditolak / dicetak ulang | Template CR80 + bleed 3 mm, 300 dpi, uji 1 proof dari vendor sebelum batch pertama; artwork final dari tim (T8c) |
 | ACR122U di macOS: driver PC/SC bawaan kadang bentrok dengan `ifdhandler` ACS; reader mode "escape" perlu plist | Card Station tidak melihat reader | Dokumentasi setup di `tools/card-station/README.md`; uji di Mac HQ sejak awal Phase 2 |
 | Salah urutan kunci NTAG213 (AUTH0/PWD) bisa mengunci kartu permanen | Kartu terbuang | Verifikasi tulis sebelum set AUTH0; AUTHLIM = 0; jangan sentuh static lock; uji di 5 kartu pertama |
 | Token + UID masih bisa diemulasi dengan magic card | Check-in palsu | Diterima (admin melihat orangnya); jalur upgrade ke NTAG 424 DNA (SUN) |
@@ -341,5 +347,5 @@ Perkiraan total **9–12 minggu** satu engineer; dua engineer (mobile + server) 
 | D1 | ~~Konfirmasi stack~~ — sudah final (§1) | — |
 | D2 | Daftar kota awal + kode 3 huruf (untuk NIM dan seed) | Tim |
 | D3 | Akun Apple Developer & Google Play untuk EAS Build (TestFlight + APK) | Owner |
-| D4 | Cara cetak per orang di kartu PVC (printer in-house Evolis/Zebra vs vendor) dan desain satu vs per kota — hardware NFC (NTAG213 + ACR122U) sudah ada | Owner |
+| D4 | ~~Cara cetak per orang di kartu PVC~~ — sudah final: vendor cetak eksternal, NTAG213 kosong disuplai perusahaan, cetak dulu lalu encode di HQ (PRODUCT.md §4.1). Masih dari tim: file artwork kartu (T8c) dan satu desain vs per kota (T8b) — tidak memblokir Phase 0 | Tim |
 | D5 | ~~Domain untuk web registrasi, dashboard, dan URL kartu~~ — sudah final: **`patsuniv.znetworks.id`** (PRODUCT.md §10.7); DNS + tunnel dipasang sesi server utama di akhir Phase 0 | — |
