@@ -33,7 +33,7 @@ XP/leaderboard/reward, laporan PR, social hub, reservasi, dan roaming **menyusul
 | Anti-screenshot | `expo-screen-capture` | `FLAG_SECURE` Android; deteksi di iOS |
 | Backend + super admin dashboard | **Next.js (App Router) + Prisma + PostgreSQL** | Pola yang sama dengan NEXUS milik owner; satu deploy untuk API + dashboard |
 | Leaderboard | Query agregat `XpLedger` + snapshot per jam | Tanpa layanan tambahan |
-| Auth | **Nomor HP + OTP** buatan sendiri (tabel `OtpCode`), JWT access + refresh token. Pengirim OTP pluggable lewat `OTP_PROVIDER` = `demo` (OTP di layar) / `whatsapp-bridge` (Baileys, tidak resmi) / `cloud-api` (WhatsApp Cloud API resmi + SMS fallback) — lihat PRODUCT.md §10.6 | Tanpa vendor untuk showcase; jalur produksi tinggal ganti provider |
+| Auth | **Email + kode OTP 6 digit** buatan sendiri (tabel `OtpCode`), JWT access + refresh token. Pengirim OTP pluggable lewat `OTP_PROVIDER` = `email` (SMTP, dipakai sekarang) / `demo` (OTP di layar) / nanti `whatsapp-bridge` (Baileys, tidak resmi) / `cloud-api` (WhatsApp Cloud API resmi + SMS fallback) — lihat PRODUCT.md §10.6 | Tanpa vendor; pindah ke OTP HP tinggal ganti provider |
 | Realtime chat | **Socket.IO** (server terpisah kecil di repo yang sama) | Lihat §1.1 |
 | File / media | **S3-compatible object storage** (MinIO di VM, atau bucket S3) | Presigned upload dari app; URL privat |
 | Job terjadwal | Cron di server (endpoint `/api/cron/*` dipanggil systemd timer) | Reminder H-3/H-1/H, follow-up 12.00, expiry roaming/redeem |
@@ -209,13 +209,13 @@ Setiap fase diakhiri **demo yang bisa diperlihatkan** dan `docs/STATUS.md` diper
 
 - Monorepo, Docker Compose (postgres, minio, web, realtime kosong), CI lint + typecheck.
 - Schema Prisma lengkap untuk seluruh entitas §7 PRODUCT.md (migrasi awal), seed: 3 kota, 1 super admin, 2 local admin, 20 member, 2 venue, 3 event.
-- Auth: **nomor HP + OTP**, JWT access/refresh, role dari `User`; middleware role & kota. Modul `OtpSender` dengan provider dipilih lewat env `OTP_PROVIDER`; Phase 0 cukup `demo` (OTP tampil di layar / respons API). Provider `whatsapp-bridge` (Baileys, nomor khusus, rate limit, fallback layar) menyusul saat uji HP sungguhan; `cloud-api` untuk produksi (PRODUCT.md §10.6).
-- **Web registrasi** `/join`: form (nama, DOB, kota, song & genre, quotes, **nomor HP/WA wajib**, email opsional), verifikasi nomor lewat OTP, cek `minAge`, generate NIM, halaman sukses dengan link grup WA + link download app, pesan konfirmasi ke nomor HP lewat OTP provider (email bila diisi).
+- Auth: **email + kode OTP 6 digit**, JWT access/refresh, role dari `User` (email unik = identitas login; phone wajib untuk grup WA); middleware role & kota. Modul `OtpSender` dengan provider dipilih lewat env `OTP_PROVIDER`: `email` (SMTP, env `SMTP_*`, template EN/ID) dipakai sekarang, `demo` (OTP tampil di layar / respons API) untuk showcase. Provider HP (`whatsapp-bridge`, `cloud-api`/Firebase) hanya disiapkan sebagai antarmuka, tidak dibangun di Phase 0 (PRODUCT.md §10.6).
+- **Web registrasi** `/join`: form (nama, DOB, kota, song & genre, quotes, **email wajib** (login), **nomor WA wajib** (grup kota)), verifikasi email lewat OTP, cek `minAge`, generate NIM, halaman sukses dengan link grup WA + link download app, email konfirmasi (SMTP yang sama dengan OTP).
 - **Akhir Phase 0**: DNS `patsuniv.znetworks.id` + tunnel ke VM dipasang oleh sesi server utama owner (di luar estimasi engineer); sejak itu `/join` dan dashboard tersaji di domain final.
 - Dashboard HQ: login, layout, halaman Kota, Admin, Member (list + detail), Settings (semua key §9).
-- App: shell Expo, login OTP, routing berdasarkan role, i18n EN/ID, tab bar member dan menu admin kosong.
+- App: shell Expo, login email + OTP, routing berdasarkan role, i18n EN/ID, tab bar member dan menu admin kosong.
 
-**Demo**: scan QR → daftar di web dengan nomor HP (OTP tampil di layar, mode `demo`) → NIM muncul → login di app dengan nomor itu → profil tampil; HQ melihat member baru di dashboard dan mengubah `minAge`.
+**Demo**: scan QR → daftar di web dengan email + nomor WA (OTP masuk ke email; di showcase mode `demo` menampilkannya di layar) → NIM muncul → login di app dengan email itu → profil tampil; HQ melihat member baru di dashboard dan mengubah `minAge`.
 
 **Effort**: 6–8 hari.
 
@@ -314,7 +314,8 @@ Perkiraan total **9–12 minggu** satu engineer; dua engineer (mobile + server) 
 | Token + UID masih bisa diemulasi dengan magic card | Check-in palsu | Diterima (admin melihat orangnya); jalur upgrade ke NTAG 424 DNA (SUN) |
 | QR app discreenshot | Check-in palsu | TTL 30–60 detik + nonce sekali pakai |
 | Push tidak sampai (APNs key, FCM config, token kadaluarsa) | Reminder & FOMO gagal | Checklist konfigurasi EAS; log pengiriman per `Notification`; retry |
-| OTP provider `whatsapp-bridge` tidak resmi (Baileys): nomor bisa diblokir Meta, sesi bisa putus (terjadi di setup Hermes owner, Jul 2026) | OTP tidak sampai, login macet | Nomor WA khusus; rate limit; fallback OTP di layar selalu aktif; hanya untuk uji internal; produksi pakai Cloud API resmi + SMS, verifikasi Meta Business dimulai sejak awal (T17) |
+| OTP email masuk spam / terlambat (SMTP) | Login member tertunda | Domain pengirim dengan SPF/DKIM, kirim ulang dengan jeda, `demo` untuk showcase |
+| Bila kelak pindah ke OTP HP: `whatsapp-bridge` tidak resmi (Baileys), nomor bisa diblokir Meta, sesi bisa putus (terjadi di setup Hermes owner, Jul 2026) | OTP tidak sampai, login macet | Nomor WA khusus; rate limit; fallback OTP di layar selalu aktif; hanya untuk uji internal; produksi pakai Cloud API resmi + SMS, verifikasi Meta Business dimulai jauh sebelumnya (T17) |
 | Chat realtime pada demo depth | Lag/putus saat demo | Satu channel per kota, batas media, reconnect otomatis di client |
 | Anti-screenshot iOS tidak bisa dipaksa | Ekspektasi tim berbeda | Ditulis eksplisit di PRODUCT.md §10.4; tampilkan deteksi di demo |
 | XP/reward/bonus PR/periode leaderboard berubah setelah coding | Rework | Semua angka sebagai setting; UI membaca setting, tidak hardcode; bonus PR disiapkan dua jalur (XP dan CASH) |
