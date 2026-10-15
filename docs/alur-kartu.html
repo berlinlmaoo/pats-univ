@@ -1,0 +1,422 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Alur Kartu Member (KTM) — PATS University</title>
+<style>
+  @page { size: A4; margin: 16mm 16mm 18mm 16mm; }
+  :root {
+    --navy: #14213d;
+    --navy-2: #1f2f55;
+    --ink: #1c2130;
+    --body: #4b5563;
+    --muted: #7b8494;
+    --line: #dde2ea;
+    --bg-soft: #f4f6f9;
+    --accent: #c9a227;
+    --pill-grey-bg: #eceff3; --pill-grey-fg: #4b5563;
+    --pill-blue-bg: #e3ebf8; --pill-blue-fg: #1f3f7a;
+    --pill-amber-bg: #fdf1d6; --pill-amber-fg: #8a5b00;
+    --pill-green-bg: #ddf3e4; --pill-green-fg: #1c6b3a;
+    --pill-red-bg: #fbe1e1; --pill-red-fg: #9a2626;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Helvetica Neue", Helvetica, Arial, "Liberation Sans", sans-serif;
+    color: var(--body);
+    font-size: 10.5pt;
+    line-height: 1.5;
+    background: #fff;
+  }
+  h1, h2, h3 { color: var(--ink); margin: 0; }
+  p { margin: 0 0 8px; }
+  strong { color: var(--ink); font-weight: 600; }
+  code {
+    font-family: "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    font-size: 9pt; color: var(--ink);
+    background: var(--bg-soft); padding: 1px 5px; border-radius: 3px;
+  }
+  ul { margin: 0 0 8px; padding-left: 18px; }
+  li { margin-bottom: 4px; }
+  li::marker { color: var(--muted); }
+
+  .page { page-break-after: always; break-after: page; }
+  .page:last-child { page-break-after: auto; break-after: auto; }
+
+  /* Cover / title */
+  .cover {
+    border-bottom: 3px solid var(--navy);
+    padding-bottom: 14px; margin-bottom: 22px;
+  }
+  .cover .kicker {
+    font-size: 8.5pt; letter-spacing: .18em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 6px;
+  }
+  .cover h1 { font-size: 22pt; line-height: 1.2; letter-spacing: -.01em; }
+  .cover .sub { color: var(--muted); font-size: 9.5pt; margin-top: 8px; }
+
+  /* Section header bar */
+  .bar {
+    background: var(--navy); color: #fff;
+    padding: 8px 14px; border-radius: 4px;
+    display: flex; align-items: baseline; gap: 12px;
+    margin: 0 0 14px;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .bar .num {
+    font-size: 8.5pt; letter-spacing: .14em; text-transform: uppercase;
+    color: #c9d3ea; font-weight: 600;
+  }
+  .bar h2 { color: #fff; font-size: 13.5pt; font-weight: 600; letter-spacing: -.005em; }
+  .section + .section { margin-top: 22px; }
+
+  /* Two-column facts */
+  .facts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 18px; }
+  .fact {
+    border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px;
+    background: #fff; break-inside: avoid;
+  }
+  .fact h3 { font-size: 9pt; text-transform: uppercase; letter-spacing: .1em; color: var(--navy); margin-bottom: 5px; }
+  .fact p:last-child { margin-bottom: 0; }
+
+  /* Flow steps */
+  .flow { display: flex; flex-direction: column; align-items: stretch; }
+  .step {
+    border: 1px solid var(--line); border-left: 4px solid var(--navy);
+    border-radius: 6px; padding: 9px 12px 9px 12px;
+    display: grid; grid-template-columns: 26px 1fr auto; gap: 10px; align-items: start;
+    background: #fff; break-inside: avoid;
+  }
+  .step .n {
+    width: 22px; height: 22px; border-radius: 50%;
+    background: var(--navy); color: #fff; font-weight: 700; font-size: 9.5pt;
+    display: flex; align-items: center; justify-content: center; margin-top: 1px;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .step .t { font-size: 10.5pt; }
+  .step .t .title { color: var(--ink); font-weight: 600; }
+  .step .t .desc { color: var(--body); margin-top: 1px; }
+  .step .t .note { color: var(--muted); font-size: 9.2pt; margin-top: 3px; }
+  .step .pillcol { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; padding-top: 1px; }
+  .arrow {
+    height: 18px; display: flex; justify-content: center; align-items: center; position: relative;
+  }
+  .arrow::before {
+    content: ""; position: absolute; top: 0; bottom: 6px; left: 50%; width: 2px; margin-left: -1px;
+    background: var(--line);
+  }
+  .arrow::after {
+    content: ""; position: absolute; bottom: 1px; left: 50%; margin-left: -5px;
+    border-left: 5px solid transparent; border-right: 5px solid transparent;
+    border-top: 6px solid #a9b2c2;
+  }
+  .flow-note {
+    margin-top: 12px; padding: 9px 12px; background: var(--bg-soft); border-radius: 6px;
+    font-size: 9.5pt; color: var(--body); break-inside: avoid;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .flow-note strong { color: var(--navy); }
+
+  /* Branch: valid / invalid */
+  .branch { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .branch .step { border-left-width: 4px; grid-template-columns: 1fr; }
+  .branch .ok { border-left-color: #1c6b3a; }
+  .branch .bad { border-left-color: #9a2626; }
+  .branch-arrows { display: grid; grid-template-columns: 1fr 1fr; }
+
+  /* Pills */
+  .pill {
+    display: inline-block; white-space: nowrap;
+    font-size: 8.2pt; font-weight: 600; letter-spacing: .02em;
+    padding: 2px 9px; border-radius: 999px; line-height: 1.5;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .pill.grey  { background: var(--pill-grey-bg);  color: var(--pill-grey-fg); }
+  .pill.blue  { background: var(--pill-blue-bg);  color: var(--pill-blue-fg); }
+  .pill.amber { background: var(--pill-amber-bg); color: var(--pill-amber-fg); }
+  .pill.green { background: var(--pill-green-bg); color: var(--pill-green-fg); }
+  .pill.red   { background: var(--pill-red-bg);   color: var(--pill-red-fg); }
+  .pill.navy  { background: var(--navy); color: #fff; }
+
+  /* Tables */
+  table { width: 100%; border-collapse: collapse; font-size: 10pt; }
+  th, td { text-align: left; vertical-align: top; padding: 6px 10px; border-bottom: 1px solid var(--line); }
+  th {
+    font-size: 8.5pt; text-transform: uppercase; letter-spacing: .1em; color: var(--muted);
+    font-weight: 600; border-bottom: 2px solid var(--navy); background: #fff;
+  }
+  tr { break-inside: avoid; }
+  td.k { color: var(--ink); font-weight: 600; white-space: nowrap; }
+  td .sub { color: var(--muted); font-size: 9pt; display: block; margin-top: 1px; }
+
+  /* Open decisions */
+  .open { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+  .open .item {
+    border: 1px dashed #b7bfcc; border-radius: 6px; padding: 10px 12px;
+    display: flex; flex-direction: column; gap: 6px; align-items: flex-start; break-inside: avoid;
+  }
+  .open .item p { margin: 0; font-size: 9.5pt; }
+  .open .item h3 { font-size: 10.5pt; font-weight: 600; margin-bottom: 2px; }
+
+  .foot { margin-top: 10px; color: var(--muted); font-size: 8.5pt; border-top: 1px solid var(--line); padding-top: 8px; }
+</style>
+</head>
+<body>
+
+<!-- ===================== HALAMAN 1 ===================== -->
+<div class="page">
+  <div class="cover">
+    <div class="kicker">PATS University · Briefing produk</div>
+    <h1>Alur Kartu Member (KTM) — PATS University</h1>
+    <div class="sub">Ringkasan alur kartu fisik dan kartu digital: dari pendaftaran, pencetakan, encode chip, sampai check-in di event. Versi 16 Oktober 2026.</div>
+  </div>
+
+  <div class="section">
+    <div class="bar"><span class="num">Bagian 1</span><h2>Ringkasan</h2></div>
+
+    <div class="facts">
+      <div class="fact">
+        <h3>Kartu fisik</h3>
+        <p>PVC <strong>NTAG213</strong> (NFC). Dicetak oleh <strong>vendor</strong> memakai kartu kosong yang disediakan perusahaan. Chip diisi dan dikunci di HQ lewat <strong>Card Station</strong> (Mac + reader ACR122U).</p>
+        <p>Admin lokal memakai HP-nya sendiri sebagai reader NFC/kamera; tidak ada alat tambahan di kota.</p>
+      </div>
+      <div class="fact">
+        <h3>Yang tercetak di kartu</h3>
+        <p><strong>Nama, NIM, QR, desain kartu.</strong></p>
+        <p>Lagu favorit, genre, dan quotes hanya tampil di profil digital, tidak dicetak.</p>
+      </div>
+      <div class="fact">
+        <h3>Isi chip</h3>
+        <p>Tautan <code>https://patsuniv.znetworks.id/c/&lt;token&gt;</code> yang ditandatangani server. Chip <strong>dikunci</strong> setelah ditulis (tidak bisa ditulis ulang).</p>
+        <p>URL ini permanen untuk kartu tersebut.</p>
+      </div>
+      <div class="fact">
+        <h3>Kartu digital</h3>
+        <p>Sebelum kartu fisik diterima, member memakai <strong>kartu digital</strong> di app (QR berputar tiap 30–60 detik).</p>
+        <p>Setelah kartu fisik diterima, kartu digital jadi cadangan: HP mati → pakai kartu; kartu tertinggal → pakai app.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== HALAMAN 2 ===================== -->
+<div class="page">
+  <div class="section">
+    <div class="bar"><span class="num">Bagian 2</span><h2>Alur dari daftar sampai kartu di tangan</h2></div>
+
+    <div class="flow">
+      <div class="step">
+        <div class="n">1</div>
+        <div class="t">
+          <div class="title">Member daftar lewat web</div>
+          <div class="desc">Scan QR di venue atau buka link → NIM dibuat otomatis → diarahkan ke grup WA kota. Kartu digital langsung aktif.</div>
+        </div>
+        <div class="pillcol"><span class="pill grey">Belum punya kartu</span></div>
+      </div>
+      <div class="arrow"></div>
+
+      <div class="step">
+        <div class="n">2</div>
+        <div class="t">
+          <div class="title">Antrean kartu di dashboard super admin</div>
+          <div class="desc">Pilih member / buat batch → <strong>download file cetak</strong>: PDF per member (ukuran CR80 85,6 × 54 mm + bleed, 300 dpi, depan-belakang: nama, NIM, QR) + PDF batch + CSV daftar.</div>
+        </div>
+        <div class="pillcol"><span class="pill blue">Dalam batch</span></div>
+      </div>
+      <div class="arrow"></div>
+
+      <div class="step">
+        <div class="n">3</div>
+        <div class="t">
+          <div class="title">Kirim ke vendor</div>
+          <div class="desc">Kartu kosong NTAG213 + file cetak dikirim ke vendor.</div>
+        </div>
+        <div class="pillcol"><span class="pill amber">Dikirim ke vendor</span></div>
+      </div>
+      <div class="arrow"></div>
+
+      <div class="step">
+        <div class="n">4</div>
+        <div class="t">
+          <div class="title">Vendor mencetak</div>
+          <div class="desc">Kartu yang sudah tercetak kembali ke HQ.</div>
+        </div>
+        <div class="pillcol"><span class="pill amber">Diterima HQ</span></div>
+      </div>
+      <div class="arrow"></div>
+
+      <div class="step">
+        <div class="n">5</div>
+        <div class="t">
+          <div class="title">Card Station di HQ</div>
+          <div class="desc">Scan QR tercetak dengan kamera Mac (atau ketik NIM) → tap kartu ke ACR122U → tulis tautan + token, kunci chip, catat UID ke member.</div>
+          <div class="note">Cetak dulu, baru encode: nama yang tercetak pasti cocok dengan isi chip.</div>
+        </div>
+        <div class="pillcol"><span class="pill blue">Ter-encode</span></div>
+      </div>
+      <div class="arrow"></div>
+
+      <div class="step">
+        <div class="n">6</div>
+        <div class="t">
+          <div class="title">Kirim ke kota</div>
+          <div class="desc">Admin lokal <strong>tap kartu saat serah terima</strong> ke member.</div>
+        </div>
+        <div class="pillcol"><span class="pill green">Diterima member</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== HALAMAN 3 ===================== -->
+<div class="page">
+  <div class="section">
+    <div class="bar"><span class="num">Bagian 3</span><h2>Alur check-in di event</h2></div>
+
+    <div class="flow">
+      <div class="step">
+        <div class="n">1</div>
+        <div class="t">
+          <div class="title">Member datang</div>
+          <div class="desc">Tunjukkan kartu fisik (atau kartu digital di app bila belum punya kartu fisik).</div>
+        </div>
+        <div class="pillcol"><span class="pill grey">Member</span></div>
+      </div>
+      <div class="arrow"></div>
+
+      <div class="step">
+        <div class="n">2</div>
+        <div class="t">
+          <div class="title">Admin lokal memindai</div>
+          <div class="desc"><strong>Tap kartu ke HP</strong> (NFC) atau <strong>scan QR</strong> dengan kamera.</div>
+        </div>
+        <div class="pillcol"><span class="pill grey">Admin lokal</span></div>
+      </div>
+      <div class="arrow"></div>
+
+      <div class="step">
+        <div class="n">3</div>
+        <div class="t">
+          <div class="title">Server memverifikasi</div>
+          <div class="desc">Token + UID + event aktif di kota itu.</div>
+        </div>
+        <div class="pillcol"><span class="pill grey">Server</span></div>
+      </div>
+      <div class="branch-arrows"><div class="arrow"></div><div class="arrow"></div></div>
+
+      <div class="branch">
+        <div class="step ok">
+          <div class="t">
+            <div class="title"><span class="pill green">Valid</span></div>
+            <div class="desc" style="margin-top:6px">Kehadiran tercatat, XP masuk. Layar konfirmasi di HP admin menampilkan <strong>nama + foto member</strong>.</div>
+            <div class="note">Aturan XP masih dibahas tim.</div>
+          </div>
+        </div>
+        <div class="step bad">
+          <div class="t">
+            <div class="title"><span class="pill red">Tidak valid</span></div>
+            <div class="desc" style="margin-top:6px">Ditolak dengan alasan:</div>
+            <ul style="margin-top:4px">
+              <li>kartu dicabut</li>
+              <li>bukan event kota ini</li>
+              <li>sudah check-in</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flow-note"><strong>Catatan:</strong> cara check-in tercatat (NFC / QR app / manual) untuk audit HQ.</div>
+  </div>
+
+  <div class="section">
+    <div class="bar"><span class="num">Bagian 4</span><h2>Kasus khusus</h2></div>
+
+    <table>
+      <thead><tr><th style="width:28%">Kasus</th><th>Penanganan</th></tr></thead>
+      <tbody>
+        <tr>
+          <td class="k">Kartu hilang / rusak</td>
+          <td>Admin lokal atau super admin <strong>cabut</strong> kartu → member masuk antrean cetak ulang → sementara pakai kartu digital.</td>
+        </tr>
+        <tr>
+          <td class="k">Member pindah kota</td>
+          <td>Data member tetap, kartu tetap berlaku. Event lintas kota mengikuti aturan roaming (dibahas terpisah).</td>
+        </tr>
+        <tr>
+          <td class="k">Chip tidak terbaca</td>
+          <td>Fallback scan QR tercetak; kalau QR juga rusak → kartu digital.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ===================== HALAMAN 4 ===================== -->
+<div class="page">
+  <div class="section">
+    <div class="bar"><span class="num">Bagian 5</span><h2>Status kartu</h2></div>
+
+    <table>
+      <thead><tr><th style="width:24%">Status</th><th style="width:50%">Siapa yang mengubah</th><th>Di mana</th></tr></thead>
+      <tbody>
+        <tr><td><span class="pill grey">Belum punya kartu</span></td><td>Sistem, otomatis saat member daftar</td><td>Web daftar</td></tr>
+        <tr><td><span class="pill blue">Dalam batch</span></td><td>Super admin saat memilih member / membuat batch</td><td>Dashboard</td></tr>
+        <tr><td><span class="pill amber">Dikirim ke vendor</span></td><td>Super admin saat batch dikirim ke vendor</td><td>Dashboard</td></tr>
+        <tr><td><span class="pill amber">Diterima HQ</span></td><td>Super admin saat kartu cetak kembali dari vendor</td><td>Dashboard</td></tr>
+        <tr><td><span class="pill blue">Ter-encode</span></td><td>Operator Card Station setelah chip ditulis dan dikunci</td><td>Card Station</td></tr>
+        <tr><td><span class="pill green">Diterima member</span></td><td>Admin lokal saat tap kartu di serah terima</td><td>App admin</td></tr>
+        <tr><td><span class="pill red">Dicabut</span></td><td>Admin lokal atau super admin (kartu hilang/rusak)</td><td>App admin / Dashboard</td></tr>
+      </tbody>
+    </table>
+    <p class="foot">Urutan normal: Belum punya kartu → Dalam batch → Dikirim ke vendor → Diterima HQ → Ter-encode → Diterima member. Dicabut mengembalikan member ke antrean cetak ulang.</p>
+  </div>
+
+  <div class="section">
+    <div class="bar"><span class="num">Bagian 6</span><h2>Peran &amp; alat</h2></div>
+
+    <table>
+      <thead><tr><th style="width:20%">Peran</th><th style="width:26%">Alat</th><th>Tugas</th></tr></thead>
+      <tbody>
+        <tr><td class="k">Member</td><td>App, web daftar</td><td>Daftar lewat web, memakai kartu digital/fisik saat check-in.</td></tr>
+        <tr><td class="k">Admin lokal</td><td>App (HP sendiri: NFC + kamera)</td><td>Tap/scan saat check-in, tap kartu saat serah terima, cabut kartu bila hilang/rusak.</td></tr>
+        <tr><td class="k">Super admin / HQ</td><td>Dashboard web</td><td>Antrean kartu, buat batch, export file cetak, cabut kartu.</td></tr>
+        <tr><td class="k">Operator Card Station</td><td>Mac + reader ACR122U</td><td>Scan QR tercetak / ketik NIM, tulis tautan + token ke chip, kunci chip, catat UID.</td></tr>
+        <tr><td class="k">Vendor cetak</td><td>File cetak + kartu kosong NTAG213</td><td>Mencetak nama, NIM, QR, dan desain di kartu kosong; mengembalikan ke HQ.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="section">
+    <div class="bar"><span class="num">Bagian 7</span><h2>Keputusan yang masih terbuka</h2></div>
+
+    <div class="open">
+      <div class="item">
+        <div>
+          <h3>Desain kartu</h3>
+          <p>File desain dari tim. Perlu diputuskan: satu desain untuk semua, atau desain per kota.</p>
+        </div>
+        <span class="pill amber">Terbuka</span>
+      </div>
+      <div class="item">
+        <div>
+          <h3>Aturan XP / reward</h3>
+          <p>Berapa XP per check-in dan reward apa yang mengikutinya masih dibahas tim.</p>
+        </div>
+        <span class="pill amber">Terbuka</span>
+      </div>
+      <div class="item">
+        <div>
+          <h3>Batas umur</h3>
+          <p>Default 18 tahun; perlu konfirmasi final.</p>
+        </div>
+        <span class="pill amber">Terbuka</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
