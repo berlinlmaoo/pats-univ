@@ -26,7 +26,7 @@ XP/leaderboard/reward, laporan PR, social hub, reservasi, dan roaming **menyusul
 |---|---|---|
 | Mobile app (member + local admin) | **Expo (React Native)**, TypeScript, Expo Router | Satu codebase iOS + Android; EAS Build untuk TestFlight/APK; ekosistem NFC/kamera/push matang |
 | NFC (app admin) | `react-native-nfc-manager` | Core NFC (iOS) + NFC Android dalam satu API; membaca NDEF URL + UID dalam satu sesi tap |
-| Card Station (Mac HQ) | **Rust** dengan crate **`pcsc`** (PC/SC), reader **ACR122U**, kartu **NTAG213** | PC/SC bawaan macOS; `pcsc` memberi akses APDU langsung untuk tulis NDEF + kunci PWD/PACK; binary tunggal tanpa runtime, mudah dijalankan operator HQ. HTTP ke API lewat `reqwest`, CLI lewat `clap` |
+| Card Station (Mac HQ) | **Rust** dengan crate **`pcsc`** (PC/SC), reader **ACR122U**, kartu **NTAG213** | PC/SC bawaan macOS; `pcsc` memberi akses APDU langsung untuk tulis NDEF + proteksi password PWD/PACK (tanpa lock permanen); binary tunggal tanpa runtime, mudah dijalankan operator HQ. HTTP ke API lewat `reqwest`, CLI lewat `clap` |
 | Kamera / QR | `expo-camera` (barcode scanning bawaan) | Tanpa native module tambahan |
 | Push | `expo-notifications` → APNs / FCM | Satu token Expo, server kirim via Expo Push API |
 | Peta / denah venue | Komponen denah sendiri (SVG/grid) + `react-native-maps` untuk lokasi venue | Denah sofa/table bukan peta geografis; grid sederhana cukup untuk demo |
@@ -143,11 +143,11 @@ Catatan teknis:
 
 - Perintah ke NTAG213 lewat ACR122U memakai APDU pass-through `FF 00 00 00 Lc <perintah ISO14443-3A>`; `READ` = `30 <page>`, `WRITE` = `A2 <page> <4 byte>`, `PWD_AUTH` = `1B <4 byte pwd>`.
 - NDEF URL dengan prefix `https://` memakai URI identifier code `0x04`, dibungkus TLV `03 <len> ... FE` mulai halaman 4. Kapasitas user NTAG213 = 144 byte, cukup untuk `https://patsuniv.znetworks.id/c/<token 32 char>` (±60 byte payload).
-- **Domain final `patsuniv.znetworks.id`** dan URL `/c/<token>` **permanen**: tertulis di tag yang dikunci, jadi subdomain ini harus dipertahankan selamanya (redirect bila kelak pindah domain). Lihat PRODUCT.md §10.7.
+- **Domain final `patsuniv.znetworks.id`** dan URL `/c/<token>` **permanen dalam praktik**: tertulis di tag yang diproteksi password dan kartu di lapangan tidak bisa diperbarui dari jauh (hanya Card Station HQ yang bisa menulis ulang), jadi subdomain ini harus dipertahankan selamanya (redirect bila kelak pindah domain). Lihat PRODUCT.md §10.7.
 - `AUTH0 = 0x03` berarti halaman 3 ke atas butuh autentikasi untuk **tulis** (`PROT = 0` = hanya tulis yang diproteksi; baca tetap bebas agar HP member bisa membaca NDEF). `AUTHLIM` diset 0 (tanpa batas percobaan) untuk menghindari kartu terkunci permanen akibat salah proses.
 - PWD per kartu diturunkan server dari kunci rahasia + UID (HMAC, 4 byte) sehingga HQ bisa menghitung ulang untuk re-encode; tidak disimpan di DB.
 - **Cetak dulu, encode belakangan**: token kartu dibuat saat batch (isi QR cetakan) dan token yang sama ditulis ke NDEF saat encode, jadi QR cetakan adalah kunci identifikasi kartu fisik di Card Station. Server menolak encode bila status kartu bukan `RECEIVED_HQ` (atau re-encode yang disetujui) dan bila UID sudah terpakai kartu lain.
-- Bit `Capability Container` dan `static lock` **tidak** disentuh, supaya kartu salah encode masih bisa diperbaiki dengan PWD.
+- Bit `Capability Container`, `static lock`, dan `dynamic lock` **tidak** disentuh: chip **diproteksi password, bukan dikunci permanen**. Hanya Card Station HQ (yang tahu PWD dari kunci server + UID) yang bisa menulis ulang — untuk memperbaiki kartu salah encode, memakai ulang kartu untuk member lain, atau mengganti token.
 
 ---
 
@@ -180,7 +180,7 @@ pats-univ/
 │       ├── Cargo.toml
 │       ├── src/
 │       │   ├── main.rs    # CLI: login, pilih batch, identifikasi (scan QR / NIM), loop encode, re-encode, verify
-│       │   ├── ntag213.rs # APDU: read/write/pwd_auth, NDEF encode, lock
+│       │   ├── ntag213.rs # APDU: read/write/pwd_auth, NDEF encode, proteksi PWD/PACK (tanpa lock bit)
 │       │   ├── qr.rs      # baca QR cetakan via kamera Mac (AVFoundation) atau input manual NIM
 │       │   └── api.rs     # klien API (prepare, key, encoded)
 │       └── README.md      # setup PC/SC + ACR122U di macOS
@@ -239,7 +239,7 @@ Setiap fase diakhiri **demo yang bisa diperlihatkan** dan `docs/STATUS.md` diper
 
 **Isi**
 
-- **Card Station** (`tools/card-station`, Rust + `pcsc`, Mac + ACR122U), dipakai saat kartu cetakan kembali dari vendor (`RECEIVED_HQ`): login super admin → pilih batch → per kartu: **identifikasi member dengan scan QR cetakan (kamera Mac) atau ketik NIM** → cocokkan nama di layar dengan cetakan → tempel kartu cetakan (chip kosong) → baca UID → tulis NDEF URL `https://patsuniv.znetworks.id/c/<token>` → set PWD/PACK + AUTH0 (kunci tulis) → verifikasi baca ulang → lapor `ENCODED` ke server. Mode re-encode untuk kartu salah/pengganti (PWD dihitung ulang dari UID). Lihat §2.2.
+- **Card Station** (`tools/card-station`, Rust + `pcsc`, Mac + ACR122U), dipakai saat kartu cetakan kembali dari vendor (`RECEIVED_HQ`): login super admin → pilih batch → per kartu: **identifikasi member dengan scan QR cetakan (kamera Mac) atau ketik NIM** → cocokkan nama di layar dengan cetakan → tempel kartu cetakan (chip kosong) → baca UID → tulis NDEF URL `https://patsuniv.znetworks.id/c/<token>` → set PWD/PACK + AUTH0 (proteksi tulis, bukan lock permanen) → verifikasi baca ulang → lapor `ENCODED` ke server. Mode re-encode (PWD dihitung ulang dari UID) untuk kartu salah encode, kartu dipakai ulang untuk member lain, atau token diganti. Lihat §2.2.
 - Endpoint `/api/hq/cards/prepare` dan `/api/hq/cards/{id}/encoded`; `/c/<token>` di web: jika app terpasang → universal link ke profil, jika tidak → halaman profil ringkas + link download.
 - NFC di app admin (`react-native-nfc-manager`): baca NDEF + UID dalam satu sesi; alur **Serah terima kartu** (tap → server cocokkan token+UID → `DELIVERED`, tanpa pilih member), **Lapor hilang** (`REVOKED`).
 - `CheckIn` metode `NFC` dengan verifikasi token + UID; urutan fallback NFC → APP_QR → MANUAL tampil di UI admin.
@@ -248,7 +248,7 @@ Setiap fase diakhiri **demo yang bisa diperlihatkan** dan `docs/STATUS.md` diper
 - Push: registrasi device, Expo Push, pusat notifikasi, pengaturan kategori; cron reminder H-3/H-1/H dan follow-up 12.00 (terima kasih / FOMO); copy per kota dari `City.notificationCopy`; broadcast event dari dashboard (flyer + push).
 - Audit metode check-in di dashboard (persentase NFC / APP_QR / MANUAL per event).
 
-**Demo**: HQ membuat batch dari antrean dan mengunduh PDF per member + PDF batch + CSV manifest (dicek ukuran CR80 + bleed); batch ditandai `SENT_TO_VENDOR` → `RECEIVED_HQ` (untuk demo: cetak stiker/label dengan QR di NTAG213 kosong); di Mac, Card Station memindai QR cetakan → nama & NIM tampil → tap kartu → tulis + kunci → `ENCODED`; scan QR kartu lain lalu tap kartu yang salah → ditolak; mencoba menulis ulang kartu dengan app NFC umum → gagal; admin menerima kartu, tap saat serah terima → `DELIVERED`; di event, tap kartu → check-in `NFC`; kartu dilaporkan hilang → revoke, token+UID lama ditolak; member tap kartunya sendiri di iPhone → profil terbuka; push reminder dan FOMO sampai ke HP demo.
+**Demo**: HQ membuat batch dari antrean dan mengunduh PDF per member + PDF batch + CSV manifest (dicek ukuran CR80 + bleed); batch ditandai `SENT_TO_VENDOR` → `RECEIVED_HQ` (untuk demo: cetak stiker/label dengan QR di NTAG213 kosong); di Mac, Card Station memindai QR cetakan → nama & NIM tampil → tap kartu → tulis + proteksi password → `ENCODED`; scan QR kartu lain lalu tap kartu yang salah → ditolak; mencoba menulis ulang kartu dengan app NFC umum → gagal, tetapi Card Station bisa re-encode kartu yang sama untuk member lain; admin menerima kartu, tap saat serah terima → `DELIVERED`; di event, tap kartu → check-in `NFC`; kartu dilaporkan hilang → revoke, token+UID lama ditolak; member tap kartunya sendiri di iPhone → profil terbuka; push reminder dan FOMO sampai ke HP demo.
 
 **Effort**: 9–11 hari (termasuk Card Station ±2–3 hari). Hardware sudah ada: NTAG213 PVC + ACR122U; perlu iPhone + Android fisik untuk uji.
 
@@ -311,7 +311,7 @@ Perkiraan total **9–12 minggu** satu engineer; dua engineer (mobile + server) 
 | Vendor salah memasangkan file cetak dengan kartu, atau kartu tertukar saat kembali ke HQ | Nama tercetak tidak cocok dengan chip | Cetak dulu, encode belakangan: Card Station mengidentifikasi kartu dari QR cetakan dan operator mencocokkan nama sebelum tulis; token di QR = token di NDEF |
 | File cetak tidak sesuai spek vendor (ukuran, bleed, resolusi, warna) | Batch ditolak / dicetak ulang | Template CR80 + bleed 3 mm, 300 dpi, uji 1 proof dari vendor sebelum batch pertama; artwork final dari tim (T8c) |
 | ACR122U di macOS: driver PC/SC bawaan kadang bentrok dengan `ifdhandler` ACS; reader mode "escape" perlu plist | Card Station tidak melihat reader | Dokumentasi setup di `tools/card-station/README.md`; uji di Mac HQ sejak awal Phase 2 |
-| Salah urutan kunci NTAG213 (AUTH0/PWD) bisa mengunci kartu permanen | Kartu terbuang | Verifikasi tulis sebelum set AUTH0; AUTHLIM = 0; jangan sentuh static lock; uji di 5 kartu pertama |
+| Salah urutan proteksi NTAG213 (AUTH0/PWD) atau tersentuhnya lock bit bisa mengunci kartu permanen | Kartu terbuang | Verifikasi tulis sebelum set AUTH0; AUTHLIM = 0; jangan pernah set static/dynamic lock bit; uji di 5 kartu pertama |
 | Token + UID masih bisa diemulasi dengan magic card | Check-in palsu | Diterima (admin melihat orangnya); jalur upgrade ke NTAG 424 DNA (SUN) |
 | QR app discreenshot | Check-in palsu | TTL 30–60 detik + nonce sekali pakai |
 | Push tidak sampai (APNs key, FCM config, token kadaluarsa) | Reminder & FOMO gagal | Checklist konfigurasi EAS; log pengiriman per `Notification`; retry |

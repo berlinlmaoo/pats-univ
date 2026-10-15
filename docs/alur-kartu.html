@@ -179,7 +179,7 @@
     <div class="facts">
       <div class="fact">
         <h3>Kartu fisik</h3>
-        <p>PVC <strong>NTAG213</strong> (NFC). Dicetak oleh <strong>vendor</strong> memakai kartu kosong yang disediakan perusahaan. Chip diisi dan dikunci di HQ lewat <strong>Card Station</strong> (Mac + reader ACR122U).</p>
+        <p>PVC <strong>NTAG213</strong> (NFC). Dicetak oleh <strong>vendor</strong> memakai kartu kosong yang disediakan perusahaan. Chip diisi dan diproteksi password di HQ lewat <strong>Card Station</strong> (Mac + reader ACR122U).</p>
         <p>Admin lokal memakai HP-nya sendiri sebagai reader NFC/kamera; tidak ada alat tambahan di kota.</p>
       </div>
       <div class="fact">
@@ -189,8 +189,8 @@
       </div>
       <div class="fact">
         <h3>Isi chip</h3>
-        <p>Tautan <code>https://patsuniv.znetworks.id/c/&lt;token&gt;</code> yang ditandatangani server. Chip <strong>dikunci</strong> setelah ditulis (tidak bisa ditulis ulang).</p>
-        <p>URL ini permanen untuk kartu tersebut.</p>
+        <p>Tautan <code>https://patsuniv.znetworks.id/c/&lt;token&gt;</code> yang ditandatangani server. Chip <strong>diproteksi password</strong> setelah ditulis (bukan dikunci permanen): hanya bisa ditulis ulang oleh Card Station HQ, misalnya untuk memakai ulang kartu bagi member lain.</p>
+        <p>URL ini permanen dalam praktik: kartu yang sudah beredar tidak bisa diperbarui dari jauh.</p>
       </div>
       <div class="fact">
         <h3>Kartu digital</h3>
@@ -251,7 +251,7 @@
         <div class="n">5</div>
         <div class="t">
           <div class="title">Card Station di HQ</div>
-          <div class="desc">Scan QR tercetak dengan kamera Mac (atau ketik NIM) → tap kartu ke ACR122U → tulis tautan + token, kunci chip, catat UID ke member.</div>
+          <div class="desc">Scan QR tercetak dengan kamera Mac (atau ketik NIM) → tap kartu ke ACR122U → tulis tautan + token, proteksi chip dengan password, catat UID ke member.</div>
           <div class="note">Cetak dulu, baru encode: nama yang tercetak pasti cocok dengan isi chip.</div>
         </div>
         <div class="pillcol"><span class="pill blue">Ter-encode</span></div>
@@ -366,7 +366,7 @@
         <tr><td><span class="pill blue">Dalam batch</span></td><td>Super admin saat memilih member / membuat batch</td><td>Dashboard</td></tr>
         <tr><td><span class="pill amber">Dikirim ke vendor</span></td><td>Super admin saat batch dikirim ke vendor</td><td>Dashboard</td></tr>
         <tr><td><span class="pill amber">Diterima HQ</span></td><td>Super admin saat kartu cetak kembali dari vendor</td><td>Dashboard</td></tr>
-        <tr><td><span class="pill blue">Ter-encode</span></td><td>Operator Card Station setelah chip ditulis dan dikunci</td><td>Card Station</td></tr>
+        <tr><td><span class="pill blue">Ter-encode</span></td><td>Operator Card Station setelah chip ditulis dan diproteksi password</td><td>Card Station</td></tr>
         <tr><td><span class="pill green">Diterima member</span></td><td>Admin lokal saat tap kartu di serah terima</td><td>App admin</td></tr>
         <tr><td><span class="pill red">Dicabut</span></td><td>Admin lokal atau super admin (kartu hilang/rusak)</td><td>App admin / Dashboard</td></tr>
       </tbody>
@@ -383,7 +383,7 @@
         <tr><td class="k">Member</td><td>App, web daftar</td><td>Daftar lewat web, memakai kartu digital/fisik saat check-in.</td></tr>
         <tr><td class="k">Admin lokal</td><td>App (HP sendiri: NFC + kamera)</td><td>Tap/scan saat check-in, tap kartu saat serah terima, cabut kartu bila hilang/rusak.</td></tr>
         <tr><td class="k">Super admin / HQ</td><td>Dashboard web</td><td>Antrean kartu, buat batch, export file cetak, cabut kartu.</td></tr>
-        <tr><td class="k">Operator Card Station</td><td>Mac + reader ACR122U</td><td>Scan QR tercetak / ketik NIM, tulis tautan + token ke chip, kunci chip, catat UID.</td></tr>
+        <tr><td class="k">Operator Card Station</td><td>Mac + reader ACR122U</td><td>Scan QR tercetak / ketik NIM, tulis tautan + token ke chip, proteksi chip dengan password (hanya HQ yang bisa menulis ulang), catat UID.</td></tr>
         <tr><td class="k">Vendor cetak</td><td>File cetak + kartu kosong NTAG213</td><td>Mencetak nama, NIM, QR, dan desain di kartu kosong; mengembalikan ke HQ.</td></tr>
       </tbody>
     </table>
