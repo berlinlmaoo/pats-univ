@@ -80,11 +80,11 @@ flowchart LR
 Langkah per langkah:
 
 1. **Scan QR** di venue atau media sosial → membuka web registrasi (`/join?src=<kode kota/sumber>`).
-2. **Form registrasi**: nama, tanggal lahir, kota, favorite song & genre, quotes, nomor WhatsApp, email (untuk login). Umur minimum dicek di sini (default 18, setting).
+2. **Form registrasi**: nama, tanggal lahir, kota, favorite song & genre, quotes, **nomor HP/WhatsApp (wajib, dipakai untuk login OTP)**, email (opsional). Umur minimum dicek di sini (default 18, setting).
 3. **NIM dibuat** otomatis. Profil berstatus `ACTIVE`, kartu fisik berstatus `NOT_PRINTED`. Member langsung bisa login ke app dan memakai **kartu digital** (QR berputar) untuk check-in sampai kartu fisik diterima.
-4. **Routing ke grup WA kota**: halaman sukses menampilkan link grup WA kota + link download app. Pesan yang sama dikirim via email.
+4. **Routing ke grup WA kota**: halaman sukses menampilkan link grup WA kota + link download app. Pesan yang sama dikirim ke nomor HP member lewat OTP provider yang aktif (lihat [§10.6](#106-otp-provider)) dan ke email bila diisi.
 5. **HQ membuat batch** dari dashboard: pilih member berstatus `NOT_PRINTED` per kota → `CardBatch`.
-6. **Card Station (HQ, Mac + ACR122U)**: untuk tiap member di batch, operator memilih member, menempelkan kartu NTAG213 kosong ke reader, dan tool menulis **NDEF URL** `https://<domain>/c/<token>` (token ditandatangani server, unik per kartu), mencatat UID, lalu **mengunci tag dengan password** (NTAG213 PWD/PACK) agar payload tidak bisa ditulis ulang. Status kartu menjadi `ENCODED`; binding ke profil terjadi di sini.
+6. **Card Station (HQ, Mac + ACR122U)**: untuk tiap member di batch, operator memilih member, menempelkan kartu NTAG213 kosong ke reader, dan tool menulis **NDEF URL** `https://patsuniv.znetworks.id/c/<token>` (token ditandatangani server, unik per kartu; domain final, lihat [§10.7](#107-domain)), mencatat UID, lalu **mengunci tag dengan password** (NTAG213 PWD/PACK) agar payload tidak bisa ditulis ulang. Status kartu menjadi `ENCODED`; binding ke profil terjadi di sini.
 7. **Cetak / personalisasi** kartu (nama, NIM, song, quotes, QR) → `PRINTED` → `SHIPPED` ke kota.
 8. **Serah terima**: admin lokal membuka menu *Serahkan kartu* dan **tap kartu** ke HP. App membaca NDEF, server mencocokkan token + UID dengan member → status `ACTIVE`, pengiriman terkonfirmasi. Tap ini hanya **konfirmasi penerimaan**; tidak ada binding baru.
 9. **Check-in di event**: admin memilih event aktif, member menempelkan kartu ke HP admin (NFC) atau menunjukkan QR app (fallback). Server memvalidasi token NDEF + UID dan mencatat `CheckIn` + XP.
@@ -151,7 +151,7 @@ Alur: member membuka event kota lain → *Request roaming* → notifikasi ke app
 
 | Fitur | Keterangan |
 |---|---|
-| Login | Email + OTP (magic code), sesi di device; satu akun bisa beberapa device |
+| Login | **Nomor HP + OTP** (6 digit, dikirim lewat OTP provider, lihat §10.6), sesi di device; satu akun bisa beberapa device. Email opsional, bukan untuk login |
 | Kartu digital | Tampilan KTM (nama, NIM, song & genre, quotes) + **QR berputar** (refresh 30–60 detik, ditandatangani server). Dipakai sampai kartu fisik diterima dan sebagai fallback |
 | Status kartu fisik | `NOT_PRINTED` → `ENCODED` → `PRINTED` → `SHIPPED` → `ACTIVE` (+ `REVOKED`) ditampilkan di app |
 | Tap kartu sendiri | Tap KTM ke iPhone/Android sendiri → deep link ke profil di app (lewat NDEF URL) |
@@ -284,7 +284,7 @@ Nama entitas dan field inti (teknis detail ada di PLAN.md / schema).
 
 | Entitas | Field inti | Catatan |
 |---|---|---|
-| `User` | id, email, phone, role, cityId (admin), status | Akun login; member & admin sama-sama `User` |
+| `User` | id, phone (unik, E.164, login), email (opsional), role, cityId (admin), status | Akun login lewat nomor HP + OTP; member & admin sama-sama `User` |
 | `Member` | id, userId, nim, fullName, dateOfBirth, cityId (asal), favoriteSong, favoriteGenre, quotes, photoUrl, isPromoter, promoterSince, joinedAt, status | Satu `User` role `MEMBER` = satu `Member` |
 | `Card` | id, memberId, nfcUid (unik, nullable), ndefToken (unik, ditandatangani), status (`NOT_PRINTED`/`ENCODED`/`PRINTED`/`SHIPPED`/`ACTIVE`/`REVOKED`), batchId, encodedAt, encodedByUserId, lockedAt, deliveredAt, deliveredByAdminId, revokedAt, revokeReason | Member bisa punya banyak `Card` (riwayat), hanya satu `ACTIVE`. Password tag tidak disimpan per kartu; diturunkan dari kunci server + UID |
 | `CardBatch` | id, cityId, status, encodedCount, printedAt, shippedAt, cardCount, exportFileUrl | Satu batch = satu kali encode + cetak per kota |
@@ -309,6 +309,7 @@ Nama entitas dan field inti (teknis detail ada di PLAN.md / schema).
 | `Device` | id, userId, platform, pushToken, appVersion, lastSeenAt | Target push |
 | `AuditLog` | id, actorId, action, targetType, targetId, meta, createdAt | Bind/revoke, manual check-in, approval, lock recap |
 | `Setting` | key, value (JSON), scope (`GLOBAL`/`CITY`), cityId | XP, umur, TTL, jendela roaming, jam push |
+| `OtpCode` | id, phone, codeHash, purpose (`LOGIN`/`REGISTER`), provider, expiresAt, attempts, consumedAt | OTP per nomor; provider yang mengirim dicatat (lihat §10.6) |
 
 ---
 
@@ -367,7 +368,7 @@ Pengiriman: Expo Push → APNs (iOS) / FCM (Android). Setiap push juga tersimpan
 ### 10.1 Credential & check-in
 
 - **Credential utama = kartu NFC fisik** (NTAG213 PVC, sudah dibeli owner). HP admin adalah reader di lapangan (Core NFC di iPhone, NFC di Android); reader **ACR122U** hanya dipakai di HQ untuk encode.
-- **Isi kartu = NDEF URL bertanda tangan** (`https://<domain>/c/<token>`), ditulis sekali di HQ lalu tag **dikunci password** (NTAG213 PWD/PACK, halaman konfigurasi diproteksi) agar tidak bisa ditulis ulang. Server memverifikasi tanda tangan token **dan** mencocokkan UID yang dibaca dengan UID yang dicatat saat encode.
+- **Isi kartu = NDEF URL bertanda tangan** (`https://patsuniv.znetworks.id/c/<token>`, domain final — lihat §10.7), ditulis sekali di HQ lalu tag **dikunci password** (NTAG213 PWD/PACK, halaman konfigurasi diproteksi) agar tidak bisa ditulis ulang. Server memverifikasi tanda tangan token **dan** mencocokkan UID yang dibaca dengan UID yang dicatat saat encode.
 - **Kloning UID saja tidak cukup**: penyerang juga butuh token sah untuk UID itu. Yang masih mungkin: menyalin token + mengemulasi UID dengan alat khusus (magic card). Ini diterima untuk prototype karena admin melihat orangnya. Upgrade berikutnya bila perlu: chip dengan kriptografi per tap (NTAG 424 DNA, SUN message) sehingga payload berubah tiap tap.
 - **Kartu digital** adalah QR berputar: payload `{memberId, nonce, exp}` ditandatangani server (HMAC/Ed25519), TTL 30–60 detik, nonce sekali pakai. Screenshot QR tidak berguna setelah TTL habis.
 - **Faktor kuat = crew yang melihat orangnya.** Karena itu self check-in + GPS tidak dipakai: QR statis bisa difoto dan GPS bisa dipalsukan.
@@ -382,7 +383,7 @@ Pengiriman: Expo Push → APNs (iOS) / FCM (Android). Setiap push juga tersimpan
 
 ### 10.3 Data pribadi
 
-- Data yang disimpan: nama, tanggal lahir, kota, nomor WA, email, foto, song/genre/quotes, riwayat kehadiran, riwayat XP/redeem, konten hub.
+- Data yang disimpan: nama, tanggal lahir, kota, nomor HP/WA, email (opsional), foto, song/genre/quotes, riwayat kehadiran, riwayat XP/redeem, konten hub.
 - Tanggal lahir hanya dipakai untuk cek umur dan tidak ditampilkan ke member lain; di kartu hanya nama, NIM, song & genre, quotes.
 - Export data hanya oleh HQ, tercatat di `AuditLog`.
 - **Foto struk laporan PR** adalah data finansial/pribadi: disimpan di bucket privat, diakses lewat URL bertanda tangan berumur pendek, hanya oleh PR pemilik laporan, Local Admin kota event, dan Super Admin. Tidak pernah tampil di hub atau ke member lain. Nama/nomor tamu (opsional) diperlakukan sama.
@@ -397,9 +398,35 @@ Pengiriman: Expo Push → APNs (iOS) / FCM (Android). Setiap push juga tersimpan
 
 ### 10.5 Akun & akses
 
-- Login email + OTP; sesi dengan refresh token; logout jarak jauh dari dashboard.
+- Login **nomor HP + OTP** (provider lihat §10.6); sesi dengan refresh token; logout jarak jauh dari dashboard.
 - Local Admin hanya bisa mengakses data kotanya; dicek di server pada tiap endpoint.
-- Rate limit pada registrasi, OTP, dan endpoint scan.
+- Rate limit pada registrasi, OTP (per nomor dan per IP), dan endpoint scan.
+
+### 10.6 OTP provider
+
+Login member dan admin memakai **nomor HP + OTP** (6 digit, TTL 5 menit, maksimum 5 percobaan, tabel `OtpCode`). **Pengirim OTP adalah provider yang bisa diganti** lewat satu setting env `OTP_PROVIDER`; logika buat/verifikasi kode tidak berubah apa pun providernya, hanya cara kode sampai ke member yang berbeda.
+
+| Mode | `OTP_PROVIDER` | Cara kerja | Dipakai untuk |
+|---|---|---|---|
+| **Demo** | `demo` | OTP **ditampilkan di layar** dan dikembalikan di respons API; tidak ada gateway sama sekali | Showcase, akun demo, uji otomatis |
+| **Prototype** | `whatsapp-bridge` | Bridge WhatsApp kecil yang berdiri sendiri, dipisahkan dari setup Hermes milik owner: **Baileys** (protokol WhatsApp Web, **tidak resmi**), nomor WA khusus untuk PATS, rate limit per nomor tujuan, dan **fallback OTP di layar** bila bridge mati | Uji dengan HP sungguhan sebelum produksi |
+| **Produksi** | `cloud-api` | **WhatsApp Cloud API resmi** lewat BSP, **fallback SMS** bila WA gagal. Alternatif tercepat yang sudah "nyata": **Firebase Phone Auth** | Rilis ke member |
+
+Risiko mode prototype yang harus diterima secara sadar:
+
+- Baileys bukan API resmi Meta → **nomor bisa diblokir** sewaktu-waktu tanpa pemberitahuan; nomor PATS harus nomor khusus, bukan nomor pribadi/operasional.
+- **Sesi bisa putus** dan butuh scan QR ulang (pernah terjadi pada setup Hermes owner, Juli 2026). Karena itu fallback OTP di layar tetap ada di mode ini.
+- Mode prototype tidak boleh dipakai untuk rilis ke member; batas pemakaiannya hanya uji internal.
+
+Untuk produksi, **verifikasi Meta Business harus dimulai sejak awal** karena memakan waktu berminggu-minggu (aksi owner, lihat T17 §12).
+
+### 10.7 Domain
+
+Domain produk **final: `patsuniv.znetworks.id`** (web registrasi `/join`, dashboard HQ, API, dan URL kartu). URL kartu = **`https://patsuniv.znetworks.id/c/<token>`**.
+
+- URL ini **permanen** karena tertulis di NDEF NTAG213 dan tag dikunci; subdomain `patsuniv.znetworks.id` harus **dipertahankan selamanya**. Bila kelak ada domain khusus, `patsuniv.znetworks.id` tetap hidup dan mengarahkan (redirect) ke domain baru.
+- **Universal Links (iOS)** dan **App Links (Android)** disajikan dari domain ini: `/.well-known/apple-app-site-association` (AASA) dan `/.well-known/assetlinks.json`.
+- DNS + tunnel untuk domain ini dipasang oleh sesi server utama owner di akhir Phase 0 (lihat PLAN.md).
 
 ---
 
@@ -419,6 +446,7 @@ Prototype mencakup seluruh visi PRD, tetapi beberapa bagian dibangun pada **demo
 | Leaderboard | Snapshot per jam + posisi sendiri live | Hadiah peringkat, histori periode panjang |
 | Laporan PR | Form + foto struk + validasi admin + bonus XP; payout uang hanya tabel | Pembayaran uang nyata, OCR struk |
 | Grup WA | Link ke grup kota (manual) | Integrasi WhatsApp API |
+| OTP | Mode `demo` (di layar) dan `whatsapp-bridge` (Baileys, tidak resmi) | WhatsApp Cloud API resmi via BSP + fallback SMS (butuh verifikasi Meta Business, T17) |
 | Push | Expo Push nyata ke device demo | Segmentasi lanjutan, A/B copy |
 | Self check-in + GPS | Tidak ada | Opsi lanjutan untuk event tanpa crew |
 | Pembayaran, tiket berbayar, merchandise | Tidak ada | — |
@@ -447,6 +475,7 @@ Prototype mencakup seluruh visi PRD, tetapi beberapa bagian dibangun pada **demo
 | T14 | Periode leaderboard (bulanan vs per event vs sepanjang masa) dan hadiah peringkat | Tim | Bulanan, tanpa hadiah |
 | T15 | Bentuk bonus PR: XP atau uang (komisi % dari struk, atau nominal per tamu) | Tim | 20 XP per tamu |
 | T16 | Siapa yang memberi flag PR: Local Admin menunjuk vs member mengajukan | Tim | Local Admin menunjuk |
+| T17 | OTP produksi: mulai **verifikasi Meta Business** + pilih BSP untuk WhatsApp Cloud API (atau putuskan Firebase Phone Auth sebagai jalur tercepat); fallback SMS. Sampai selesai, OTP memakai mode `demo` / `whatsapp-bridge` (§10.6) | Owner | `demo` untuk showcase |
 
 ---
 
@@ -469,6 +498,8 @@ Prototype mencakup seluruh visi PRD, tetapi beberapa bagian dibangun pada **demo
 13. **Role PR (promoter)**: member ber-flag PR mengirim laporan tamu per event + foto struk; Local Admin memvalidasi; bonus dikreditkan saat validasi; laporan + struk masuk recap dan export HQ. Struk = data pribadi/finansial, akses terbatas admin + super admin. **TBD**: bentuk bonus (XP vs uang) dan siapa yang memberi flag PR — tim akan membahas.
 14. **Prioritas build**: sistem absensi berbasis kartu lebih dulu (registrasi, Card Station, kartu digital fallback, scan admin + check-in, riwayat, dasar super admin) di Phase 0–2; XP/leaderboard/reward, laporan PR, social hub, reservasi, roaming menyusul di fase berikutnya.
 15. **Stack final**: Expo (React Native) untuk app; Next.js + Prisma + PostgreSQL untuk backend + dashboard; **Rust (crate `pcsc`)** untuk Card Station di Mac dengan ACR122U.
+16. **Login = nomor HP + OTP** (bukan email + OTP). Registrasi: nomor HP wajib, email opsional. Pengirim OTP pluggable lewat `OTP_PROVIDER`: `demo` (OTP di layar, untuk showcase), `whatsapp-bridge` (Baileys dari setup Hermes owner, tidak resmi, nomor khusus, rate limit, fallback layar), `cloud-api` (WhatsApp Cloud API resmi via BSP + fallback SMS, atau Firebase Phone Auth). Verifikasi Meta Business dimulai sejak awal (T17). Lihat §10.6.
+17. **Domain final: `patsuniv.znetworks.id`**. URL kartu `https://patsuniv.znetworks.id/c/<token>` permanen (tertulis di NTAG213), subdomain dipertahankan selamanya, redirect bila kelak ada domain khusus; AASA/assetlinks di domain ini. DNS + tunnel dipasang sesi server utama di akhir Phase 0. Menghapus keputusan D5 di PLAN.md. Lihat §10.7.
 
 ### Sebelum 16 Oktober 2026
 

@@ -33,12 +33,12 @@ XP/leaderboard/reward, laporan PR, social hub, reservasi, dan roaming **menyusul
 | Anti-screenshot | `expo-screen-capture` | `FLAG_SECURE` Android; deteksi di iOS |
 | Backend + super admin dashboard | **Next.js (App Router) + Prisma + PostgreSQL** | Pola yang sama dengan NEXUS milik owner; satu deploy untuk API + dashboard |
 | Leaderboard | Query agregat `XpLedger` + snapshot per jam | Tanpa layanan tambahan |
-| Auth | Email + OTP buatan sendiri (tabel `OtpCode`), JWT access + refresh token | Tanpa vendor; mudah untuk akun demo |
+| Auth | **Nomor HP + OTP** buatan sendiri (tabel `OtpCode`), JWT access + refresh token. Pengirim OTP pluggable lewat `OTP_PROVIDER` = `demo` (OTP di layar) / `whatsapp-bridge` (Baileys, tidak resmi) / `cloud-api` (WhatsApp Cloud API resmi + SMS fallback) — lihat PRODUCT.md §10.6 | Tanpa vendor untuk showcase; jalur produksi tinggal ganti provider |
 | Realtime chat | **Socket.IO** (server terpisah kecil di repo yang sama) | Lihat §1.1 |
 | File / media | **S3-compatible object storage** (MinIO di VM, atau bucket S3) | Presigned upload dari app; URL privat |
 | Job terjadwal | Cron di server (endpoint `/api/cron/*` dipanggil systemd timer) | Reminder H-3/H-1/H, follow-up 12.00, expiry roaming/redeem |
 | Export | CSV/XLSX via `exceljs`; PDF = print view | Cukup untuk demo |
-| Hosting | Infrastruktur VM owner yang sudah ada (Docker Compose, reverse proxy, TLS) | Tidak butuh layanan baru |
+| Hosting | Infrastruktur VM owner yang sudah ada (Docker Compose, reverse proxy, TLS), domain **`patsuniv.znetworks.id`** | Tidak butuh layanan baru; DNS + tunnel dipasang sesi server utama di akhir Phase 0 |
 
 ### 1.1 Realtime: Socket.IO vs Supabase Realtime
 
@@ -139,7 +139,8 @@ sequenceDiagram
 Catatan teknis:
 
 - Perintah ke NTAG213 lewat ACR122U memakai APDU pass-through `FF 00 00 00 Lc <perintah ISO14443-3A>`; `READ` = `30 <page>`, `WRITE` = `A2 <page> <4 byte>`, `PWD_AUTH` = `1B <4 byte pwd>`.
-- NDEF URL dengan prefix `https://` memakai URI identifier code `0x04`, dibungkus TLV `03 <len> ... FE` mulai halaman 4. Kapasitas user NTAG213 = 144 byte, cukup untuk `https://<domain>/c/<token 32 char>`.
+- NDEF URL dengan prefix `https://` memakai URI identifier code `0x04`, dibungkus TLV `03 <len> ... FE` mulai halaman 4. Kapasitas user NTAG213 = 144 byte, cukup untuk `https://patsuniv.znetworks.id/c/<token 32 char>` (±60 byte payload).
+- **Domain final `patsuniv.znetworks.id`** dan URL `/c/<token>` **permanen**: tertulis di tag yang dikunci, jadi subdomain ini harus dipertahankan selamanya (redirect bila kelak pindah domain). Lihat PRODUCT.md §10.7.
 - `AUTH0 = 0x03` berarti halaman 3 ke atas butuh autentikasi untuk **tulis** (`PROT = 0` = hanya tulis yang diproteksi; baca tetap bebas agar HP member bisa membaca NDEF). `AUTHLIM` diset 0 (tanpa batas percobaan) untuk menghindari kartu terkunci permanen akibat salah proses.
 - PWD per kartu diturunkan server dari kunci rahasia + UID (HMAC, 4 byte) sehingga HQ bisa menghitung ulang untuk re-encode; tidak disimpan di DB.
 - Bit `Capability Container` dan `static lock` **tidak** disentuh, supaya kartu salah encode masih bisa diperbaiki dengan PWD.
@@ -203,12 +204,13 @@ Setiap fase diakhiri **demo yang bisa diperlihatkan** dan `docs/STATUS.md` diper
 
 - Monorepo, Docker Compose (postgres, minio, web, realtime kosong), CI lint + typecheck.
 - Schema Prisma lengkap untuk seluruh entitas §7 PRODUCT.md (migrasi awal), seed: 3 kota, 1 super admin, 2 local admin, 20 member, 2 venue, 3 event.
-- Auth: email + OTP, JWT access/refresh, role dari `User`; middleware role & kota.
-- **Web registrasi** `/join`: form (nama, DOB, kota, song & genre, quotes, WA, email), cek `minAge`, generate NIM, halaman sukses dengan link grup WA + link download app, email konfirmasi.
+- Auth: **nomor HP + OTP**, JWT access/refresh, role dari `User`; middleware role & kota. Modul `OtpSender` dengan provider dipilih lewat env `OTP_PROVIDER`; Phase 0 cukup `demo` (OTP tampil di layar / respons API). Provider `whatsapp-bridge` (Baileys, nomor khusus, rate limit, fallback layar) menyusul saat uji HP sungguhan; `cloud-api` untuk produksi (PRODUCT.md §10.6).
+- **Web registrasi** `/join`: form (nama, DOB, kota, song & genre, quotes, **nomor HP/WA wajib**, email opsional), verifikasi nomor lewat OTP, cek `minAge`, generate NIM, halaman sukses dengan link grup WA + link download app, pesan konfirmasi ke nomor HP lewat OTP provider (email bila diisi).
+- **Akhir Phase 0**: DNS `patsuniv.znetworks.id` + tunnel ke VM dipasang oleh sesi server utama owner (di luar estimasi engineer); sejak itu `/join` dan dashboard tersaji di domain final.
 - Dashboard HQ: login, layout, halaman Kota, Admin, Member (list + detail), Settings (semua key §9).
 - App: shell Expo, login OTP, routing berdasarkan role, i18n EN/ID, tab bar member dan menu admin kosong.
 
-**Demo**: scan QR → daftar di web → NIM muncul → login di app dengan akun itu → profil tampil; HQ melihat member baru di dashboard dan mengubah `minAge`.
+**Demo**: scan QR → daftar di web dengan nomor HP (OTP tampil di layar, mode `demo`) → NIM muncul → login di app dengan nomor itu → profil tampil; HQ melihat member baru di dashboard dan mengubah `minAge`.
 
 **Effort**: 6–8 hari.
 
@@ -231,11 +233,11 @@ Setiap fase diakhiri **demo yang bisa diperlihatkan** dan `docs/STATUS.md` diper
 
 **Isi**
 
-- **Card Station** (`tools/card-station`, Rust + `pcsc`, Mac + ACR122U): login super admin → pilih batch → per kartu: tempel NTAG213 kosong → baca UID → tulis NDEF URL `https://<domain>/c/<token>` → set PWD/PACK + AUTH0 (kunci tulis) → verifikasi baca ulang → lapor `ENCODED` ke server. Mode re-encode untuk kartu salah/pengganti (PWD dihitung ulang dari UID). Lihat §2.2.
+- **Card Station** (`tools/card-station`, Rust + `pcsc`, Mac + ACR122U): login super admin → pilih batch → per kartu: tempel NTAG213 kosong → baca UID → tulis NDEF URL `https://patsuniv.znetworks.id/c/<token>` → set PWD/PACK + AUTH0 (kunci tulis) → verifikasi baca ulang → lapor `ENCODED` ke server. Mode re-encode untuk kartu salah/pengganti (PWD dihitung ulang dari UID). Lihat §2.2.
 - Endpoint `/api/hq/cards/prepare` dan `/api/hq/cards/{id}/encoded`; `/c/<token>` di web: jika app terpasang → universal link ke profil, jika tidak → halaman profil ringkas + link download.
 - NFC di app admin (`react-native-nfc-manager`): baca NDEF + UID dalam satu sesi; alur **Serah terima kartu** (tap → server cocokkan token+UID → `ACTIVE`, tanpa pilih member), **Lapor hilang** (`REVOKED`).
 - `CheckIn` metode `NFC` dengan verifikasi token + UID; urutan fallback NFC → APP_QR → MANUAL tampil di UI admin.
-- Deep link `/c/<token>` di app member (universal link iOS + app link Android): tap kartu sendiri di iPhone XS+ membuka profil.
+- Deep link `/c/<token>` di app member (universal link iOS + app link Android; AASA `/.well-known/apple-app-site-association` dan `/.well-known/assetlinks.json` disajikan dari `patsuniv.znetworks.id`): tap kartu sendiri di iPhone XS+ membuka profil.
 - Dashboard HQ: **Card batch** (pilih member `NOT_PRINTED` per kota → batch → progres encode → export CSV/XLSX file cetak dengan URL QR per kartu → `PRINTED` → `SHIPPED`), daftar kartu belum `ACTIVE`.
 - Push: registrasi device, Expo Push, pusat notifikasi, pengaturan kategori; cron reminder H-3/H-1/H dan follow-up 12.00 (terima kasih / FOMO); copy per kota dari `City.notificationCopy`; broadcast event dari dashboard (flyer + push).
 - Audit metode check-in di dashboard (persentase NFC / APP_QR / MANUAL per event).
@@ -306,6 +308,7 @@ Perkiraan total **9–12 minggu** satu engineer; dua engineer (mobile + server) 
 | Token + UID masih bisa diemulasi dengan magic card | Check-in palsu | Diterima (admin melihat orangnya); jalur upgrade ke NTAG 424 DNA (SUN) |
 | QR app discreenshot | Check-in palsu | TTL 30–60 detik + nonce sekali pakai |
 | Push tidak sampai (APNs key, FCM config, token kadaluarsa) | Reminder & FOMO gagal | Checklist konfigurasi EAS; log pengiriman per `Notification`; retry |
+| OTP provider `whatsapp-bridge` tidak resmi (Baileys): nomor bisa diblokir Meta, sesi bisa putus (terjadi di setup Hermes owner, Jul 2026) | OTP tidak sampai, login macet | Nomor WA khusus; rate limit; fallback OTP di layar selalu aktif; hanya untuk uji internal; produksi pakai Cloud API resmi + SMS, verifikasi Meta Business dimulai sejak awal (T17) |
 | Chat realtime pada demo depth | Lag/putus saat demo | Satu channel per kota, batas media, reconnect otomatis di client |
 | Anti-screenshot iOS tidak bisa dipaksa | Ekspektasi tim berbeda | Ditulis eksplisit di PRODUCT.md §10.4; tampilkan deteksi di demo |
 | XP/reward/bonus PR/periode leaderboard berubah setelah coding | Rework | Semua angka sebagai setting; UI membaca setting, tidak hardcode; bonus PR disiapkan dua jalur (XP dan CASH) |
@@ -339,4 +342,4 @@ Perkiraan total **9–12 minggu** satu engineer; dua engineer (mobile + server) 
 | D2 | Daftar kota awal + kode 3 huruf (untuk NIM dan seed) | Tim |
 | D3 | Akun Apple Developer & Google Play untuk EAS Build (TestFlight + APK) | Owner |
 | D4 | Cara cetak per orang di kartu PVC (printer in-house Evolis/Zebra vs vendor) dan desain satu vs per kota — hardware NFC (NTAG213 + ACR122U) sudah ada | Owner |
-| D5 | Domain untuk web registrasi, dashboard, dan URL kartu `/c/<token>` (harus final sebelum encode, karena tertulis permanen di kartu) | Owner |
+| D5 | ~~Domain untuk web registrasi, dashboard, dan URL kartu~~ — sudah final: **`patsuniv.znetworks.id`** (PRODUCT.md §10.7); DNS + tunnel dipasang sesi server utama di akhir Phase 0 | — |
