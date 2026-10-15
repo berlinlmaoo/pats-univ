@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pertanyaan Terbuka untuk Tim — PATS University</title>
+<style>
+  @page { size: A4; margin: 14mm 15mm 16mm 15mm; }
+  :root {
+    --navy: #14213d;
+    --navy-2: #1f2f55;
+    --ink: #1c2130;
+    --body: #4b5563;
+    --muted: #7b8494;
+    --line: #dde2ea;
+    --bg-soft: #f4f6f9;
+    --accent: #c9a227;
+    --pill-grey-bg: #eceff3; --pill-grey-fg: #4b5563;
+    --pill-blue-bg: #e3ebf8; --pill-blue-fg: #1f3f7a;
+    --pill-amber-bg: #fdf1d6; --pill-amber-fg: #8a5b00;
+    --pill-green-bg: #ddf3e4; --pill-green-fg: #1c6b3a;
+    --pill-red-bg: #fbe1e1; --pill-red-fg: #9a2626;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Helvetica Neue", Helvetica, Arial, "Liberation Sans", sans-serif;
+    color: var(--body);
+    font-size: 10pt;
+    line-height: 1.45;
+    background: #fff;
+  }
+  h1, h2, h3 { color: var(--ink); margin: 0; }
+  p { margin: 0 0 8px; }
+  strong { color: var(--ink); font-weight: 600; }
+  code {
+    font-family: "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    font-size: 9pt; color: var(--ink);
+    background: var(--bg-soft); padding: 1px 5px; border-radius: 3px;
+  }
+  ul { margin: 0 0 8px; padding-left: 18px; }
+  li { margin-bottom: 4px; }
+  li::marker { color: var(--muted); }
+
+  .page { }
+
+  /* Cover / title */
+  .cover {
+    border-bottom: 3px solid var(--navy);
+    padding-bottom: 14px; margin-bottom: 18px;
+  }
+  .cover .kicker {
+    font-size: 8.5pt; letter-spacing: .18em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 6px;
+  }
+  .cover h1 { font-size: 20pt; line-height: 1.2; letter-spacing: -.01em; }
+  .cover .sub { color: var(--muted); font-size: 9.5pt; margin-top: 8px; }
+
+  .intro {
+    padding: 10px 12px; background: var(--bg-soft); border-radius: 6px;
+    font-size: 9.5pt; color: var(--body); margin-bottom: 16px; break-inside: avoid;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .intro p:last-child { margin-bottom: 0; }
+  .intro strong { color: var(--navy); }
+
+  /* Section header bar */
+  .bar {
+    background: var(--navy); color: #fff;
+    padding: 8px 14px; border-radius: 4px;
+    display: flex; align-items: baseline; gap: 12px;
+    margin: 0 0 12px; break-after: avoid; break-inside: avoid;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .bar .num {
+    font-size: 8.5pt; letter-spacing: .14em; text-transform: uppercase;
+    color: #c9d3ea; font-weight: 600;
+  }
+  .bar h2 { color: #fff; font-size: 13.5pt; font-weight: 600; letter-spacing: -.005em; }
+  .bar .tag { margin-left: auto; }
+  .section + .section { margin-top: 18px; }
+
+  /* Question cards */
+  .qs { display: flex; flex-direction: column; gap: 8px; }
+  .q {
+    border: 1px solid var(--line); border-left: 4px solid var(--navy);
+    border-radius: 6px; padding: 8px 12px 9px;
+    display: grid; grid-template-columns: 26px 1fr; gap: 10px; align-items: start;
+    background: #fff; break-inside: avoid;
+  }
+  .q .n {
+    width: 22px; height: 22px; border-radius: 50%;
+    background: var(--navy); color: #fff; font-weight: 700; font-size: 9.5pt;
+    display: flex; align-items: center; justify-content: center; margin-top: 1px;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .q .head { display: block; }
+  .q .title { color: var(--ink); font-weight: 600; font-size: 10.2pt; }
+  .q .ref { color: var(--muted); font-size: 8.5pt; letter-spacing: .06em; margin-left: 6px; white-space: nowrap; }
+  .q .ctx { color: var(--body); font-size: 9.2pt; margin-top: 2px; }
+  .q .ctx::before { content: "Konteks: "; color: var(--muted); font-weight: 600; }
+  .q .def { margin-top: 4px; font-size: 9pt; color: var(--muted); display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+  .q .answer {
+    margin-top: 6px; border: 1px dashed #b7bfcc; border-radius: 5px;
+    min-height: 34px; position: relative; background: #fff;
+  }
+  .q .answer.tall { min-height: 50px; }
+  .q .answer::before {
+    content: "Jawaban"; position: absolute; top: 3px; left: 8px;
+    font-size: 7.8pt; letter-spacing: .12em; text-transform: uppercase; color: #b0b7c3; font-weight: 600;
+  }
+
+  /* Pills */
+  .pill {
+    display: inline-block; white-space: nowrap;
+    font-size: 8.2pt; font-weight: 600; letter-spacing: .02em;
+    padding: 2px 9px; border-radius: 999px; line-height: 1.5;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .pill.grey  { background: var(--pill-grey-bg);  color: var(--pill-grey-fg); }
+  .pill.blue  { background: var(--pill-blue-bg);  color: var(--pill-blue-fg); }
+  .pill.amber { background: var(--pill-amber-bg); color: var(--pill-amber-fg); }
+  .pill.green { background: var(--pill-green-bg); color: var(--pill-green-fg); }
+  .pill.red   { background: var(--pill-red-bg);   color: var(--pill-red-fg); }
+  .pill.navy  { background: var(--navy); color: #fff; }
+  .pill.wrap  { white-space: normal; }
+
+  .foot { margin-top: 14px; color: var(--muted); font-size: 8.5pt; border-top: 1px solid var(--line); padding-top: 8px; }
+</style>
+</head>
+<body>
+
+<!-- ===================== HALAMAN 1 ===================== -->
+<div class="page">
+  <div class="cover">
+    <div class="kicker">PATS University · Lembar pertanyaan</div>
+    <h1>Pertanyaan Terbuka untuk Tim — PATS University</h1>
+    <div class="sub">Hal-hal di PRD yang masih menunggu jawaban tim. Isi kotak jawaban, atau coret kalau setuju dengan default sementara. Versi 16 Oktober 2026.</div>
+  </div>
+
+  <div class="intro">
+    <p><strong>Yang sudah final</strong> tidak ditanyakan lagi di sini; semuanya tercatat di PRD: admin yang melakukan scan (bukan self check-in), kartu fisik NFC sebagai credential utama dengan kartu digital sementara sampai kartu fisik diterima, pencetakan oleh vendor eksternal dengan kartu kosong dari perusahaan, cetak dulu baru encode chip di HQ, login email + kode OTP, domain <code>patsuniv.znetworks.id</code>, dan yang tercetak di kartu hanya nama, NIM, dan QR. Lembar ini berisi sisanya: keputusan yang pemiliknya tim. Kalau tidak ada jawaban, kami memakai <strong>default sementara</strong> yang tertulis di tiap nomor, dan semuanya bisa diubah lewat pengaturan tanpa rilis ulang.</p>
+  </div>
+
+  <div class="section">
+    <div class="bar"><span class="num">Bagian 1</span><h2>Absensi &amp; kartu</h2><span class="tag pill amber">Prioritas pertama</span></div>
+
+    <div class="qs">
+      <div class="q">
+        <div class="n">1</div>
+        <div>
+          <div class="head"><span class="title">Kota mana saja yang mulai duluan, dan apa kode tiap kota?</span><span class="ref">T7</span></div>
+          <div class="ctx">Kode kota jadi bagian NIM (<code>&lt;kota&gt;&lt;yy&gt;&lt;5 digit&gt;</code>, misal <code>JKT2600001</code>) dan link daftar <code>/join?src=&lt;kode&gt;</code>; sekali tercetak di kartu tidak bisa diganti.</div>
+          <div class="def"><span class="pill grey">Default sementara</span> Belum ada; butuh daftar dari tim (nama kota, kode 3 huruf, link grup WA, zona waktu).</div>
+          <div class="answer tall"></div>
+        </div>
+      </div>
+
+      <div class="q">
+        <div class="n">2</div>
+        <div>
+          <div class="head"><span class="title">Siapa yang menyiapkan file artwork kartu, dan kapan bisa kami terima?</span><span class="ref">T8c</span></div>
+          <div class="ctx">Dipakai sebagai template cetak untuk vendor. Spek: depan + belakang, CR80 85,6 × 54 mm + bleed 3 mm, 300 dpi (PDF/SVG/PNG). Yang tercetak di atas artwork hanya nama, NIM, QR, jadi sisakan area untuk ketiganya.</div>
+          <div class="def"><span class="pill grey">Default sementara</span> Placeholder desain sementara dari kami sampai artwork tim masuk.</div>
+          <div class="answer"></div>
+        </div>
+      </div>
+
+      <div class="q">
+        <div class="n">3</div>
+        <div>
+          <div class="head"><span class="title">Berapa umur minimum member?</span><span class="ref">T5</span></div>
+          <div class="ctx">Dicek dari tanggal lahir saat registrasi; yang di bawah batas ditolak. Berkaitan dengan reward minuman beralkohol.</div>
+          <div class="def"><span class="pill grey">Default sementara</span> 18 tahun.</div>
+          <div class="answer"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="bar"><span class="num">Bagian 2</span><h2>XP, reward, PR</h2><span class="tag pill blue">Fase berikutnya</span></div>
+
+    <div class="qs">
+      <div class="q">
+        <div class="n">4</div>
+        <div>
+          <div class="head"><span class="title">Berapa XP yang didapat member tiap check-in?</span><span class="ref">T1</span></div>
+          <div class="ctx">Angka dasar seluruh gamifikasi; muncul di push "Check-in tercatat, +{xp} XP" dan leaderboard.</div>
+          <div class="def"><span class="pill grey">Default sementara</span> 50 XP per check-in.</div>
+          <div class="answer"></div>
+        </div>
+      </div>
+
+      <div class="q">
+        <div class="n">5</div>
+        <div>
+          <div class="head"><span class="title">Reward apa saja yang bisa ditukar, dan berapa harga XP masing-masing?</span><span class="ref">T2</span></div>
+          <div class="ctx">Jadi katalog di app; member menukar XP, crew memvalidasi kode di venue. Sebutkan juga kalau ada reward yang beda per kota.</div>
+          <div class="def"><span class="pill grey">Default sementara</span> 100 XP = 1 cocktail.</div>
+          <div class="answer tall"></div>
+        </div>
+      </div>
+
+      <div class="q">
+        <div class="n">6</div>
+        <div>
+          <div class="head"><span class="title">Spin wheel: berapa biaya sekali putar, apa isi tiap slot, dan bagaimana bobot peluangnya?</span><span class="ref">T3</span></div>
+          <div class="ctx">Menentukan isi roda dan seberapa sering hadiah besar keluar; bobot boleh tidak sama rata.</div>
+          <div class="def"><span class="pill grey">Default sementara</span> 250 XP per putaran, 6 slot dengan bobot sama.</div>
+          <div class="answer tall"></div>
+        </div>
+      </div>
+
+      <div class="q">
+        <div class="n">7</div>
+        <div>
+          <div class="head"><span class="title">Berapa maksimum spin per member dalam satu event?</span><span class="ref">T4</span></div>
+          <div class="ctx">Batas agar member ber-XP besar tidak menguras hadiah dalam satu malam.</div>
+          <div class="def"><span class="pill grey">Default sementara</span> 5 spin per event.</div>
+          <div class="answer"></div>
+        </div>
+      </div>
+
+      <div class="q">
+        <div class="n">8</div>
+        <div>
+          <div class="head"><span class="title">Leaderboard dihitung per periode apa, dan apakah peringkat teratas dapat hadiah?</span><span class="ref">T14</span></div>
+          <div class="ctx">Pilihan: bulanan, per event, atau sepanjang masa. Ada leaderboard per kota dan nasional; saat periode tutup, member bisa menerima push peringkat akhir.</div>
+          <div class="def"><span class="pill grey">Default sementara</span> Bulanan, tanpa hadiah peringkat.</div>
+          <div class="answer"></div>
+        </div>
+      </div>
+
+      <div class="q">
+        <div class="n">9</div>
+        <div>
+          <div class="head"><span class="title">Bonus PR (promoter) berupa apa: XP atau uang? Kalau uang, persentase dari struk atau nominal per tamu?</span><span class="ref">T15</span></div>
+          <div class="ctx">PR melapor jumlah tamu + foto struk per event, admin kota memvalidasi, bonus dikreditkan saat validasi dan masuk rekap HQ.</div>
+          <div class="def"><span class="pill grey">Default sementara</span> 20 XP per tamu.</div>
+          <div class="answer"></div>
+        </div>
+      </div>
+
+      <div class="q">
+        <div class="n">10</div>
+        <div>
+          <div class="head"><span class="title">Siapa yang menjadikan member sebagai PR: admin kota yang menunjuk, atau member yang mengajukan lalu disetujui?</span><span class="ref">T16</span></div>
+          <div class="ctx">Menentukan apakah app perlu alur pengajuan + persetujuan, atau cukup tombol di sisi admin.</div>
+          <div class="def"><span class="pill grey">Default sementara</span> Admin kota menunjuk.</div>
+          <div class="answer"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="bar"><span class="num">Bagian 3</span><h2>Komunikasi &amp; komunitas</h2></div>
+
+    <div class="qs">
+      <div class="q">
+        <div class="n">11</div>
+        <div>
+          <div class="head"><span class="title">Apa teks push final untuk tiap kota: pengingat H-3, H-1, hari H, serta pesan "thank you" dan FOMO jam 12.00 keesokan harinya?</span><span class="ref">T9</span></div>
+          <div class="ctx">Copy bisa diatur per kota oleh HQ; placeholder yang tersedia <code>{name}</code> <code>{event}</code> <code>{venue}</code> <code>{time}</code> <code>{xp}</code>. Lampirkan di halaman terpisah kalau tidak muat.</div>
+          <div class="def"><span class="pill grey">Default sementara</span> H-3 "3 hari lagi: {event}." · H-1 "Besok: {event} di {venue}." · Hari H "Malam ini: {event}. Bawa KTM-mu." · Thank you "Thank you udah dateng semalem, {name}. +{xp} XP masuk." · FOMO "Kamu kenapa semalem ga dateng, {name}? Cek event berikutnya."</div>
+          <div class="answer tall"></div>
+        </div>
+      </div>
+
+      <div class="q">
+        <div class="n">12</div>
+        <div>
+          <div class="head"><span class="title">Siapa yang boleh posting di timeline kota: semua member, atau admin saja?</span><span class="ref">T10</span></div>
+          <div class="ctx">Timeline adalah bagian social hub per kota. Kalau semua member boleh, perlu moderasi oleh admin kota.</div>
+          <div class="def"><span class="pill grey">Default sementara</span> Admin + member, dengan moderasi admin.</div>
+          <div class="answer"></div>
+        </div>
+      </div>
+
+      <div class="q">
+        <div class="n">13</div>
+        <div>
+          <div class="head"><span class="title">Selain sofa, table, FDC, pax, dan revenue, field apa lagi yang perlu diisi admin di rekap setelah event?</span><span class="ref">T11</span></div>
+          <div class="ctx">Rekap diisi admin kota tiap event dan masuk export HQ; misalnya revenue per kategori (minuman, tiket, dsb.).</div>
+          <div class="def"><span class="pill grey">Default sementara</span> sofa / table / FDC / pax + revenue total.</div>
+          <div class="answer"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="bar"><span class="num">Bagian 4</span><h2>Lainnya</h2></div>
+
+    <div class="qs">
+      <div class="q">
+        <div class="n">14</div>
+        <div>
+          <div class="head"><span class="title">Siapa yang menyiapkan teks kebijakan privasi dan persetujuan, dan apa saja yang harus disetujui member saat daftar?</span><span class="ref">T12 · Tim/legal</span></div>
+          <div class="ctx">Tampil sebagai halaman kebijakan + centang persetujuan di registrasi. Data yang dikumpulkan: nama, email, nomor WA, tanggal lahir, foto, kehadiran; untuk PR juga foto struk.</div>
+          <div class="def"><span class="pill grey">Default sementara</span> Belum ada; sampai teks masuk, registrasi memakai persetujuan umum sementara.</div>
+          <div class="answer tall"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="foot">Jawaban dikembalikan ke Berlin; dimasukkan ke PRD §12/§13.</p>
+</div>
+
+</body>
+</html>
