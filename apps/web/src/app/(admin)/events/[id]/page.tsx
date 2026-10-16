@@ -8,10 +8,13 @@ import { EventPhaseBadge, MethodBadge } from '@/components/dashboard/status';
 import { Table, Td, Th, Tr } from '@/components/dashboard/table';
 import { Card, CardHeader } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
+import { can } from '@pats/shared';
+import { cityScope } from '@/lib/loyalty/operations';
+import { DrawPanel } from '@/components/phase5/draw';
 import { db } from '@/lib/db';
 import { eventFormOptions } from '@/lib/events/form-options';
 import { eventInclude, toEventFormValues } from '@/lib/events/service';
-import { requireHq } from '@/lib/hq/guard';
+import { requireDashboard } from '@/lib/hq/guard';
 import { getT } from '@/lib/i18n';
 import { EventDialogButton } from '../event-form';
 import { EventActions } from './event-actions';
@@ -21,8 +24,9 @@ import { LiveRefresh } from './live-refresh';
 type Params = { params: Promise<{ id: string }> };
 
 async function load(id: string) {
-  return db.event.findUnique({
-    where: { id },
+  const admin = await requireDashboard();
+  return db.event.findFirst({
+    where: { id, cityId: cityScope(admin) },
     include: { ...eventInclude, createdBy: { select: { name: true } } },
   });
 }
@@ -33,7 +37,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
 }
 
 export default async function EventPage({ params }: Params) {
-  await requireHq();
+  const admin = await requireDashboard();
   const t = await getT();
   const event = await load((await params).id);
   if (!event) notFound();
@@ -49,9 +53,9 @@ export default async function EventPage({ params }: Params) {
       include: { member: { select: { id: true, nim: true, fullName: true } }, admin: { select: { name: true } } },
     }),
     db.checkIn.groupBy({ by: ['method'], where: { eventId: event.id }, _count: { _all: true } }),
-    eventFormOptions(),
+    eventFormOptions(cityScope(admin)),
     db.city.findMany({
-      where: { active: true },
+      where: { active: true, id: cityScope(admin) },
       orderBy: { name: 'asc' },
       select: { id: true, name: true, _count: { select: { members: { where: { status: 'ACTIVE', user: { status: 'ACTIVE' } } } } } },
     }),
@@ -101,13 +105,13 @@ export default async function EventPage({ params }: Params) {
             </div>
           </div>
           <div className="flex shrink-0 flex-wrap items-center gap-2">
-            <BroadcastButton
+            {can(admin.role, 'hq.manage') && <BroadcastButton
               eventId={event.id}
               eventCityId={event.cityId}
               cities={cityMembers.map((c) => ({ id: c.id, name: c.name, members: c._count.members }))}
               preview={pushPreview}
               disabled={event.status === 'DRAFT'}
-            />
+            />}
             <EventDialogButton
               cities={form.cities}
               defaults={form.defaults}
@@ -125,6 +129,7 @@ export default async function EventPage({ params }: Params) {
         </header>
       </div>
 
+      <DrawPanel eventId={event.id} />
       <div className="grid items-start gap-6 lg:grid-cols-5">
         <Card className="min-w-0 overflow-hidden lg:col-span-3">
           <CardHeader

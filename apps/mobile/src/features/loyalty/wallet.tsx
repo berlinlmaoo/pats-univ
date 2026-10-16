@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Alert, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { Gift, Trophy, FileText } from 'lucide-react-native';
@@ -25,43 +25,29 @@ import { ApiFailure, errorKey } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
 import { colors, radius, size, space, useColors } from '@/theme';
 import { Choices, Group } from './ui';
-import { PrizeWheel } from './wheel';
+import { LiveDraw } from './draw';
+import { useSocialRoom } from '../social/realtime';
 
 export function WalletScreen() {
   const t = useT();
   const c = useColors();
-  const { call } = useAuth();
+  const { call, me } = useAuth();
   const state = useApi<WalletDto>('/api/loyalty/wallet', { pollMs: 15_000 });
+  useSocialRoom(me?.member ? { kind: 'wallet', id: me.member.id } : null, state.reload);
   const [eventId, setEventId] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [winner, setWinner] = useState<RewardDto | null>(null);
-  const [wheelPrizes, setWheelPrizes] = useState<RewardDto[] | null>(null);
-  const event =
-    state.data?.events.find((e) => e.id === eventId) ?? state.data?.events[0];
-  const prizes = useMemo(
-    () =>
-      state.data?.rewards.filter(
-        (r) =>
-          r.type === 'SPIN_PRIZE' &&
-          r.spinWeight > 0 &&
-          (r.stock === null || r.stock > 0),
-      ) ?? [],
-    [state.data?.rewards],
-  );
-  async function issue(reward?: RewardDto) {
+  const event = state.data?.events.find((e) => e.id === eventId) ?? state.data?.events[0];
+  async function issue(reward: RewardDto) {
     if (!event || busy) return;
     setBusy(true);
     setError('');
-    setWinner(null);
-    if (!reward) setWheelPrizes(prizes);
     try {
-      const result = await call<{ redemption: RedemptionDto }>(
+      await call<{ redemption: RedemptionDto }>(
         'POST',
-        reward ? '/api/loyalty/redeem' : '/api/loyalty/spin',
+        '/api/loyalty/redeem',
         { eventId: event.id, ...(reward ? { rewardId: reward.id } : {}) },
       );
-      if (!reward) setWinner(result.redemption.reward);
       await state.reload();
     } catch (err) {
       setError(errorKey(err instanceof ApiFailure ? err.code : 'INTERNAL'));
@@ -69,7 +55,7 @@ export function WalletScreen() {
       setBusy(false);
     }
   }
-  const confirm = (reward?: RewardDto) =>
+  const confirm = (reward: RewardDto) =>
     Alert.alert(
       t(reward ? 'loyalty.redeem' : 'loyalty.spin'),
       t('loyalty.confirmRedeem'),
@@ -144,13 +130,8 @@ export function WalletScreen() {
                 title={t('loyalty.leaderboard')}
                 onPress={() => router.push('/leaderboard')}
               />
-              {state.data.isPromoter && (
-                <ListRow
-                  icon={FileText}
-                  title={t('loyalty.promoter')}
-                  onPress={() => router.push('/promoter')}
-                />
-              )}
+              <ListRow icon={FileText} title={t('phase5.claimTitle')} onPress={() => router.push('/claims')} />
+
             </Card>
             {state.data.events.length ? (
               <Choices
@@ -177,7 +158,7 @@ export function WalletScreen() {
               />
             )}
             <SectionLabel>{t('loyalty.catalogue')}</SectionLabel>
-            {!state.data.rewards.filter((r) => r.type === 'DIRECT').length ? (
+            {!state.data.rewards.filter((r) => r.type === 'DIRECT' && (!event || r.venueId === event.venueId)).length ? (
               <EmptyState
                 icon={Gift}
                 title={t('loyalty.emptyRewards')}
@@ -192,7 +173,7 @@ export function WalletScreen() {
               />
             ) : (
               state.data.rewards
-                .filter((r) => r.type === 'DIRECT')
+                .filter((r) => r.type === 'DIRECT' && (!event || r.venueId === event.venueId))
                 .map((r) => (
                   <Card key={r.id} style={styles.card}>
                     <Text variant="title3">{r.name}</Text>
@@ -218,56 +199,7 @@ export function WalletScreen() {
                   </Card>
                 ))
             )}
-            {(!!prizes.length || !!winner) && (
-              <Card style={styles.card}>
-                <Text variant="title3">{t('loyalty.spin')}</Text>
-                <Text variant="bodySm" tone="textMuted">
-                  {t('loyalty.spinPrice', {
-                    cost: formatCount(state.data.spinCostXp),
-                    limit: formatCount(
-                      event?.spinLimit ?? state.data.maxSpinsPerEvent,
-                    ),
-                  })}
-                </Text>
-                <PrizeWheel
-                  rewards={wheelPrizes ?? prizes}
-                  winner={winner}
-                  running={busy}
-                />
-                {winner && (
-                  <Text weight={600} accessibilityLiveRegion="polite">
-                    {t('loyalty.spinResult', { reward: winner.name })}
-                  </Text>
-                )}
-                {prizes.map((r) => (
-                  <Text variant="caption" key={r.id}>
-                    {r.name} · {t('loyalty.weight')}:{' '}
-                    {formatCount(r.spinWeight)}
-                  </Text>
-                ))}
-                <Text variant="caption" tone="textMuted">
-                  {t('loyalty.spinHint')}
-                </Text>
-                {event && (
-                  <Text variant="bodySm">
-                    {t('loyalty.spinsUsed', {
-                      used: formatCount(event.spinsUsed),
-                      limit: formatCount(event.spinLimit),
-                    })}
-                  </Text>
-                )}
-                <Button
-                  label={t('loyalty.spin')}
-                  loading={busy}
-                  disabled={
-                    !event ||
-                    event.spinsUsed >= event.spinLimit ||
-                    state.data.balance < state.data.spinCostXp
-                  }
-                  onPress={() => confirm()}
-                />
-              </Card>
-            )}
+            {event && <LiveDraw key={event.id} eventId={event.id} changed={state.reload} />}
             <SectionLabel>{t('loyalty.codes')}</SectionLabel>
             {!state.data.redemptions.length ? (
               <EmptyState
@@ -284,6 +216,7 @@ export function WalletScreen() {
                 />
               ))
             )}
+            {state.data.expiring.map((lot, i) => <Text key={i} variant="caption" tone="textMuted">{t('phase5.xpExpiry', { xp: formatCount(lot.xp), date: formatDateTime(new Date(lot.expiresAt), t.locale) })}</Text>)}
             <SectionLabel>{t('loyalty.ledger')}</SectionLabel>
             {!state.data.ledger.length ? (
               <EmptyState

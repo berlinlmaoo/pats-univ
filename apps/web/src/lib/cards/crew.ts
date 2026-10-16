@@ -32,7 +32,7 @@ export async function previewHandover(admin: AuthUser, input: { token: string; n
   if (card.nfcUid !== input.nfcUid) throw new AppError('CARD_UID_MISMATCH', 409);
   const member = toCardMember(card.member);
   let issue: HandoverPreviewResponse['issue'] = null;
-  if (admin.role === 'LOCAL_ADMIN' && card.member.cityId !== admin.cityId) issue = { code: 'OTHER_CITY' };
+  if (!can(admin.role, 'hq.manage') && card.member.cityId !== admin.cityId) issue = { code: 'OTHER_CITY' };
   else if (member.status !== 'ACTIVE') issue = { code: 'MEMBER_INACTIVE' };
   else if (card.status === 'DELIVERED') issue = { code: 'ALREADY_DELIVERED', at: card.deliveredAt?.toISOString(), by: card.deliveredBy?.name ?? undefined };
   return { card: toCardInfo(card), member, issue };
@@ -79,7 +79,7 @@ export async function searchCardMembers(admin: AuthUser, q: string): Promise<Cre
   if (term.length < 2) return { members: [] };
   const members = await db.member.findMany({
     where: {
-      ...(admin.role === 'LOCAL_ADMIN' ? { cityId: admin.cityId ?? '__none__' } : {}),
+      ...(!can(admin.role, 'hq.manage') ? { cityId: admin.cityId ?? '__none__' } : {}),
       OR: [{ fullName: { contains: term, mode: 'insensitive' } }, { nim: { contains: term.toUpperCase() } }],
     },
     orderBy: { fullName: 'asc' },

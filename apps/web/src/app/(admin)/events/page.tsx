@@ -9,8 +9,9 @@ import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader } from '@/components/ui/page-header';
 import type { Prisma } from '@/generated/prisma';
+import { cityScope } from '@/lib/loyalty/operations';
 import { db } from '@/lib/db';
-import { requireHq } from '@/lib/hq/guard';
+import { requireDashboard } from '@/lib/hq/guard';
 import { getT } from '@/lib/i18n';
 import { eventFormOptions } from '@/lib/events/form-options';
 import { EventDialogButton } from './event-form';
@@ -23,11 +24,11 @@ export async function generateMetadata(): Promise<Metadata> {
 type Search = { when?: string; city?: string };
 
 export default async function EventsPage({ searchParams }: { searchParams: Promise<Search> }) {
-  await requireHq();
+  const admin = await requireDashboard();
   const t = await getT();
   const sp = await searchParams;
   const when: When = sp.when === 'past' || sp.when === 'all' ? sp.when : 'upcoming';
-  const cityId = sp.city ?? '';
+  const cityId = cityScope(admin, sp.city || undefined) ?? '';
   const now = new Date();
 
   const where: Prisma.EventWhereInput = {
@@ -46,8 +47,8 @@ export default async function EventsPage({ searchParams }: { searchParams: Promi
         _count: { select: { checkIns: true } },
       },
     }),
-    eventFormOptions(),
-    db.event.count().then((n) => n > 0),
+    eventFormOptions(cityScope(admin)),
+    db.event.count({ where: { cityId: cityScope(admin) } }).then((n) => n > 0),
   ]);
   // Method audit (PLAN.md §4 Phase 2): how often the door fell back from the card to QR or manual.
   const methods = await db.checkIn.groupBy({ by: ['eventId', 'method'], where: { eventId: { in: events.map((e) => e.id) } }, _count: { _all: true } });

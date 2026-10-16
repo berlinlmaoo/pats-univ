@@ -1,8 +1,8 @@
 # PATS University — Build Plan (Showcase Prototype)
 
-Versi: 1.0 — 16 Oktober 2026. Mengacu ke [PRODUCT.md](PRODUCT.md).
+Versi: 1.5 — 16 Oktober 2026. Mengacu ke [PRODUCT.md](PRODUCT.md).
 
-Tujuan plan ini: membangun prototype yang bisa didemokan end-to-end sesuai visi penuh PRD, dalam lima fase, masing-masing berakhir dengan sesuatu yang bisa diperlihatkan.
+Tujuan plan ini: membangun prototype yang bisa didemokan end-to-end sesuai visi penuh PRD, dalam enam fase, masing-masing berakhir dengan sesuatu yang bisa diperlihatkan.
 
 ## Fokus: sistem absensi berbasis kartu lebih dulu
 
@@ -264,7 +264,7 @@ Setiap fase diakhiri **demo yang bisa diperlihatkan** dan `docs/STATUS.md` diper
 
 **Gerbang**: demo Phase 2 harus lolos end-to-end (registrasi → encode → serah terima → check-in NFC → riwayat → dashboard) sebelum Phase 3 dimulai.
 
-### Phase 3 — XP, leaderboard, reward, spin wheel, laporan PR, recap & export
+### Phase 3 (historis; aturan diganti Phase 5) — XP, leaderboard, reward, spin wheel, laporan PR, recap & export
 
 **Isi**
 
@@ -282,7 +282,7 @@ Setiap fase diakhiri **demo yang bisa diperlihatkan** dan `docs/STATUS.md` diper
 
 **Effort**: 10–12 hari.
 
-### Phase 4 — Social hub, reservasi, roaming
+### Phase 4 (historis; aturan diganti Phase 5) — Social hub, reservasi, roaming
 
 **Isi**
 
@@ -296,6 +296,24 @@ Setiap fase diakhiri **demo yang bisa diperlihatkan** dan `docs/STATUS.md` diper
 **Demo**: member Jakarta chat di hub Jakarta dengan voice note; mention `@ADMIN` → admin dapat push; member Bandung minta roaming ke event Jakarta → admin Jakarta approve absensi, HQ approve hub → member Bandung melihat hub Jakarta; 48 jam disimulasikan dengan mengubah setting → akses hilang; reservasi sofa dikonfirmasi admin; screenshot hub di Android gagal, di iOS tercatat.
 
 **Effort**: 10–12 hari.
+
+### Phase 5 — Keputusan tim 16 Oktober dan Claim XP
+
+**Hasil**: aturan aktif mengikuti PRODUCT §12. Implementasi dan demo terperinci: [PHASE5-REPORT.md](PHASE5-REPORT.md).
+
+- Migrasi Regional Admin satu kota, alias API lama, capability checks dan dashboard regional; batas lima admin dengan city lock.
+- Welcome 100 sekali, check-in 50 + confirmed reservation 25; katalog reward per venue; expiry XP 18 bulan dan refund membawa expiry asli.
+- Live draw event: hadiah/peak hour/kapasitas, lima nama, 250 XP, satu entry/member, slot dikunci DB, draw random sekali, audit dan Socket.IO. Menggantikan wheel berbobot.
+- Kuartal kalender WIB: #1 setiap kota mendapat satu free slot untuk event berikutnya/pilihan HQ; expiry tiga bulan dari tutup kuartal dan konsumsi CAS.
+- **Addendum menggantikan OPEN-3:** menu Claim XP untuk PR dan member setelah `endsAt`; kedua form, receipt opsional, edit pending, unik member/event/form. Regional app/web queue adjust/approve/reject; bonus otomatis sekali, audit sebelum/sesudah, notifikasi dan private wallet room. Admin tidak memasukkan recap PR atas nama member.
+- HQ-only timeline + reaksi; recap menambah PIC dan accountable; PR badge/appointment tetap.
+- Kartu pengganti Rp100.000 dengan pencatatan pembayaran; request pindah kota diputuskan HQ, NIM/kartu tetap; anonimkan profil saat keluar, simpan ledger/kehadiran.
+- Reservasi regional dengan minimum charge venue/slot; satu unpaid lintas event sampai DP dicatat. Roaming 48 jam tanpa batas default.
+- Production seed JKT/JOG, demo memisahkan data contoh. Artwork/legal tetap placeholder. `{city}` terisi pada push; copy verbatim T9 belum ada di sumber, jangan menandai fallback sebagai final.
+
+**Verifikasi**: unit ledger/tie-break/refund/formula dan logika layar mobile, typecheck/lint, migrasi legacy account, matriks HTTP/PostgreSQL/Socket.IO dengan race nyata, satu build Next.js di akhir. Tidak menjalankan simulator, emulator, Metro atau native build. Gerbang resource: free memory ≥25%, load1 <15, tanpa xcodebuild/build/install lain.
+
+**Changelog 16 Oktober**: tambahkan Phase 5; default dan demo historis Phase 3/4 di atas tidak lagi menjadi spesifikasi aktif. Deploy/merge dilakukan sesi utama; push, artwork, legal dan QA perangkat fisik tercatat eksplisit pada laporan.
 
 ### Ringkasan effort
 

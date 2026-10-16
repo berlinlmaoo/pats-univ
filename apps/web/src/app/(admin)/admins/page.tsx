@@ -20,7 +20,7 @@ export default async function AdminsPage() {
   const t = await getT();
   const [admins, cities] = await Promise.all([
     db.user.findMany({
-      where: { role: 'LOCAL_ADMIN' },
+      where: { role: 'REGIONAL_ADMIN' },
       orderBy: [{ city: { name: 'asc' } }, { name: 'asc' }],
       include: { city: { select: { name: true, timezone: true } } },
     }),

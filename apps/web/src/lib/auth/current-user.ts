@@ -1,4 +1,5 @@
 import 'server-only';
+import { can } from '@pats/shared';
 import { cookies } from 'next/headers';
 import { cache } from 'react';
 import type { Role, User } from '@/generated/prisma';
@@ -56,13 +57,13 @@ export async function getApiUser(req: Request): Promise<AuthUser | null> {
 export async function requireApiUser(req: Request, roles?: readonly Role[]): Promise<AuthUser> {
   const user = await getApiUser(req);
   if (!user) throw new AppError('UNAUTHENTICATED', 401);
-  if (roles && !roles.includes(user.role)) throw new AppError('FORBIDDEN', 403);
+  if (roles && !roles.some(role => role === 'SUPER_ADMIN' ? can(user.role, 'hq.manage') : role === 'REGIONAL_ADMIN' ? can(user.role, 'city.operations') : user.role === 'MEMBER')) throw new AppError('FORBIDDEN', 403);
   return user;
 }
 
 /** Local admins only reach their own city; HQ reaches every city. */
 export function requireCityAccess(user: AuthUser, cityId: string): void {
-  if (user.role === 'SUPER_ADMIN') return;
-  if (user.role === 'LOCAL_ADMIN' && user.cityId === cityId) return;
+  if (can(user.role, 'hq.manage')) return;
+  if (can(user.role, 'city.operations') && user.cityId === cityId) return;
   throw new AppError('FORBIDDEN', 403, 'No access to this city');
 }

@@ -12,6 +12,9 @@ import { saveSettingAction } from '@/lib/hq/settings';
 import { cn } from '@/lib/cn';
 
 const UNIT_LABEL = {
+  months: 'settings.unitMonths',
+  rupiah: 'settings.unitRupiah',
+  slots: 'settings.unitSlots',
   requests: 'settings.unitRequests',
   days: 'settings.unitDays',
   mb: 'settings.unitMb',

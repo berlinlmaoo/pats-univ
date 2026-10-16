@@ -2,7 +2,7 @@
  * Domain enums shared by server, dashboard and app. They mirror the Prisma enums in
  * apps/web/prisma/schema.prisma (the server checks they stay in sync at build time).
  */
-export const ROLES = ['MEMBER', 'LOCAL_ADMIN', 'SUPER_ADMIN'] as const;
+export const ROLES = ['MEMBER', 'LOCAL_ADMIN', 'REGIONAL_ADMIN', 'SUPER_ADMIN'] as const;
 export type Role = (typeof ROLES)[number];
 
 export const CARD_STATUSES = [

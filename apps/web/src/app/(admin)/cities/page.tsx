@@ -25,7 +25,7 @@ export default async function CitiesPage() {
   const cities = await db.city.findMany({
     orderBy: { name: 'asc' },
     include: {
-      _count: { select: { members: true, venues: true, admins: { where: { role: 'LOCAL_ADMIN' } } } },
+      _count: { select: { members: true, venues: true, admins: { where: { role: 'REGIONAL_ADMIN' } } } },
       venues: { select: { id: true, name: true }, orderBy: { name: 'asc' } },
     },
   });

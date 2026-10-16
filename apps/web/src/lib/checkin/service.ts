@@ -1,4 +1,5 @@
 import 'server-only';
+import { creditXp } from '../loyalty/xp';
 import {
   CHECK_IN_METHODS,
   eventPhase,
@@ -223,7 +224,10 @@ export async function commitCheckIn(admin: AuthUser, input: CommitInput, now = n
     }
     // Credited now, shown from Phase 3 (PLAN.md §4).
     if (xp > 0) {
-      await tx.xpLedger.create({ data: { memberId: member.id, delta: xp, reason: 'CHECK_IN', refType: 'CheckIn', refId: row.id, createdAt: now } });
+      await creditXp(tx, { memberId: member.id, delta: xp, reason: 'CHECK_IN', refType: 'CheckIn', refId: row.id, createdAt: now, awardKey: `checkin:${row.id}` });
+    }
+    if (await tx.reservation.findFirst({ where: { memberId: member.id, eventId: event.id, status: 'CONFIRMED' } })) {
+      await creditXp(tx, { memberId: member.id, delta: await getSetting(tx, 'reservationBonusXp', { cityId: event.cityId }), reason: 'RESERVATION_BONUS', refType: 'CheckIn', refId: row.id, awardKey: `reservation:${row.id}`, createdAt: now });
     }
     if (input.method === 'MANUAL') {
       await tx.auditLog.create({

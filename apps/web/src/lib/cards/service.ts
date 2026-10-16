@@ -1,4 +1,5 @@
 import 'server-only';
+import { getSetting } from '../settings';
 import {
   BATCH_ACTION_FROM,
   cardUrl,
@@ -231,7 +232,7 @@ export async function revokeCard(actor: AuthUser, cardId: string, reason: string
     });
     if (res.count !== 1) throw new AppError('CARD_REVOKED', 409);
     await tx.reencodeRequest.updateMany({ where: { cardId, status: { in: ['PENDING', 'APPROVED'] } }, data: { status: 'EXPIRED' } });
-    const replacement = await tx.card.create({ data: { memberId: card.memberId, status: 'NOT_PRINTED', replacesCardId: card.id } });
+    const replacement = await tx.card.create({ data: { memberId: card.memberId, status: 'NOT_PRINTED', replacesCardId: card.id, replacementFee: await getSetting(tx, 'cardReplacementFee') } });
     await tx.auditLog.create({
       data: {
         actorId: actor.id,

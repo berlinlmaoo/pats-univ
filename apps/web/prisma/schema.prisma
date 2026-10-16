@@ -15,7 +15,7 @@ datasource db {
 
 enum Role {
   MEMBER
-  LOCAL_ADMIN
+  REGIONAL_ADMIN
   SUPER_ADMIN
 }
 
@@ -75,11 +75,15 @@ enum CheckInMethod {
 }
 
 enum XpReason {
+  WELCOME
+  RESERVATION_BONUS
+  EXPIRE
   CHECK_IN
   REDEEM
   SPIN
   REFUND
   PROMOTER_BONUS
+  MEMBER_CLAIM
   ADJUST
 }
 
@@ -194,6 +198,7 @@ enum SessionClient {
 
 /// A login. Members and admins are both users; the role decides what they can reach.
 model User {
+  reactions PostReaction[]
   id                String     @id @default(cuid())
   /// Login identity (lower-case). OTP codes are sent here.
   email             String     @unique
@@ -202,7 +207,7 @@ model User {
   /// Display name (members: same as Member.fullName).
   name              String
   role              Role       @default(MEMBER)
-  /// Home city for LOCAL_ADMIN; null for SUPER_ADMIN. Members use Member.cityId.
+  /// Home city for REGIONAL_ADMIN; null for SUPER_ADMIN. Members use Member.cityId.
   cityId            String?
   status            UserStatus @default(ACTIVE)
   /// Language for emails and push copy.
@@ -283,6 +288,10 @@ model OtpCode {
 // ─── Members & cards ──────────────────────────────────────────────────────────
 
 model Member {
+  xpClaims XpClaim[]
+  drawEntries DrawEntry[]
+  freeDrawCredits FreeDrawCredit[]
+  regionChanges RegionChangeRequest[]
   id            String       @id @default(cuid())
   userId        String       @unique
   /// <city code><yy><5-digit sequence>, e.g. JKT2600042. Never changes.
@@ -350,6 +359,9 @@ model Card {
   /// Storage key of the per-member print PDF.
   printFileUrl       String?
   /// The revoked card this one replaces (lost or damaged).
+  replacementFee    Int?
+  feePaidAt          DateTime?
+  feeRecordedById    String?
   replacesCardId     String?    @unique
   /// Encode lease: the station holding this card right now (parallel encoding at HQ).
   leaseId            String?    @unique
@@ -458,6 +470,9 @@ model City {
 
   admins          User[]                @relation("CityAdmins")
   members         Member[]
+  freeDrawCredits FreeDrawCredit[]
+  regionChangesFrom RegionChangeRequest[] @relation("RegionFrom")
+  regionChangesTo RegionChangeRequest[] @relation("RegionTo")
   nimSequences    NimSequence[]
   venues          Venue[]
   events          Event[]
@@ -480,6 +495,7 @@ model Venue {
   lat       Float?
   lng       Float?
   /// Floor plan: { slots: [{ code, kind: "SOFA" | "TABLE", x, y, w, h, pax }] }.
+  minimumCharge Int @default(0)
   layout    Json?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -487,11 +503,13 @@ model Venue {
   city         City          @relation(fields: [cityId], references: [id])
   events       Event[]
   reservations Reservation[]
+  rewards      Reward[]
 
   @@index([cityId])
 }
 
 model Event {
+  xpClaims XpClaim[]
   id                String      @id @default(cuid())
   cityId            String
   venueId           String?
@@ -507,6 +525,15 @@ model Event {
   capacity          Int?
   /// Overrides the maxSpinsPerEvent setting when set.
   maxSpinsPerMember Int?
+  drawPrize         String?
+  peakStartsAt      DateTime?
+  peakEndsAt        DateTime?
+  drawSlots         Int?
+  drawStartedAt     DateTime?
+  drawStartedById   String?
+  drawWinnerEntryId String? @unique
+  drawEntries       DrawEntry[]
+  freeDrawCredits   FreeDrawCredit[]
   createdById       String?
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt
@@ -563,6 +590,9 @@ model XpLedger {
   id        String   @id @default(cuid())
   memberId  String
   delta     Int
+  expiresAt DateTime?
+  awardKey  String? @unique
+  allocations Json?
   reason    XpReason
   refType   String?
   refId     String?
@@ -597,6 +627,8 @@ model Reward {
   xpCost      Int
   /// Null = available in every city.
   cityId      String?
+  venueId     String?
+  venue       Venue? @relation(fields: [venueId], references: [id])
   /// Null = unlimited.
   stock       Int?
   active      Boolean    @default(true)
@@ -638,11 +670,13 @@ model PromoterReport {
   memberId      String
   eventId       String
   cityId        String
+  reservationCount Int @default(0)
+  notes         String?
   guestCount    Int
   /// Optional [{ name, phone }]. Private, like the receipt.
   guests        Json?
   /// Private bucket key; served only through short-lived signed URLs.
-  receiptUrl    String
+  receiptUrl    String @default("")
   receiptAmount Int?
   status        PromoterReportStatus @default(SUBMITTED)
   bonusKind     BonusKind?
@@ -699,6 +733,7 @@ model Channel {
 }
 
 model Post {
+  reactions PostReaction[]
   id        String    @id @default(cuid())
   channelId String
   authorId  String
@@ -772,6 +807,10 @@ model Reservation {
   /// Slot code from Venue.layout. Unique per event while CONFIRMED (partial index).
   slotCode  String
   pax       Int
+  minimumCharge Int @default(0)
+  downPaymentAmount Int?
+  downPaymentAt DateTime?
+  downPaymentById String?
   status    ReservationStatus @default(PENDING)
   note      String?
   createdAt DateTime          @default(now())
@@ -824,6 +863,8 @@ model TrafficRecap {
   revenueFdc    Int       @default(0)
   /// Computed by the server.
   total         Int       @default(0)
+  personInCharge String @default("")
+  accountablePerson String @default("")
   note          String?
   submittedById String?
   lockedAt      DateTime?
@@ -905,4 +946,85 @@ model Setting {
   updatedBy User?  @relation("SettingUpdatedBy", fields: [updatedById], references: [id])
 
   @@index([key])
+}
+
+/// A stage draw entry. Unique member/event and position make seats impossible to double-book.
+model DrawEntry {
+  id String @id @default(cuid())
+  eventId String
+  memberId String
+  position Int
+  xpSpent Int
+  freeCreditId String? @unique
+  createdAt DateTime @default(now())
+  event Event @relation(fields: [eventId], references: [id])
+  member Member @relation(fields: [memberId], references: [id])
+  freeCredit FreeDrawCredit? @relation(fields: [freeCreditId], references: [id])
+  @@unique([eventId, memberId])
+  @@unique([eventId, position])
+}
+
+model FreeDrawCredit {
+  id String @id @default(cuid())
+  cityId String
+  memberId String
+  periodStart DateTime
+  periodEnd DateTime
+  eventId String?
+  expiresAt DateTime
+  usedAt DateTime?
+  createdAt DateTime @default(now())
+  city City @relation(fields: [cityId], references: [id])
+  member Member @relation(fields: [memberId], references: [id])
+  event Event? @relation(fields: [eventId], references: [id])
+  entry DrawEntry?
+  @@unique([cityId, periodStart])
+}
+
+model RegionChangeRequest {
+  id String @id @default(cuid())
+  memberId String
+  fromCityId String
+  toCityId String
+  reason String
+  status String @default("PENDING")
+  decidedById String?
+  decidedAt DateTime?
+  decisionNote String?
+  createdAt DateTime @default(now())
+  member Member @relation(fields: [memberId], references: [id])
+  fromCity City @relation("RegionFrom", fields: [fromCityId], references: [id])
+  toCity City @relation("RegionTo", fields: [toCityId], references: [id])
+}
+
+/// Post-event claims. Creation and review use distinct transitions; pending claims may be edited.
+model XpClaim {
+  id String @id @default(cuid())
+  memberId String
+  eventId String
+  formType String
+  guestCount Int @default(0)
+  reservationCount Int
+  receiptUrl String @default("")
+  notes String @default("")
+  status String @default("PENDING")
+  bonusValue Int?
+  reviewedById String?
+  reviewedAt DateTime?
+  rejectReason String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  member Member @relation(fields: [memberId], references: [id])
+  event Event @relation(fields: [eventId], references: [id])
+  @@unique([memberId, eventId, formType])
+  @@index([status, eventId])
+}
+
+model PostReaction {
+  postId String
+  userId String
+  createdAt DateTime @default(now())
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@id([postId, userId])
 }

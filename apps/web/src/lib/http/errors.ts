@@ -14,6 +14,12 @@ export class AppError extends Error {
 
 /** i18n key for each error code (UI side). */
 export const ERROR_MESSAGE_KEY: Record<ApiErrorCode, string> = {
+  DRAW_FULL: 'phase5.drawFull',
+  DRAW_COMPLETED: 'phase5.drawCompleted',
+  DRAW_NOT_READY: 'phase5.drawNotReady',
+  ADMIN_LIMIT: 'phase5.adminLimit',
+  CLAIM_EXISTS: 'phase5.claimExists',
+  CLAIM_NOT_OPEN: 'phase5.claimNotOpen',
   VALIDATION: 'validation.invalid',
   UNAUTHENTICATED: 'errors.unauthenticated',
   FORBIDDEN: 'errors.forbidden',

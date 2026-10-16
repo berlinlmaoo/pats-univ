@@ -6,7 +6,7 @@ import { redirect } from 'next/navigation';
 import { createEvent, transitionEvent, updateEvent } from '../events/service';
 import { AppError, ERROR_MESSAGE_KEY } from '../http/errors';
 import type { ActionResult } from './action-result';
-import { requireHq } from './guard';
+import { requireDashboard } from './guard';
 
 function failure(err: unknown): ActionResult {
   if (err instanceof AppError) {
@@ -17,7 +17,7 @@ function failure(err: unknown): ActionResult {
 
 /** Create (eventId null, then go to the new event) or edit an event from the dashboard. */
 export async function saveEventAction(eventId: string | null, _prev: ActionResult | null, form: FormData): Promise<ActionResult> {
-  const hq = await requireHq();
+  const hq = await requireDashboard();
   const raw = Object.fromEntries(form);
   const parsed = eventInputSchema.safeParse({ ...raw, publish: form.has('publish') });
   if (!parsed.success) return { ok: false, fields: fieldErrors(parsed.error) };
@@ -36,7 +36,7 @@ export async function saveEventAction(eventId: string | null, _prev: ActionResul
 const DONE: Record<EventAction, string> = { publish: 'events.published', open: 'events.opened', close: 'events.closed' };
 
 export async function eventTransitionAction(eventId: string, action: EventAction): Promise<ActionResult> {
-  const hq = await requireHq();
+  const hq = await requireDashboard();
   try {
     await transitionEvent(hq, eventId, action);
   } catch (err) {

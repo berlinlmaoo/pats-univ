@@ -7,7 +7,7 @@ import { getSetting } from '@/lib/settings';
 
 /** What the app's event form needs: the admin's city, its venues and the default window. */
 export const GET = route(async (req: Request) => {
-  const admin = await requireApiUser(req, ['LOCAL_ADMIN']);
+  const admin = await requireApiUser(req, ['REGIONAL_ADMIN']);
   if (!admin.cityId) throw new AppError('FORBIDDEN', 403);
   const city = await db.city.findUniqueOrThrow({
     where: { id: admin.cityId },

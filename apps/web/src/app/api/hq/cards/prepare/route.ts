@@ -8,7 +8,7 @@ import { ok, readJson, route } from '@/lib/http/respond';
  * it for this station. HQ stations, or a city admin with an approved re-encode (grantId).
  */
 export const POST = route(async (req: Request) => {
-  const user = await requireApiUser(req, ['SUPER_ADMIN', 'LOCAL_ADMIN']);
+  const user = await requireApiUser(req, ['SUPER_ADMIN', 'REGIONAL_ADMIN']);
   const input = stationClaimSchema.parse(await readJson(req));
   return ok(await claimCard(user, input));
 });

@@ -2,7 +2,7 @@
  * Demo data (PLAN.md §4): 3 cities, 1 HQ account, 2 city admins, 20 members, 2 venues,
  * 3 upcoming events plus one live Jakarta event with check-in open, and every setting at its
  * default. Safe to re-run: existing rows are kept.
- * City codes are placeholders until the team confirms the launch cities (D2 / T7).
+ * Launch cities are JKT/JOG. Production mode excludes all demo accounts, venues and events.
  */
 import { PrismaPg } from '@prisma/adapter-pg';
 import { SETTINGS, settingId, type SettingKey } from '@pats/shared';
@@ -14,6 +14,7 @@ const db = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.
 
 const CITIES = [
   { code: 'JKT', name: 'Jakarta', waGroupUrl: 'https://chat.whatsapp.com/PATSJakartaDemo' },
+  { code: 'JOG', name: 'Jogja', waGroupUrl: null },
   { code: 'BDG', name: 'Bandung', waGroupUrl: 'https://chat.whatsapp.com/PATSBandungDemo' },
   { code: 'SBY', name: 'Surabaya', waGroupUrl: null },
 ];
@@ -45,9 +46,10 @@ const MEMBERS: [string, string, string, string, string][] = [
 const slug = (name: string) => name.toLowerCase().replace(/[^a-z]+/g, '.').replace(/^\.|\.$/g, '');
 
 async function main() {
+  const production = process.env.SEED_MODE === 'production' || process.env.NODE_ENV === 'production';
   const cities = new Map<string, Awaited<ReturnType<typeof db.city.upsert>>>();
-  for (const c of CITIES) {
-    cities.set(c.code, await db.city.upsert({ where: { code: c.code }, create: c, update: {} }));
+  for (const c of CITIES.filter(c => !production || ['JKT', 'JOG'].includes(c.code))) {
+    cities.set(c.code, await db.city.upsert({ where: { code: c.code }, create: production ? { ...c, waGroupUrl: null } : c, update: {} }));
   }
 
   for (const key of Object.keys(SETTINGS) as SettingKey[]) {
@@ -58,6 +60,13 @@ async function main() {
     });
   }
 
+  if (production) {
+    await db.city.updateMany({ where: { code: { in: ['BDG', 'SBY'] } }, data: { active: false } });
+    const email = process.env.SEED_SUPER_ADMIN_EMAIL?.toLowerCase();
+    if (email) await db.user.upsert({ where: { email }, create: { email, phone: '', name: 'HQ PATS', role: 'SUPER_ADMIN' }, update: {} });
+    console.log('Production cities and settings ready: JKT, JOG.');
+    return;
+  }
   const hqEmail = (process.env.SEED_SUPER_ADMIN_EMAIL || 'hq@patsuniv.test').toLowerCase();
   await db.user.upsert({
     where: { email: hqEmail },
@@ -67,12 +76,13 @@ async function main() {
 
   for (const [code, name, phone] of [
     ['JKT', 'Andi Crew Jakarta', '+6281100000002'],
+    ['JOG', 'Crew Jogja', '+6281100000004'],
     ['BDG', 'Sari Crew Bandung', '+6281100000003'],
   ] as const) {
     const email = `admin.${code.toLowerCase()}@patsuniv.test`;
     await db.user.upsert({
       where: { email },
-      create: { email, phone, name, role: 'LOCAL_ADMIN', cityId: cities.get(code)!.id },
+      create: { email, phone, name, role: 'REGIONAL_ADMIN', cityId: cities.get(code)!.id },
       update: {},
     });
   }
@@ -115,6 +125,7 @@ async function main() {
 
   const venues = [
     { cityCode: 'JKT', name: 'PATS Senopati', address: 'Jl. Senopati No. 8, Jakarta Selatan', lat: -6.2297, lng: 106.8091 },
+    { cityCode: 'JOG', name: 'PATS Jogja', address: 'Jogja', lat: -7.7956, lng: 110.3695 },
     { cityCode: 'BDG', name: 'PATS Braga', address: 'Jl. Braga No. 21, Bandung', lat: -6.9175, lng: 107.6091 },
   ];
   for (const v of venues) {
@@ -149,6 +160,7 @@ async function main() {
   const events = [
     { cityCode: 'JKT', venue: 'PATS Senopati', title: 'PATS Friday Session', inDays: 2 },
     { cityCode: 'JKT', venue: 'PATS Senopati', title: 'PATS University Launch Night', inDays: 9 },
+    { cityCode: 'JOG', venue: 'PATS Jogja', title: 'PATS Jogja Night', inDays: 4 },
     { cityCode: 'BDG', venue: 'PATS Braga', title: 'PATS Bandung Takeover', inDays: 5 },
   ];
   for (const e of events) {

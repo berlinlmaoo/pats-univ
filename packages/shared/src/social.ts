@@ -3,7 +3,7 @@ import { z } from "zod";
 const id = z.string().min(1).max(100);
 const body = z.string().trim().max(4000, "validation.tooLong");
 export const roomSchema = z.object({
-  kind: z.enum(["channel", "conversation", "attendance"]),
+  kind: z.enum(["channel", "conversation", "attendance", "draw", "wallet"]),
   id,
 });
 export type SocialRoom = z.infer<typeof roomSchema>;
@@ -53,6 +53,7 @@ export const slotSchema = z.object({
   w: z.number().int().min(1).max(12),
   h: z.number().int().min(1).max(12),
   pax: z.number().int().min(1).max(100),
+  minimumCharge: z.number().int().min(0).max(2_000_000_000).optional(),
   minimumSpend: z.string().trim().max(200).optional(),
 });
 export const layoutSchema = z
@@ -131,6 +132,7 @@ export function validRoaming(
   );
 }
 export interface HubChannel {
+  canPostTimeline?: boolean;
   id: string;
   cityId: string;
   name: string;
@@ -140,6 +142,8 @@ export interface HubChannel {
   memberPosting: boolean | null;
 }
 export interface HubItem {
+  reactionCount?: number;
+  reacted?: boolean;
   id: string;
   body: string;
   author: { id: string; name: string };
@@ -166,6 +170,9 @@ export interface FeedResponse {
 }
 export interface SocialReservation {
   canDecide: boolean;
+  minimumCharge: number;
+  downPaymentAmount: number | null;
+  downPaymentAt: string | null;
   id: string;
   eventId: string;
   slotCode: string;
@@ -192,6 +199,7 @@ export interface SocialOperations {
     id: string;
     name: string;
     cityId: string;
+    minimumCharge: number;
     layout: { slots: VenueSlot[] };
   }[];
   screenshots: { memberId: string; name: string; count: number }[];

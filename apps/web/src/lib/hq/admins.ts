@@ -3,8 +3,8 @@
 import { emailSchema, fieldErrors, phoneSchema } from '@pats/shared';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import { audit } from '../audit';
-import { revokeAllSessions } from '../auth/sessions';
+import { createRegionalAdmin, setRegionalAdminActive } from '../membership';
+import { AppError } from '../http/errors';
 import { db } from '../db';
 import { isUniqueViolation } from '../db-errors';
 import type { ActionResult } from './action-result';
@@ -18,7 +18,7 @@ const adminSchema = z.object({
   locale: z.enum(['id', 'en']).default('id'),
 });
 
-/** Adds a LOCAL_ADMIN bound to one city. They log in to the app with this email. */
+/** Adds a REGIONAL_ADMIN bound to one city. They log in to the app with this email. */
 export async function createAdminAction(_prev: ActionResult | null, form: FormData): Promise<ActionResult> {
   const hq = await requireHq();
   const parsed = adminSchema.safeParse(Object.fromEntries(form));
@@ -26,9 +26,9 @@ export async function createAdminAction(_prev: ActionResult | null, form: FormDa
   const city = await db.city.findUnique({ where: { id: parsed.data.cityId } });
   if (!city) return { ok: false, fields: { cityId: 'errors.cityNotFound' } };
   try {
-    const user = await db.user.create({ data: { ...parsed.data, role: 'LOCAL_ADMIN' } });
-    await audit(hq.id, 'admin.created', { type: 'User', id: user.id }, { cityId: city.id, email: user.email });
+    await createRegionalAdmin(hq, parsed.data);
   } catch (err) {
+    if (err instanceof AppError && err.code === 'ADMIN_LIMIT') return { ok: false, message: 'phase5.adminLimit' };
     if (isUniqueViolation(err)) {
       return { ok: false, fields: { email: 'admins.emailTaken' } };
     }
@@ -40,11 +40,10 @@ export async function createAdminAction(_prev: ActionResult | null, form: FormDa
 
 export async function setAdminActiveAction(userId: string, active: boolean): Promise<ActionResult> {
   const hq = await requireHq();
-  const user = await db.user.findFirst({ where: { id: userId, role: 'LOCAL_ADMIN' } });
+  const user = await db.user.findFirst({ where: { id: userId, role: 'REGIONAL_ADMIN' } });
   if (!user) return { ok: false, message: 'errors.notFound' };
-  await db.user.update({ where: { id: userId }, data: { status: active ? 'ACTIVE' : 'DISABLED' } });
-  if (!active) await revokeAllSessions(userId);
-  await audit(hq.id, active ? 'admin.reactivated' : 'admin.deactivated', { type: 'User', id: userId });
+  try { await setRegionalAdminActive(hq, userId, active); }
+  catch (err) { if (err instanceof AppError && err.code === 'ADMIN_LIMIT') return { ok: false, message: 'phase5.adminLimit' }; throw err; }
   revalidatePath('/admins');
   return { ok: true };
 }

@@ -24,7 +24,8 @@ export async function buildMe(userId: string): Promise<MeResponse> {
       email: user.email,
       phone: user.phone,
       name: user.name,
-      role: user.role,
+      // Preserve the legacy wire role for installed tester builds; capabilities are authoritative.
+      role: user.role === 'REGIONAL_ADMIN' ? 'LOCAL_ADMIN' : user.role,
       locale: user.locale,
       city: user.city ?? m?.city ?? null,
       capabilities: [...capabilitiesOf(user.role)],

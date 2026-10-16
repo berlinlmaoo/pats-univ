@@ -1,4 +1,5 @@
 'use client';
+import { ClaimQueue } from '@/components/phase5/claims';
 import { useState, type FormEvent } from 'react';
 import { ClipboardList, Users } from 'lucide-react';
 import {
@@ -100,6 +101,7 @@ export function OperationsPage() {
               ),
             )}
           </div>
+          <ClaimQueue />
           <h2 className="text-title2">{t('loyalty.promoter')}</h2>
           {!state.data.reports.length ? (
             <Card>
@@ -114,7 +116,6 @@ export function OperationsPage() {
               <ReportReview
                 key={`${r.id}-${r.status}`}
                 report={r}
-                done={done}
               />
             ))
           )}
@@ -134,6 +135,7 @@ export function OperationsPage() {
                 eventId={e.id}
                 title={`${e.title} · ${e.city.name}`}
                 recap={e.recap}
+                canLock={state.data!.canLockRecap}
                 done={done}
               />
             ))
@@ -211,18 +213,10 @@ function PromoterRow({
 }
 export function ReportReview({
   report: r,
-  done,
 }: {
   report: ReportDto;
-  done: () => void;
 }) {
   const t = useT();
-  const [reason, setReason] = useState('');
-  const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [action, setAction] = useState<'validate' | 'reject' | 'cancel' | null>(
-    null,
-  );
   return (
     <Card className="space-y-4 p-5">
       <div className="flex flex-wrap justify-between gap-2">
@@ -273,85 +267,11 @@ export function ReportReview({
       {r.rejectReason && (
         <p className="text-body-sm text-danger-fg">{r.rejectReason}</p>
       )}
-      {error && (
-        <p role="alert" className="text-body-sm text-danger-fg">
-          {t.loose(error)}
-        </p>
-      )}
-      {(r.status === 'SUBMITTED' || r.status === 'VALIDATED') && (
-        <>
-          <Field label={t('loyalty.reason')} htmlFor={`reason-${r.id}`}>
-            <Textarea
-              id={`reason-${r.id}`}
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-            />
-          </Field>
-          <div className="flex flex-wrap gap-2">
-            {r.status === 'SUBMITTED' ? (
-              <>
-                <Button onClick={() => setAction('validate')}>
-                  {t('loyalty.validate')}
-                </Button>
-                <Button
-                  variant="danger"
-                  disabled={reason.trim().length < 3}
-                  onClick={() => setAction('reject')}
-                >
-                  {t('loyalty.reject')}
-                </Button>
-              </>
-            ) : (
-              <Button
-                variant="danger"
-                disabled={
-                  reason.trim().length < 3 ||
-                  r.payouts.some((p) => p.status === 'PAID')
-                }
-                onClick={() => setAction('cancel')}
-              >
-                {t('loyalty.cancelBonus')}
-              </Button>
-            )}
-          </div>
-        </>
-      )}
-      <ConfirmDialog
-        open={!!action}
-        onClose={() => setAction(null)}
-        title={t('loyalty.confirm')}
-        body={
-          action === 'cancel'
-            ? t('loyalty.cancelBonusConfirm')
-            : action === 'reject'
-              ? reason
-              : t('loyalty.reviewHint')
-        }
-        confirmLabel={t(
-          action === 'validate'
-            ? 'loyalty.validate'
-            : action === 'reject'
-              ? 'loyalty.reject'
-              : 'loyalty.cancelBonus',
-        )}
-        destructive={action !== 'validate'}
-        busy={busy}
-        onConfirm={async () => {
-          setBusy(true);
-          const result = await postJson(`/api/admin/loyalty/reports/${r.id}`, {
-            action,
-            reason,
-          });
-          setBusy(false);
-          setAction(null);
-          if (result.ok) done();
-          else setError(result.error.messageKey);
-        }}
-      />
     </Card>
   );
 }
 export function RecapForm({
+  canLock,
   eventId,
   title,
   recap,
@@ -360,6 +280,7 @@ export function RecapForm({
   eventId: string;
   title: string;
   recap: RecapDto | null;
+  canLock: boolean;
   done: () => void;
 }) {
   const t = useT();
@@ -382,6 +303,8 @@ export function RecapForm({
           'revenueFdc',
         ].map((k) => [k, Number(f.get(k))]),
       ),
+      personInCharge: f.get('personInCharge'),
+      accountablePerson: f.get('accountablePerson'),
       note: f.get('note'),
     });
     if (!input.success) {
@@ -445,6 +368,7 @@ export function RecapForm({
               />
             </Field>
           ))}
+          {(['personInCharge', 'accountablePerson'] as const).map(k => <Field key={k} htmlFor={`${eventId}-${k}`} label={t(`phase5.${k}`)}><Input id={`${eventId}-${k}`} name={k} required maxLength={120} defaultValue={recap?.[k] ?? ''} /></Field>)}
           <Field htmlFor={`${eventId}-note`} label={t('loyalty.note')}>
             <Textarea
               id={`${eventId}-note`}
@@ -463,7 +387,7 @@ export function RecapForm({
             <Button type="submit" loading={busy}>
               {t('common.save')}
             </Button>
-            {recap && (
+            {recap && canLock && (
               <Button variant="secondary" onClick={() => setLock(true)}>
                 {t('loyalty.lock')}
               </Button>

@@ -53,8 +53,9 @@ export function leaderboardWindow(
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(selected)) return null;
   const [year, m] = selected.split('-').map(Number) as [number, number];
   if (year < 2000 || year > 9998) return null;
-  const start = parseZonedDateTime(`${selected}-01`, '00:00', 'Asia/Jakarta');
-  const next = new Date(Date.UTC(year, m, 1));
+  const firstMonth = mode === 'QUARTERLY' ? Math.floor((m - 1) / 3) * 3 + 1 : m;
+  const start = parseZonedDateTime(`${year}-${String(firstMonth).padStart(2, '0')}-01`, '00:00', 'Asia/Jakarta');
+  const next = new Date(Date.UTC(year, firstMonth - 1 + (mode === 'QUARTERLY' ? 3 : 1), 1));
   const end = parseZonedDateTime(
     `${next.getUTCFullYear()}-${String(next.getUTCMonth() + 1).padStart(2, '0')}-01`,
     '00:00',
@@ -111,21 +112,24 @@ export const validateCodeInput = z.object({
 });
 export const rewardInput = z.object({
   id: id.optional(),
-  type: z.enum(['DIRECT', 'SPIN_PRIZE']),
+  type: z.literal('DIRECT'),
   name: z.string().trim().min(1).max(120),
   description: z.string().trim().max(1000).default(''),
   xpCost: count,
   cityId: id.nullable(),
+  venueId: id,
   stock: count.nullable(),
   active: z.boolean(),
-  spinWeight: z.number().int().min(0).max(1_000_000),
+  spinWeight: z.literal(0).default(0),
 });
 export const promoterInput = z.object({
   eventId: id,
   guestCount: count,
+  reservationCount: count.default(0),
+  notes: z.string().trim().max(2000).default(''),
   receiptUrl: z
     .string()
-    .regex(/^receipts\/[a-z0-9]+\/[a-f0-9-]+\.(jpg|png|webp)$/),
+    .regex(/^receipts\/[a-z0-9]+\/[a-f0-9-]+\.(jpg|png|webp)$/).or(z.literal('')).default(''),
   receiptAmount: money.nullable().default(null),
   guests: z
     .array(
@@ -149,6 +153,8 @@ export const reviewInput = z
 export const recapInput = z
   .object({
     eventId: id,
+    personInCharge: z.string().trim().min(1).max(120),
+    accountablePerson: z.string().trim().min(1).max(120),
     sofaCount: count,
     tableCount: count,
     fdcCount: count,
@@ -170,6 +176,7 @@ export interface RewardDto {
   description: string;
   xpCost: number;
   cityId: string | null;
+  venueId: string | null;
   stock: number | null;
   active: boolean;
   spinWeight: number;
@@ -187,13 +194,14 @@ export interface RedemptionDto {
 export interface WalletDto {
   balance: number;
   isPromoter: boolean;
+  expiring: { xp: number; expiresAt: string }[];
   ledger: { id: string; delta: number; reason: string; createdAt: string }[];
   milestone: { reward: RewardDto; remaining: number; progress: number } | null;
   rewards: RewardDto[];
   redemptions: RedemptionDto[];
   spinCostXp: number;
   maxSpinsPerEvent: number;
-  events: { id: string; title: string; spinsUsed: number; spinLimit: number }[];
+  events: { id: string; title: string; venueId: string | null; spinsUsed: number; spinLimit: number }[];
 }
 export type LeaderboardEntry = Omit<RankedMember, 'nim' | 'reachedAt'>;
 export interface LeaderboardDto {
@@ -210,6 +218,8 @@ export interface ReportDto {
   memberId: string;
   eventId: string;
   guestCount: number;
+  reservationCount: number;
+  notes: string | null;
   receiptAmount: number | null;
   status: string;
   bonusKind: string | null;
@@ -222,6 +232,8 @@ export interface ReportDto {
   payouts: { id: string; amount: number; status: string }[];
 }
 export interface RecapDto {
+  personInCharge: string;
+  accountablePerson: string;
   eventId: string;
   sofaCount: number;
   tableCount: number;
@@ -235,6 +247,7 @@ export interface RecapDto {
   lockedAt: string | null;
 }
 export interface OperationsDto {
+  canLockRecap: boolean;
   events: {
     id: string;
     title: string;
@@ -249,4 +262,72 @@ export interface OperationsDto {
     fulfilled: number;
     revenue: number;
   };
+}
+
+/** Calendar-month expiry clamps month ends (31 August + 6 months -> last day of February). */
+export function addMonths(date: Date, months: number): Date {
+  const result = new Date(date);
+  const day = result.getUTCDate();
+  result.setUTCDate(1);
+  result.setUTCMonth(result.getUTCMonth() + months);
+  const last = new Date(Date.UTC(result.getUTCFullYear(), result.getUTCMonth() + 1, 0)).getUTCDate();
+  result.setUTCDate(Math.min(day, last));
+  return result;
+}
+export const prBonusXp = (pax: number, reservations: number, perPax: number, perReservation: number) =>
+  pax * perPax + reservations * perReservation;
+
+export interface XpLotRow {
+  id: string; delta: number; reason: string; createdAt: Date; expiresAt: Date | null; refId: string | null;
+}
+/** Replay append-only ledger; spending consumes the oldest remaining earn first. */
+export function remainingXpLots(rows: readonly XpLotRow[]) {
+  let debt = 0;
+  const lots: { id: string; remaining: number; expiresAt: Date | null }[] = [];
+  for (const row of rows) {
+    if (row.delta > 0) {
+      const paidDebt = Math.min(row.delta, debt); debt -= paidDebt;
+      lots.push({ id: row.id, remaining: row.delta - paidDebt, expiresAt: row.expiresAt });
+    }
+    else if (row.reason === 'EXPIRE') {
+      const lot = lots.find(l => l.id === row.refId);
+      if (lot) lot.remaining = Math.max(0, lot.remaining + row.delta);
+    } else {
+      let spend = -row.delta;
+      for (const lot of [...lots].sort((a, b) => (a.expiresAt?.getTime() ?? Infinity) - (b.expiresAt?.getTime() ?? Infinity))) {
+        const used = Math.min(lot.remaining, spend);
+        lot.remaining -= used;
+        spend -= used;
+        if (!spend) break;
+      }
+      debt += spend;
+    }
+  }
+  return lots.filter(l => l.remaining > 0).sort((a, b) => (a.expiresAt?.getTime() ?? Infinity) - (b.expiresAt?.getTime() ?? Infinity));
+}
+
+export interface DrawDto {
+  eventId: string; prize: string | null; peakStartsAt: string | null; peakEndsAt: string | null;
+  capacity: number; costXp: number; startedAt: string | null; winnerEntryId: string | null;
+  entries: { id: string; position: number; name: string; memberId: string }[];
+  freeCredit: { id: string; expiresAt: string } | null;
+  ownEntryId: string | null;
+}
+
+export const claimInput = z.object({
+  eventId: id, formType: z.enum(['PR', 'MEMBER']), guestCount: count.default(0), reservationCount: count,
+  receiptUrl: z.string().regex(/^receipts\/[a-z0-9]+\/[a-f0-9-]+\.(jpg|png|webp)$/).or(z.literal('')).default(''),
+  notes: z.string().trim().max(2000).default(''),
+});
+export const claimReviewInput = z.object({
+  id, decision: z.enum(['APPROVED', 'REJECTED']), guestCount: count.optional(), reservationCount: count.optional(),
+  reason: z.string().trim().max(1000).default(''),
+}).refine(v => v.decision !== 'REJECTED' || v.reason.length >= 3, { path: ['reason'], message: 'validation.required' });
+export interface ClaimDto {
+  id: string; memberId: string; eventId: string; formType: 'PR' | 'MEMBER'; guestCount: number; reservationCount: number;
+  receiptUrl: string; notes: string; status: 'PENDING' | 'APPROVED' | 'REJECTED'; bonusValue: number | null;
+  rejectReason: string | null; member: { fullName: string }; event: { title: string };
+}
+export interface ClaimsDto {
+  claims: ClaimDto[]; events: { id: string; title: string }[]; isPromoter: boolean; allowMemberGl: boolean;
 }

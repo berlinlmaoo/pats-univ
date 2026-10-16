@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Trophy } from 'lucide-react-native';
-import { formatCount, zonedParts, type LeaderboardDto } from '@pats/shared';
+import { formatCount, formatDate, zonedParts, type LeaderboardDto } from '@pats/shared';
 import { Card } from '@/components/card';
 import { Button } from '@/components/button';
 import { EmptyState } from '@/components/empty-state';
@@ -47,7 +47,8 @@ export function LeaderboardScreen() {
               value={city}
               onChange={setCity}
             />
-            {state.data.mode === 'MONTHLY' && (
+            {state.data.periodStart && state.data.periodEnd && <Text variant="caption">{formatDate(new Date(state.data.periodStart), t.locale)} — {formatDate(new Date(new Date(state.data.periodEnd).getTime() - 1), t.locale)}</Text>}
+            {['MONTHLY', 'QUARTERLY'].includes(state.data.mode) && (
               <>
                 <Field label={t('loyalty.month')}>
                   <Input

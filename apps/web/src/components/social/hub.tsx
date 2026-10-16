@@ -140,7 +140,7 @@ function ChannelForm({
     );
   return (
     <Card className="p-4">
-      <form
+      {(channel?.kind !== "TIMELINE" || channel.canPostTimeline) &&       <form
         className="space-y-3"
         onSubmit={async (e) => {
           e.preventDefault();
@@ -260,7 +260,8 @@ function ChannelForm({
         <Button loading={busy} type="submit">
           {t("common.save")}
         </Button>
-      </form>
+      </form>}
+
     </Card>
   );
 }
@@ -401,6 +402,7 @@ export function Feed({
                   </Button>
                 </div>
               )}
+              {channel?.kind === 'TIMELINE' && <Button variant="ghost" onClick={() => void mutate('react', { postId: item.id, active: !item.reacted })}>{t.loose(item.reacted ? 'phase5.reacted' : 'phase5.react')} · {item.reactionCount ?? 0}</Button>}
             </article>
           ),
         )
@@ -673,6 +675,7 @@ function LayoutEditor({
   venue: SocialOperations["venues"][number];
 }) {
   const t = useT();
+  const [minimumCharge, setMinimumCharge] = useState(venue.minimumCharge);
   const [slots, setSlots] = useState<VenueSlot[]>(venue.layout.slots),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
@@ -685,7 +688,7 @@ function LayoutEditor({
               ...s,
               [key]: ["code", "kind", "minimumSpend"].includes(key)
                 ? value
-                : Number(value),
+                : key === "minimumCharge" && value === "" ? undefined : Number(value),
             }
           : s,
       ),
@@ -717,12 +720,14 @@ function LayoutEditor({
           const r = await postJson("/api/social/layout", {
             venueId: venue.id,
             layout: { slots },
+            minimumCharge,
           });
           setBusy(false);
           setError(r.ok ? "" : r.error.messageKey);
           setSaved(r.ok);
         }}
       >
+        <Field htmlFor={`minimum-${venue.id}`} label={t("phase5.venueMinimum")}><Input id={`minimum-${venue.id}`} type="number" min={0} required value={minimumCharge} onChange={e => setMinimumCharge(Number(e.target.value))} /></Field>
         {slots.map((s, i) => (
           <fieldset
             key={i}
@@ -741,12 +746,13 @@ function LayoutEditor({
                 "h",
                 "pax",
                 "minimumSpend",
+                "minimumCharge",
               ] as const
             ).map((key) => (
               <Field
                 key={key}
                 htmlFor={`${venue.id}-${i}-${key}`}
-                label={t.loose(
+                label={key === "minimumCharge" ? t("phase5.minimumCharge") : t.loose(
                   `social.${({ code: "slotCode", kind: "kind", w: "width", h: "height" } as Record<string, string>)[key] ?? key}`,
                 )}
               >
@@ -769,9 +775,9 @@ function LayoutEditor({
                     type={
                       ["code", "minimumSpend"].includes(key) ? "text" : "number"
                     }
-                    min={["x", "y"].includes(key) ? 0 : 1}
+                    min={["x", "y", "minimumCharge"].includes(key) ? 0 : 1}
                     onChange={(e) => update(i, key, e.target.value)}
-                    required={key !== "minimumSpend"}
+                    required={key !== "minimumSpend" && key !== "minimumCharge"}
                   />
                 )}
               </Field>

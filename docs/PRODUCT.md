@@ -1,22 +1,22 @@
 # PATS University — Product Requirements
 
 Status: **showcase prototype**, cakupan penuh visi PRD tim.
-Versi dokumen: 1.0 — 16 Oktober 2026.
+Versi dokumen: 1.5 — 16 Oktober 2026.
 Sumber: PRD + Visual Flowchart tim (4 bagian) dan keputusan owner 16 Oktober 2026. Jika keduanya berbeda, keputusan owner yang berlaku (lihat [Changelog keputusan](#changelog-keputusan)).
 
 ---
 
 ## 1. Ringkasan
 
-PATS University adalah program keanggotaan untuk komunitas PATS di banyak kota. Setiap member punya **KTM (Kartu Tanda Mahasiswa)** fisik ber-NFC dengan NIM unik, dipakai untuk absen di event, mengumpulkan XP, menukar reward, dan masuk ke social hub kota asalnya. Admin lokal tiap kota mengelola event dan absensi lewat aplikasi yang sama; HQ mengelola seluruh kota lewat dashboard web.
+PATS University adalah program keanggotaan untuk komunitas PATS di banyak kota. Setiap member punya **KTM (Kartu Tanda Mahasiswa)** fisik ber-NFC dengan NIM unik, dipakai untuk absen di event, mengumpulkan XP, menukar reward, dan masuk ke social hub kota asalnya. Regional Admin tiap kota mengelola event dan absensi lewat aplikasi yang sama; HQ mengelola seluruh kota lewat dashboard web.
 
-Produk terdiri dari tiga permukaan:
+Produk terdiri dari empat permukaan:
 
 | Permukaan | Platform | Pengguna |
 |---|---|---|
 | Web registrasi (public) | Web (mobile-first) | Calon member |
-| Aplikasi PATS University | Android + iOS, satu app | Member, Local Admin (role dari akun) |
-| Super Admin Dashboard | Web | HQ / Super Admin |
+| Aplikasi PATS University | Android + iOS, satu app | Member, Regional Admin (role dari akun) |
+| Dashboard admin | Web | HQ dan Regional Admin (sebatas satu kota) |
 | Card Station | Tool Mac + reader ACR122U | Operator HQ (encode kartu NTAG213) |
 
 Prototype ini dibangun untuk didemokan secara end-to-end: registrasi → kartu → check-in → XP & leaderboard → reward → laporan PR → social hub → roaming → recap. **Prioritas pertama adalah sistem absensi berbasis kartu** (registrasi, kartu NFC, kartu digital fallback, scan admin, riwayat, dasar super admin); fitur lain menyusul (urutan di PLAN.md). Bagian yang berat di back-end dikerjakan pada **demo depth** (lihat [§11](#11-di-luar-cakupan--demo-depth)).
@@ -38,7 +38,7 @@ Prototype ini dibangun untuk didemokan secara end-to-end: registrasi → kartu �
 | Pengguna | Kebutuhan utama |
 |---|---|
 | Member | Daftar cepat, punya kartu, absen tanpa ribet, lihat XP & reward, ngobrol di hub kotanya, reservasi tempat |
-| Local Admin (crew kota) | Scan member di pintu, serahkan kartu, validasi reward, isi recap malam itu, kelola channel hub |
+| Regional Admin (crew kota) | Scan member di pintu, serahkan kartu, validasi reward, isi recap malam itu, kelola channel hub |
 | Super Admin / HQ | Lihat semua kota, siapkan batch kartu + file cetak untuk vendor, encode kartu, broadcast event, approve roaming, export data |
 
 ---
@@ -50,11 +50,11 @@ Satu akun = satu role. Role ditentukan server, bukan dipilih di app.
 | Role | Permukaan | Ringkasan hak |
 |---|---|---|
 | `MEMBER` | App | Profil & kartu digital, check-in (discan admin), XP & leaderboard, reward, social hub kota asal, reservasi, request roaming |
-| `MEMBER` + flag **PR (promoter)** | App (menu PR) | Semua hak member + kirim laporan tamu per event dengan foto struk, lihat status validasi dan bonus |
-| `LOCAL_ADMIN` | App (menu Admin) | Semua hak member di kotanya + scan check-in, serah terima/revoke kartu, validasi redeem, validasi laporan PR, traffic recap, channel hub, approve roaming absensi ke kotanya |
+| `MEMBER` + flag **PR (promoter)** | App | Badge PR; Claim XP Form Member dan Form PR setelah event, foto struk opsional |
+| `REGIONAL_ADMIN` | App + web | Satu kota: event, scan, kartu, redeem, Claim XP, recap, PR, reservasi/DP, moderasi, roaming absensi; tidak menerbitkan timeline |
 | `SUPER_ADMIN` | Web dashboard + app (menu HQ) | Kota, admin, event, member, kartu (antrean, batch, file cetak, keputusan encode ulang), broadcast, roaming approval (social hub), recap global (termasuk laporan PR), export, settings. Di app: encode kartu di HP (Phase 2) |
 
-Local Admin terikat ke **satu kota**. Super Admin tidak terikat kota. Aksi kartu dan check-in dicek lewat **capability** (`checkin.scan`, `card.handover`, `card.reportLost`, `card.requestReencode`, `card.encode`, `card.decideReencode`), bukan nama role, supaya peran baru (mis. regional manager, pertanyaan S1) cukup diberi capability. PR bukan role akun terpisah, melainkan flag `isPromoter` pada `Member` (siapa yang memberi flag masih TBD, lihat §12).
+Regional Admin terikat ke **tepat satu kota**. HQ tidak terikat kota. Semua izin admin diperiksa lewat capability. Maksimal lima admin aktif per kota (`regionalAdminLimit`), termasuk saat reaktivasi. Migrasi mengganti enum tanpa mengganti akun atau scope. API profil tetap mengirim alias `LOCAL_ADMIN` untuk kompatibilitas app tester; shared menerima kedua nama. PR adalah flag `isPromoter` yang ditunjuk Regional Admin/HQ.
 
 ---
 
@@ -87,17 +87,17 @@ Langkah per langkah:
 5. **HQ membuat batch** dari halaman **Kartu** di dashboard: antrean member tanpa kartu (`NOT_PRINTED`) per kota → pilih → `CardBatch`. Saat batch dibuat, server membuat `Card` + **token kartu** (ditandatangani, unik) untuk tiap member → status `IN_BATCH`. HQ **mengunduh file cetak**: satu PDF per member (CR80 85,6 × 54 mm + bleed 3 mm, 300 dpi, depan + belakang: **hanya nama, NIM, dan QR berisi token kartu** di atas artwork kartu — song & genre dan quotes tidak dicetak, hanya ada di profil digital `https://patsuniv.znetworks.id/c/<token>`), PDF gabungan satu batch, dan CSV manifest untuk vendor. Render dari template HTML/SVG → PDF.
 6. **Cetak di vendor eksternal** — perusahaan menyuplai kartu NTAG213 kosong, vendor mencetak personalisasi di atasnya (**cetak dulu, encode belakangan**). Batch → `SENT_TO_VENDOR`; saat kartu cetakan kembali ke HQ → `RECEIVED_HQ`. Chip masih kosong di tahap ini.
 7. **Card Station (HQ, Mac + ACR122U)**: untuk tiap kartu cetakan, operator **mengidentifikasi member dengan memindai QR di kartu lewat kamera Mac atau mengetik NIM**, lalu menempelkan kartu itu ke reader. Tool menulis **NDEF URL** dengan token yang sama dengan QR cetakan (domain final, lihat [§10.7](#107-domain)), mencatat UID, lalu **memproteksi tag dengan password** (NTAG213 PWD/PACK; tulis diproteksi mulai halaman AUTH0, baca tetap terbuka, PROT=0) sehingga payload **hanya bisa ditulis ulang oleh Card Station HQ** — bukan dikunci permanen, bit lock statis/dinamis tidak disentuh. Status kartu menjadi `ENCODED`; binding UID ke profil terjadi di sini. Alasan cetak dulu: nama yang tercetak harus sama dengan isi chip; meng-encode sebelum cetak berisiko tertukar di vendor. Kartu ter-encode dikirim ke kota.
-8. **Serah terima**: admin lokal membuka menu *Serahkan kartu* dan **tap kartu** ke HP. App membaca NDEF, server mencocokkan token + UID dengan member → status `DELIVERED`, pengiriman terkonfirmasi. Tap ini hanya **konfirmasi penerimaan**; tidak ada binding baru.
+8. **Serah terima**: admin regional membuka menu *Serahkan kartu* dan **tap kartu** ke HP. App membaca NDEF, server mencocokkan token + UID dengan member → status `DELIVERED`, pengiriman terkonfirmasi. Tap ini hanya **konfirmasi penerimaan**; tidak ada binding baru.
 9. **Check-in di event**: admin memilih event aktif, member menempelkan kartu ke HP admin (NFC) atau menunjukkan QR app (fallback). Server memvalidasi token NDEF + UID dan mencatat `CheckIn` + XP.
 10. **Reward**: member menukar XP di app → `Redemption` dengan kode sekali pakai → crew memasukkan/scan kode → reward diserahkan.
 
-> Menggantikan langkah PDF "Admin tap NFC kosong di venue": kartu dicetak per orang oleh vendor di NTAG213 kosong milik perusahaan, lalu di-encode dan diikat ke member di HQ (Card Station) dengan identifikasi lewat QR cetakan / NIM. Tap pertama oleh admin lokal = konfirmasi serah terima.
+> Menggantikan langkah PDF "Admin tap NFC kosong di venue": kartu dicetak per orang oleh vendor di NTAG213 kosong milik perusahaan, lalu di-encode dan diikat ke member di HQ (Card Station) dengan identifikasi lewat QR cetakan / NIM. Tap pertama oleh admin regional = konfirmasi serah terima.
 >
 > Bonus showcase: karena isi kartu adalah NDEF URL, member yang menempelkan kartunya sendiri ke iPhone (XS ke atas, background tag reading) mendapat prompt yang membuka profilnya di app (universal link) atau di web jika app belum terpasang.
 
 ### 4.2 Event
 
-1. Super Admin atau Local Admin membuat `Event` (kota, venue, tanggal/jam WIB, flyer, deskripsi, kuota opsional).
+1. Super Admin atau Regional Admin membuat `Event` (kota, venue, tanggal/jam WIB, flyer, deskripsi, kuota opsional).
 2. Push reminder otomatis: H-3, H-1, hari H (jam konfigurasi per kota).
 3. Saat event, admin membuka mode **Scan** dan mencatat kehadiran.
 4. Jam 12.00 WIB hari berikutnya: push "terima kasih" ke yang hadir, push FOMO ke member kota itu yang tidak hadir.
@@ -106,14 +106,16 @@ Langkah per langkah:
 ### 4.3 Social hub
 
 - Member hanya melihat hub **kota asal** (region-locked).
-- Isi hub: **Timeline** (post foto/teks oleh admin & member sesuai setting channel), **Live Chat** per channel (teks, voice note, video pendek; mention `@ADMIN` untuk memanggil crew), dan **Reservasi venue**.
+- Isi hub: **Timeline** (hanya HQ menerbitkan; member membaca dan memberi reaksi), **Live Chat** per channel (teks, voice note, video pendek; mention `@ADMIN` untuk memanggil crew), dan **Reservasi venue**.
 - Anti-screenshot: aktif di Android (`FLAG_SECURE`); di iOS hanya terdeteksi dan dicatat (lihat [§10](#10-keamanan--privasi)).
 
 ### 4.4 Reservasi venue
 
 - Admin mengatur layout venue (denah sofa/table sebagai grid/koordinat sederhana) per venue.
 - Member memilih event + slot (sofa/table) → `Reservation` status `PENDING` → percakapan otomatis terbuka dengan marketing/admin kota → admin `CONFIRMED` / `REJECTED`.
-- Satu slot hanya bisa `CONFIRMED` untuk satu reservasi per event.
+- Satu slot hanya bisa `CONFIRMED` untuk satu reservasi per event. Regional Admin kota event mengonfirmasi; HQ dapat menangani sebagai override.
+- Minimum charge numerik per venue, dapat ditimpa per slot; nilai disalin saat pemesanan.
+- Satu reservasi `PENDING`/`CONFIRMED` tanpa DP memblokir reservasi baru di semua event. DP yang dicatat admin (nominal, waktu, pencatat) membuka reservasi berikutnya. Pembayaran di luar app.
 
 ### 4.5 Roaming antar kota
 
@@ -121,27 +123,30 @@ Dua jenis roaming, masing-masing dengan approver berbeda:
 
 | Jenis | Yang diminta | Approver | Berlaku sampai |
 |---|---|---|---|
-| `ATTENDANCE` | Absen di event kota lain | Local Admin kota tujuan | Selesai event (check-in tetap tercatat di kota asal member + kota event) |
+| `ATTENDANCE` | Absen di event kota lain | Regional Admin kota tujuan | Selesai event (check-in tetap tercatat di kota asal member + kota event) |
 | `SOCIAL_HUB` | Akses social hub kota lain | Super Admin (HQ) | 48 jam setelah event tujuan berakhir, lalu otomatis kembali ke hub asal |
 
 Alur: member membuka event kota lain → *Request roaming* → notifikasi ke approver → approve/reject → member dapat push hasilnya. Setelah kedaluwarsa, akses hub lain hilang tanpa aksi manual.
 
-### 4.6 Laporan PR (promoter)
+### 4.6 Claim XP setelah event
 
-1. Member ber-flag PR membuka event yang sudah berlangsung → *Laporan tamu* → isi jumlah tamu, opsional nama/nomor tamu, **unggah foto struk** penjualan → `PromoterReport` status `SUBMITTED`.
-2. Local Admin kota event meninjau: melihat foto struk, jumlah tamu, mencocokkan dengan kehadiran → `VALIDATED` (dengan nilai bonus) atau `REJECTED` (dengan alasan).
-3. Saat `VALIDATED`, bonus dikreditkan: entri `XpLedger` (jika bonus berupa XP) atau entri `PromoterPayout` (jika berupa uang) — bentuk bonus masih TBD, keduanya disiapkan.
-4. Laporan + struk tampil di recap event di dashboard HQ dan ikut export.
+1. Setelah `endsAt`, setiap member membuka **Claim XP**. Form Member berisi jumlah reservasi; GL hanya jika setting mengizinkan (default mati). PR juga mendapat Form PR: GL pax + jumlah reservasi. Struk opsional pada kedua form.
+2. Satu claim per member/event/jenis form, unik di DB. Hanya `PENDING` yang dapat diedit. Member kota event atau yang tercatat hadir dapat mengajukan.
+3. Regional Admin kota event meninjau di app/web, di samping recap: approve, reject dengan alasan, atau ubah angka lalu approve. Audit menyimpan aktor/waktu/angka sebelum dan sesudah.
+4. Approval memberi XP otomatis sekali: PR = 5 × GL + 25 × reservasi, Member = 25 × reservasi. Tarif configurable. CAS + award key mencegah approval ganda. Reject memberi notifikasi tanpa XP; profil/wallet diperbarui melalui Socket.IO dan push.
+5. Ini menggantikan alur admin mengetik recap PR. Laporan/payout fase lama dipertahankan sebagai arsip baca saja.
 
-### 4.7 XP & leaderboard
+### 4.7 XP, leaderboard dan live draw
 
-- Setiap check-in (dan bonus lain) menambah `XpLedger`. Saldo member = jumlah ledger.
-- Leaderboard **per kota** dan **nasional**, periode **bulanan** (usulan, TBD): peringkat berdasarkan XP yang didapat dalam periode; seri diurutkan konsisten (XP sama → yang lebih dulu mencapai angka itu di atas → lalu NIM).
-- Member melihat posisi dirinya sendiri (ditandai) walau di luar daftar teratas.
+- Registrasi mendapat 100 XP sekali; check-in 50 XP + 25 XP hanya jika sudah ada reservasi `CONFIRMED` untuk event yang sama.
+- XP disimpan sebagai ledger, kedaluwarsa 18 bulan kalender sejak diperoleh. Pengeluaran mengonsumsi lot dengan expiry terdekat. Expiry mengurangi sisa lot lewat entri ledger; refund membawa expiry asli, tidak memperpanjang umur XP.
+- Leaderboard kota/nasional memakai XP diperoleh, mengecualikan refund, periode kuartal kalender WIB. Seri: XP → waktu mencapai → NIM → ID stabil. Posisi sendiri tetap terlihat.
+- Setiap kota, #1 kuartal selesai mendapat satu slot gratis pada event berikutnya, atau event pilihan HQ. Grant unik per kota/periode, pemakaian sekali, expiry akhir kuartal berikutnya (default 3 bulan).
+- Live draw: satu hadiah event, lima nama peserta (setting kapasitas), 250 XP/slot, satu slot/member/event, hanya di peak hour dan setelah check-in. Slot dikunci DB, first come first served. Semua slot harus terisi sebelum Regional Admin/HQ menjalankan draw sekali; server memilih secara acak dan mencatat aktor/waktu/semua peserta/pemenang. Socket.IO menampilkan hasil live. XP peserta yang kalah tetap terpakai.
 
 ### 4.8 Recap & kontrol HQ
 
-- Local Admin: dashboard kota (member aktif, kehadiran per event, reward tertukar, recap).
+- Regional Admin: dashboard kota (member aktif, kehadiran per event, reward tertukar, recap).
 - HQ: semua kota dalam satu tabel, filter periode/kota, **export 1-klik** (CSV/XLSX; PDF di demo depth), broadcast event (flyer + push ke kota terpilih), approval roaming hub, manajemen channel global.
 
 ---
@@ -160,16 +165,16 @@ Alur: member membuka event kota lain → *Request roaming* → notifikasi ke app
 | Riwayat kehadiran | Daftar `CheckIn` dengan event, waktu, metode |
 | XP & milestone | Saldo XP, ledger, progress menuju reward berikutnya |
 | Leaderboard | Peringkat kota & nasional per periode, posisi sendiri selalu terlihat |
-| Menu PR (hanya flag PR) | Laporan tamu per event + foto struk, status validasi, riwayat bonus |
-| Reward | Katalog, direct redeem, spin wheel (jumlah spin per event dibatasi), kode redeem sekali pakai + countdown |
+| Claim XP | Form Member untuk semua; Form PR untuk flag PR. Edit pending, status keputusan dan bonus |
+| Reward | Katalog per venue, direct redeem dan kode TTL; slot live draw event |
 | Social hub | Timeline, live chat per channel, voice note, video pendek, mention `@ADMIN` |
 | Reservasi | Pilih slot dari denah, chat ke marketing, status reservasi |
 | Roaming | Request absen kota lain / akses hub kota lain, status request |
 | Notifikasi | Pusat notifikasi + pengaturan (reminder, hub, reward) |
-| Profil | Edit song/genre/quotes/foto; nama, DOB, kota hanya lewat admin |
+| Profil | Edit song/genre/quotes/foto; nama/DOB lewat admin; perubahan kota lewat request dan approval HQ |
 | Bahasa | Indonesia / English |
 
-### 5.2 Local Admin (app, menu Admin)
+### 5.2 Regional Admin (app, menu Admin)
 
 | Fitur | Keterangan |
 |---|---|
@@ -178,9 +183,9 @@ Alur: member membuka event kota lain → *Request roaming* → notifikasi ke app
 | Lapor kartu hilang / rusak | Tandai `REVOKED` (token lama ditolak permanen); kartu pengganti otomatis masuk antrean cetak HQ |
 | Minta encode ulang | Kartu `DELIVERED` rusak tapi chip masih jalan: alasan wajib → HQ setujui/tolak → izin sekali pakai 24 jam untuk meng-encode kartu itu di HP admin yang meminta (password tetap dari server) |
 | Validasi reward | Masukkan/scan kode redeem → lihat reward → tandai diserahkan |
-| Validasi laporan PR | Daftar laporan `SUBMITTED` di kotanya, lihat foto struk, validasi/tolak, nilai bonus dihitung dari setting |
+| Review Claim XP | Antrean `PENDING` kota event, struk opsional, adjust/approve/reject, bonus otomatis |
 | Event kota | Buat/edit event kotanya, lihat kehadiran live saat event |
-| Traffic recap | Form per event: sofa, table, FDC, pax (+ catatan); total dihitung sistem; bisa diedit sampai dikunci HQ |
+| Traffic recap | Form per event: sofa, table, FDC, pax, PIC malam itu dan penanggung jawab utama (+ catatan); total dihitung sistem; bisa diedit sampai dikunci HQ |
 | Channel hub | Buat/arsip channel, pin post, hapus konten, mute member |
 | Reservasi | Daftar reservasi masuk, konfirmasi/tolak, chat dengan member |
 | Roaming absensi | Approve/reject request `ATTENDANCE` ke kotanya |
@@ -191,7 +196,7 @@ Alur: member membuka event kota lain → *Request roaming* → notifikasi ke app
 | Fitur | Keterangan |
 |---|---|
 | Kota & venue | CRUD kota (kode, zona waktu, link grup WA, copy notifikasi), venue + denah |
-| Admin | Undang/nonaktifkan Local Admin per kota |
+| Admin | Undang/nonaktifkan Regional Admin per kota |
 | Member | Cari, lihat detail, edit data inti, nonaktifkan |
 | Kartu | Halaman **Kartu**: antrean member tanpa kartu (`NOT_PRINTED`) per kota → buat batch (`IN_BATCH`, token kartu dibuat) → **unduh file cetak**: PDF per member (CR80 85,6 × 54 mm + bleed 3 mm, 300 dpi, depan + belakang; hanya nama, NIM, QR token kartu + artwork), PDF gabungan batch, CSV manifest vendor → tandai `SENT_TO_VENDOR` → `RECEIVED_HQ`; progres encode per batch; daftar kartu belum `DELIVERED`. Render HTML/SVG template → PDF |
 | Card Station (tool Mac) | Tool kecil di Mac HQ dengan reader **ACR122U**, dipakai setelah kartu cetakan kembali dari vendor: identifikasi member dengan **scan QR cetakan (kamera Mac) atau ketik NIM** → tempel kartu → tulis NDEF URL bertoken (token sama dengan QR) ke **NTAG213** → catat UID → proteksi tulis dengan password (PWD/PACK, tanpa lock permanen) → status `ENCODED`. Bisa **re-encode** kartu (password diturunkan dari kunci server + UID), misalnya memakai ulang kartu untuk member lain atau mengganti token. Menyimpan hasil ke server lewat API dengan kredensial super admin |
@@ -201,7 +206,7 @@ Alur: member membuka event kota lain → *Request roaming* → notifikasi ke app
 | Reward & XP | Katalog reward, nilai XP, aturan spin, kuota — semua sebagai setting |
 | Recap global | Tabel recap per event/kota (termasuk laporan PR + struk), kunci recap, export 1-klik |
 | Leaderboard | Lihat leaderboard kota/nasional per periode, atur periode & jumlah teratas |
-| PR | Daftar member ber-flag PR, laporan & payout per periode (bila bonus uang) |
+| PR / Claim XP | Penunjukan PR, review claim PR dan member, audit keputusan |
 | Export | Member, check-in, XP ledger, leaderboard, redemption, laporan PR, recap → CSV/XLSX |
 | Audit | Log aksi admin (bind/revoke kartu, manual check-in, approval) |
 | Settings | Umur minimum, XP per check-in, rotasi QR, jendela roaming, waktu push per kota |
@@ -216,7 +221,7 @@ Urutan menu di dashboard. Halaman 1–6 adalah bagian dari **fokus sistem absens
 | 2 | Member | Cari, detail, edit data inti, nonaktifkan, status kartu | 0–2 |
 | 3 | Kartu | Antrean `NOT_PRINTED`, batch, unduh file cetak (PDF per member, PDF batch, CSV manifest), status vendor → encode → kirim, kartu belum `DELIVERED`, revoke | 0–2 |
 | 4 | Kota & venue | CRUD kota (kode, zona waktu, link grup WA, copy notifikasi), venue + denah | 0–2 |
-| 5 | Admin lokal | Undang/nonaktifkan Local Admin per kota | 0–2 |
+| 5 | Regional Admin | Undang/nonaktifkan Regional Admin per kota | 0–2 |
 | 6 | Event | Semua kota; buat/edit event, jendela check-in, daftar hadir + metode check-in | 0–2 |
 | 7 | Broadcast | Flyer + push ke kota terpilih | Lanjut |
 | 8 | Reward & XP | Katalog reward, nilai XP, aturan spin, leaderboard | Lanjut |
@@ -248,30 +253,24 @@ App dan dashboard harus **bersih, setara Notion/Linear, dan memakai bahasa visua
 5. Member dari kota lain hanya bisa check-in jika ada `RoamingRequest` tipe `ATTENDANCE` berstatus `APPROVED` untuk event itu.
 6. Jendela check-in: dari `checkInOpensAt` sampai `checkInClosesAt` event (default: 1 jam sebelum mulai sampai event berakhir; setting).
 
-### 6.2 XP & reward — placeholder (TBD)
+### 6.2 XP, reward dan draw — diputuskan 16 Oktober
 
-Nilai di bawah **belum diputuskan** tim dan hanya placeholder untuk demo. Semua adalah **setting di dashboard**, bukan hardcode.
+| Aturan | Default / keputusan |
+|---|---|
+| Welcome / check-in / reservasi confirmed | 100 / 50 / +25 XP |
+| Katalog redeem | Per venue; harga dan stok ditetapkan admin |
+| Live draw | 250 XP per slot; 5 nama; satu slot/member/event; peak hour per event |
+| Hadiah draw | Satu hadiah event; dipilih admin; hasil server sekali, audit + realtime |
+| XP kedaluwarsa | 18 bulan sejak diperoleh; hanya sisa yang belum dipakai |
+| Kartu pengganti | Rp 100.000, pembayaran dicatat di luar app, tanpa batas penggantian |
 
-| Setting | Placeholder | Status |
-|---|---|---|
-| XP per check-in | 50 XP | TBD |
-| Direct redeem contoh | 100 XP = 1 cocktail | TBD |
-| Spin wheel | 250 XP = 1 spin | TBD |
-| Maksimum spin | 5 spin per member per event | TBD |
-| Isi roda & probabilitas | 6 slot contoh, bobot sama | TBD |
-| XP kedaluwarsa | Tidak ada | TBD |
-
-Aturan yang sudah tetap:
-
-- XP dicatat sebagai **ledger** (`XpLedger`), bukan saldo yang ditimpa. Saldo = jumlah ledger.
-- Pengurangan XP hanya lewat redeem/spin; pembatalan redeem mengembalikan XP lewat entri ledger baru.
-- Spin wheel: satu spin = satu entri `Redemption` tipe `SPIN` dengan hasil tersimpan di server (bukan dihitung di app).
+Semua angka operasional tersedia sebagai setting dashboard/field event/venue. Saldo adalah SUM ledger setelah expiry. Draw menggantikan wheel pribadi berbobot; katalog spin lama tidak aktif, riwayat transaksi lama tetap ada.
 
 ### 6.3 Redeem — kode sekali pakai
 
 1. Member menekan *Redeem* → server mengurangi XP dan membuat `Redemption` berstatus `ISSUED` dengan **kode 6 karakter** + QR, berlaku 15 menit (setting).
 2. Crew memasukkan/scan kode → server mengecek: kode ada, `ISSUED`, belum kedaluwarsa, event/kota cocok → status `FULFILLED` + admin yang memvalidasi.
-3. Kode yang sudah `FULFILLED` atau `EXPIRED` ditolak. Kode kedaluwarsa mengembalikan XP otomatis.
+3. Kode yang sudah `FULFILLED` atau `EXPIRED` ditolak. Kode kedaluwarsa mengembalikan XP otomatis dengan expiry asli; bila sudah lewat expiry, XP langsung tidak dapat dibelanjakan.
 4. Satu reward tidak bisa diklaim dua kali karena transisi status dilakukan atomik di server.
 
 ### 6.4 Umur
@@ -281,27 +280,18 @@ Aturan yang sudah tetap:
 
 ### 6.5 Roaming
 
-- `ATTENDANCE`: disetujui Local Admin kota tujuan; berlaku untuk satu event.
+- `ATTENDANCE`: disetujui Regional Admin kota tujuan; berlaku untuk satu event.
 - `SOCIAL_HUB`: disetujui HQ; akses hub tujuan **kedaluwarsa 48 jam** (setting) setelah event tujuan berakhir. Setelah itu akses kembali ke hub asal otomatis.
 - Request tanpa keputusan sampai event dimulai menjadi `EXPIRED`.
 - Satu member maksimum satu request aktif per event per jenis.
 
-### 6.6 Leaderboard — placeholder (TBD)
+### 6.6 Leaderboard
 
-| Setting | Placeholder | Status |
-|---|---|---|
-| Periode | Bulanan (1 s.d. akhir bulan, WIB) | TBD |
-| Cakupan | Kota + nasional | Tetap |
-| Jumlah teratas ditampilkan | 50 | TBD |
-| Tie-break | XP periode sama → waktu mencapai angka itu lebih dulu → NIM lebih kecil | Tetap |
-| Hadiah peringkat | Tidak ada (hanya tampilan) | TBD |
+Kuartal kalender WIB, kota dan nasional; tampilan default 50 teratas. Pengeluaran dan expiry tidak mengurangi XP peringkat yang diperoleh pada periode, refund tidak menambah peringkat. Tie-break mengikuti §4.7. Hadiah satu slot gratis untuk #1 **setiap kota**, bukan pemenang nasional; tidak dapat ditukar uang dan tidak berlaku setelah expiry.
 
-### 6.7 Laporan PR — placeholder (TBD)
+### 6.7 Claim XP
 
-- Hanya member ber-flag PR yang bisa mengirim; satu laporan per PR per event (bisa diedit selama masih `SUBMITTED`).
-- Foto struk wajib; jumlah tamu wajib; nama/nomor tamu opsional.
-- Validasi hanya oleh Local Admin kota event (atau HQ). Bonus dikreditkan sekali saat `VALIDATED`; pembatalan membuat entri pembalik.
-- **TBD**: bentuk bonus (XP tetap per tamu, XP per nominal struk, komisi % dari struk, atau nominal per tamu) dan siapa yang memberi flag PR (Local Admin menunjuk vs member mengajukan lalu disetujui). Placeholder demo: 20 XP per tamu tervalidasi.
+Aturan final adalah §4.6 (addendum yang menggantikan OPEN-3). PR ditunjuk Regional Admin, bukan mengajukan sendiri. Claim per jenis form bersifat unik permanen; reject tidak memberi XP dan tidak membuka claim baru untuk kombinasi yang sama. Foto bukti privat dan opsional. Alur payout uang lama tidak dipakai untuk claim baru.
 
 ### 6.8 NIM — usulan format
 
@@ -324,11 +314,11 @@ Nama entitas dan field inti (teknis detail ada di PLAN.md / schema).
 | `Venue` | id, cityId, name, address, lat, lng, layout (JSON: slot sofa/table + koordinat) | Denah untuk reservasi |
 | `Event` | id, cityId, venueId, title, description, flyerUrl, startsAt, endsAt, checkInOpensAt, checkInClosesAt, status (`DRAFT`/`PUBLISHED`/`OPEN`/`CLOSED`), maxSpinsPerMember, createdById | Waktu disimpan UTC, ditampilkan WIB |
 | `CheckIn` | id, eventId, memberId, method (`NFC`/`APP_QR`/`MANUAL`), cardId, adminId, roamingRequestId, manualReason, checkedInAt | Unik (eventId, memberId) |
-| `XpLedger` | id, memberId, delta, reason (`CHECK_IN`/`REDEEM`/`SPIN`/`REFUND`/`PROMOTER_BONUS`/`ADJUST`), refType, refId, createdAt | Saldo = SUM(delta); leaderboard = SUM(delta > 0) per periode |
+| `XpLedger` | id, memberId, delta, reason (`CHECK_IN`/`REDEEM`/`SPIN`/`REFUND`/`PROMOTER_BONUS`/`ADJUST`), refType, refId, createdAt | Saldo = SUM(delta); expiry/awardKey/allocations; leaderboard positif selain REFUND |
 | `LeaderboardSnapshot` | id, scope (`CITY`/`NATIONAL`), cityId, periodStart, periodEnd, entries (JSON: rank, memberId, xp) | Dihitung cron tiap jam + saat periode tutup; query live untuk posisi sendiri |
-| `PromoterReport` | id, memberId (PR), eventId, cityId, guestCount, guests (JSON: nama/nomor opsional), receiptUrl (privat), receiptAmount (opsional), status (`SUBMITTED`/`VALIDATED`/`REJECTED`), bonusKind (`XP`/`CASH`), bonusValue, reviewedById, reviewedAt, rejectReason | Unik (memberId, eventId) |
-| `PromoterPayout` | id, promoterReportId, memberId, amount, status (`PENDING`/`PAID`), paidAt, paidById | Hanya dipakai bila bonus berupa uang (TBD) |
-| `Reward` | id, type (`DIRECT`/`SPIN_PRIZE`), name, description, xpCost, cityId (nullable = global), stock (nullable), active, spinWeight | Spin prize memakai `spinWeight` |
+| `PromoterReport` (arsip) | id, memberId (PR), eventId, cityId, guestCount, guests (JSON: nama/nomor opsional), receiptUrl (privat), receiptAmount (opsional), status (`SUBMITTED`/`VALIDATED`/`REJECTED`), bonusKind (`XP`/`CASH`), bonusValue, reviewedById, reviewedAt, rejectReason | Unik (memberId, eventId) |
+| `PromoterPayout` (arsip) | id, promoterReportId, memberId, amount, status (`PENDING`/`PAID`), paidAt, paidById | Riwayat Phase 3; tidak ada payout baru |
+| `Reward` | id, type (`DIRECT`/`SPIN_PRIZE`), name, description, xpCost, cityId (nullable = global), stock (nullable), active, spinWeight | Baru hanya DIRECT dengan venueId; bobot/type spin untuk arsip |
 | `Redemption` | id, memberId, rewardId, eventId, kind (`DIRECT`/`SPIN`), code (unik), status (`ISSUED`/`FULFILLED`/`EXPIRED`/`CANCELLED`), issuedAt, expiresAt, fulfilledAt, fulfilledByAdminId | Kode sekali pakai |
 | `Channel` | id, cityId, name, kind (`TIMELINE`/`CHAT`), visibility, archived | Hub per kota |
 | `Post` | id, channelId, authorId, body, mediaUrls, pinned, createdAt, deletedAt | Timeline |
@@ -337,6 +327,11 @@ Nama entitas dan field inti (teknis detail ada di PLAN.md / schema).
 | `Reservation` | id, eventId, venueId, memberId, slotCode, pax, status (`PENDING`/`CONFIRMED`/`REJECTED`/`CANCELLED`), note, conversationId | Unik (eventId, slotCode) saat `CONFIRMED` |
 | `RoamingRequest` | id, memberId, eventId, targetCityId, type (`ATTENDANCE`/`SOCIAL_HUB`), status (`PENDING`/`APPROVED`/`REJECTED`/`EXPIRED`), decidedById, decidedAt, accessExpiresAt | `accessExpiresAt` = endsAt event + 48 jam |
 | `TrafficRecap` | id, eventId, cityId, sofaCount, tableCount, fdcCount, paxCount, revenueSofa, revenueTable, revenueFdc, total, note, submittedById, lockedAt | Total dihitung server |
+| `XpClaim` | memberId, eventId, formType, guestCount, reservationCount, receiptUrl, notes, status, bonusValue, reviewer/waktu/alasan | Unik member/event/form, CAS pending |
+| `DrawEntry` | eventId, memberId, position, xpSpent, freeCreditId | Unik event/member dan event/posisi |
+| `FreeDrawCredit` | cityId, memberId, periodStart/end, eventId, expiresAt, usedAt | Unik kota/kuartal |
+| `RegionChangeRequest` | memberId, fromCityId, toCityId, reason, status, decidedById, decidedAt | Satu pending per member |
+| `PostReaction` | postId, userId | Satu reaksi/member/post |
 | `Notification` | id, userId, kind, title, body, data (JSON), sentAt, readAt | Pusat notifikasi + log push |
 | `Device` | id, userId, platform, pushToken, appVersion, lastSeenAt | Target push |
 | `AuditLog` | id, actorId, action, targetType, targetId, meta, createdAt | Bind/revoke, manual check-in, approval, lock recap |
@@ -347,7 +342,9 @@ Nama entitas dan field inti (teknis detail ada di PLAN.md / schema).
 
 ## 8. Notifikasi
 
-Semua waktu dalam **WIB** (`Asia/Jakarta`) kecuali kota diset zona lain. Copy push **dapat diubah per kota** oleh HQ (`City.notificationCopy`), dengan placeholder `{name}`, `{event}`, `{venue}`, `{time}`.
+**T9 menunggu sumber copy:** tabel jawaban menyebut copy final tetapi tidak memuat lima kalimat verbatim. Copy berikut adalah fallback lama, bukan copy final tim. Isi override ID verbatim dan terjemahan EN setelah HQ mengirim teks; `{city}` sudah diisi otomatis.
+
+Semua waktu dalam **WIB** (`Asia/Jakarta`) kecuali kota diset zona lain. Copy push **dapat diubah per kota** oleh HQ (`City.notificationCopy`), dengan placeholder `{name}`, `{event}`, `{venue}`, `{time}`, `{city}`.
 
 | Pemicu | Penerima | Waktu | Copy default (ID) |
 |---|---|---|---|
@@ -360,8 +357,7 @@ Semua waktu dalam **WIB** (`Asia/Jakarta`) kecuali kota diset zona lain. Copy pu
 | Check-in berhasil | Member | Realtime | "Check-in {event} tercatat. +{xp} XP." |
 | Redeem dibuat / kedaluwarsa | Member | Realtime | Kode + sisa waktu |
 | Roaming diputuskan | Member | Realtime | Disetujui / ditolak |
-| Laporan PR masuk | Admin kota event | Realtime | Nama PR, event, jumlah tamu |
-| Laporan PR diputuskan | PR | Realtime | Divalidasi (+ bonus) / ditolak (alasan) |
+| Claim XP diputuskan | Pengaju (PR/member) | Realtime | Approved (+XP) / rejected (alasan); wallet room privat |
 | Leaderboard periode tutup | Member (opsional) | Awal periode | Peringkat akhir periode lalu |
 | Request roaming masuk | Approver (admin / HQ) | Realtime | Nama, kota asal, event |
 | Reservasi diputuskan | Member | Realtime | Dikonfirmasi / ditolak |
@@ -377,23 +373,28 @@ Pengiriman: Expo Push → APNs (iOS) / FCM (Android). Setiap push juga tersimpan
 | Key | Scope | Default |
 |---|---|---|
 | `minAge` | GLOBAL | 18 (TBD) |
-| `xpPerCheckIn` | GLOBAL / CITY | 50 (TBD) |
-| `spinCostXp` | GLOBAL | 250 (TBD) |
-| `maxSpinsPerEvent` | GLOBAL / EVENT | 5 (TBD) |
+| `welcomeBonusXp` | GLOBAL | 100 |
+| `xpPerCheckIn` / `reservationBonusXp` | GLOBAL / CITY | 50 / 25 |
+| `xpExpiryMonths` | GLOBAL | 18 |
+| `spinCostXp` | GLOBAL | 250 |
+| `maxSpinsPerEvent` / `drawSlots` | GLOBAL / EVENT | 1 (0 menutup entry) / 5 |
+| `freeDrawExpiryMonths` | GLOBAL | 3 |
+| `regionalAdminLimit` | GLOBAL / CITY | 5 |
+| `cardReplacementFee` | GLOBAL | 100000 |
 | `redeemCodeTtlMinutes` | GLOBAL | 15 |
 | `appQrTtlSeconds` | GLOBAL | 45 (rentang 30–60) |
 | `roamingHubExpiryHours` | GLOBAL | 48 |
-| `roamingMaxPerMonth` | GLOBAL | 0 = tanpa batas, per jenis per bulan UTC (TBD) |
-| `hubTimelinePosting` | GLOBAL / CITY | `MEMBERS` = admin + member (TBD); override per channel |
+| `roamingMaxPerMonth` | GLOBAL | 0 = tanpa batas, per jenis per bulan UTC |
+| `hubTimelinePosting` | GLOBAL / CITY | `HQ`; timeline selalu HQ-only |
 | `hubHistoryDays` | GLOBAL | 30 hari |
 | `hubMediaMaxSeconds` / `hubMediaMaxMb` | GLOBAL | 60 detik / 25 MB (TBD) |
-| `reservationApprover` | GLOBAL / CITY | `LOCAL_ADMIN` (TBD) |
-| `reservationMaxPerEvent` | GLOBAL | 1 reservasi aktif per member (TBD) |
-| `leaderboardPeriod` | GLOBAL | `MONTHLY` (TBD) |
+| `reservationApprover` | GLOBAL / CITY | `REGIONAL_ADMIN` |
+| `leaderboardPeriod` | GLOBAL | `QUARTERLY` |
 | `leaderboardTopN` | GLOBAL | 50 |
-| `promoterBonusKind` | GLOBAL | `XP` (TBD) |
-| `promoterBonusPerGuestXp` | GLOBAL / CITY | 20 (TBD) |
-| `promoterCommissionPercent` | GLOBAL / CITY | 0 (TBD, bila `CASH`) |
+| `promoterBonusKind` | GLOBAL | `XP` |
+| `promoterBonusPerGuestXp` / `promoterBonusPerReservationXp` | GLOBAL / CITY | 5 / 25 |
+| `memberBonusPerReservationXp` / `memberBonusPerGuestXp` | GLOBAL / CITY | 25 / 5 |
+| `memberClaimAllowGl` | GLOBAL | 0 (reservasi saja) |
 | `checkInOpensBeforeMinutes` | GLOBAL / EVENT | 60 |
 | `reminderTime` | CITY | 10:00 |
 | `followUpTime` | CITY | 12:00 |
@@ -424,7 +425,7 @@ Pengiriman: Expo Push → APNs (iOS) / FCM (Android). Setiap push juga tersimpan
 - Data yang disimpan: nama, tanggal lahir, kota, email, nomor WA, foto, song/genre/quotes, riwayat kehadiran, riwayat XP/redeem, konten hub.
 - Tanggal lahir hanya dipakai untuk cek umur dan tidak ditampilkan ke member lain; di kartu fisik hanya nama, NIM, dan QR (song & genre, quotes hanya di profil digital).
 - Export data hanya oleh HQ, tercatat di `AuditLog`.
-- **Foto struk laporan PR** adalah data finansial/pribadi: disimpan di bucket privat, diakses lewat URL bertanda tangan berumur pendek, hanya oleh PR pemilik laporan, Local Admin kota event, dan Super Admin. Tidak pernah tampil di hub atau ke member lain. Nama/nomor tamu (opsional) diperlakukan sama.
+- **Foto struk laporan PR** adalah data finansial/pribadi: disimpan di bucket privat, diakses lewat URL bertanda tangan berumur pendek, hanya oleh PR pemilik laporan, Regional Admin kota event, dan Super Admin. Tidak pernah tampil di hub atau ke member lain. Nama/nomor tamu (opsional) diperlakukan sama.
 - Leaderboard hanya menampilkan nama tampilan, foto, kota, dan XP; tidak ada data lain.
 - Member bisa meminta penonaktifan akun; data absensi/recap tetap (agregat), data profil dianonimkan.
 - Perlu halaman kebijakan privasi + persetujuan saat registrasi (konten dari tim).
@@ -437,7 +438,7 @@ Pengiriman: Expo Push → APNs (iOS) / FCM (Android). Setiap push juga tersimpan
 ### 10.5 Akun & akses
 
 - Login **email + OTP** (provider lihat §10.6); sesi dengan refresh token; logout jarak jauh dari dashboard.
-- Local Admin hanya bisa mengakses data kotanya; dicek di server pada tiap endpoint.
+- Regional Admin hanya bisa mengakses data kotanya; dicek di server pada tiap endpoint.
 - Rate limit pada registrasi, OTP (per email dan per IP), dan endpoint scan.
 
 ### 10.6 OTP provider
@@ -479,12 +480,12 @@ Prototype mencakup seluruh visi PRD, tetapi beberapa bagian dibangun pada **demo
 | Voice note & video | Upload ke object storage, pemutaran dasar, batas 60 detik / 25 MB | Transcoding, thumbnail otomatis, streaming adaptif |
 | Anti-screenshot | Android diblokir, iOS dideteksi + dicatat | Watermark dinamis, pemblokiran iOS (tidak mungkin) |
 | Reservasi venue | Denah grid sederhana per venue, chat ke admin | Denah vektor interaktif, pembayaran DP |
-| Spin wheel | Hasil server, animasi app, bobot dari setting | Analitik probabilitas, hadiah fisik stok lintas kota |
+| Live draw | Lima nama, sekali per event, server random, audit, realtime | Pengiriman hadiah fisik ditangani crew |
 | Export PDF | CSV/XLSX nyata; PDF berupa cetak dari tampilan web | Template PDF resmi |
 | Card Station | Tool CLI kecil di Mac (Rust), satu kartu per aksi, identifikasi via QR cetakan / NIM, hasil langsung ke server | Antrian batch otomatis |
 | File cetak kartu | PDF per member + PDF batch + CSV manifest dari template HTML/SVG (CR80 + bleed 3 mm, 300 dpi) | Manajemen warna/ICC pracetak, preflight otomatis sesuai spek vendor, portal vendor |
 | Leaderboard | Snapshot per jam + posisi sendiri live | Hadiah peringkat, histori periode panjang |
-| Laporan PR | Form + foto struk + validasi admin + bonus XP; payout uang hanya tabel | Pembayaran uang nyata, OCR struk |
+| Claim XP | PR/member, struk opsional, review regional, audit, XP otomatis | OCR struk dan pembayaran uang nyata |
 | Grup WA | Link ke grup kota (manual) | Integrasi WhatsApp API |
 | OTP | Mode `email` (SMTP) dan `demo` (di layar) | OTP via nomor HP: `whatsapp-bridge` (Baileys, tidak resmi) lalu WhatsApp Cloud API resmi via BSP + fallback SMS (butuh verifikasi Meta Business, T17) |
 | Push | Expo Push nyata ke device demo | Segmentasi lanjutan, A/B copy |
@@ -494,33 +495,42 @@ Prototype mencakup seluruh visi PRD, tetapi beberapa bagian dibangun pada **demo
 
 ---
 
-## 12. Keputusan yang masih terbuka (TBD)
+## 12. Keputusan tim dan dependensi tersisa
 
-| # | Hal | Pemilik | Default sementara |
-|---|---|---|---|
-| T1 | XP per check-in | Tim | 50 |
-| T2 | Katalog reward & harga XP | Tim | 100 XP = cocktail |
-| T3 | Biaya spin, isi roda, bobot | Tim | 250 XP, 6 slot bobot sama |
-| T4 | Maksimum spin per event | Tim | 5 |
-| T5 | Umur minimum | Tim | 18 |
-| T6 | Format NIM final | Owner | `<kota><yy><5 digit>` |
-| T7 | Daftar kota awal + kode | Tim | — |
-| T8 | ~~Cara cetak per orang di kartu PVC~~ — **diputuskan 16 Okt**: vendor cetak eksternal, kartu NTAG213 kosong disuplai perusahaan, cetak dulu lalu encode di HQ | — | — |
-| T8b | Desain kartu: satu desain untuk semua atau berbeda per kota | Owner | Satu desain |
-| T8c | File artwork kartu (depan + belakang, CR80 + bleed) dari tim, untuk template cetak | Tim | Placeholder desain sementara |
-| T9 | Copy push final per kota | Tim | lihat §8 |
-| T10 | Siapa boleh posting di timeline (semua member vs admin saja) | Tim | Admin + member |
-| T11 | Field recap tambahan (misal revenue per kategori) | Tim | sofa/table/FDC/pax + revenue |
-| T12 | Kebijakan privasi & persetujuan | Tim/legal | — |
-| T13 | Nama brand/ikon app di store | Owner | PATS University |
-| T14 | Periode leaderboard (bulanan vs per event vs sepanjang masa) dan hadiah peringkat | Tim | Bulanan, tanpa hadiah |
-| T15 | Bentuk bonus PR: XP atau uang (komisi % dari struk, atau nominal per tamu) | Tim | 20 XP per tamu |
-| T16 | Siapa yang memberi flag PR: Local Admin menunjuk vs member mengajukan | Tim | Local Admin menunjuk |
-| T17 | Bila kelak pindah ke OTP HP: mulai **verifikasi Meta Business** + pilih BSP untuk WhatsApp Cloud API (atau putuskan Firebase Phone Auth sebagai jalur tercepat); fallback SMS. Sampai diputuskan, OTP memakai `email` (SMTP) dan `demo` untuk showcase (§10.6) | Owner | `email` |
+| ID | Keputusan / status 16 Oktober 2026 |
+|---|---|
+| T1 | 100 XP welcome sekali, 50 check-in, +25 confirmed reservation |
+| T2 | Reward per venue; katalog aktual diisi operasional |
+| T3 / T4 | Live draw lima nama, 250 XP, sekali/member/event saat peak hour; bukan wheel pribadi |
+| T5 | Tetap 18 sampai keputusan umur final |
+| T6 | Format NIM tetap `<kota><yy><5 digit>`; belum ada pengganti |
+| T7 | Launch JKT Jakarta + JOG Jogja; BDG/SBY hanya demo |
+| T8 / T8b | Vendor cetak dahulu, HQ encode; satu template swappable |
+| T8c | Artwork HQ belum diterima; placeholder di `apps/web/card-templates/placeholder`, `CARD_TEMPLATE_DIR` untuk penggantian |
+| T9 | `{city}` siap; lima teks ID verbatim belum disertakan pada sumber, terjemahan EN menunggu teks tersebut |
+| T10 | Timeline hanya HQ; member baca/reaksi |
+| T11 | Recap menambah PIC malam itu dan penanggung jawab utama |
+| T12 | Legal HQ menulis; placeholder tetap sampai teks diterima |
+| T13 | Brand tetap PATS University |
+| T14 / OPEN-4 | Kuartalan, #1 per kota satu slot gratis, event berikutnya/pilihan HQ, expiry akhir kuartal berikutnya |
+| T15 / T16 / OPEN-3 terbaru | PR ditunjuk Regional Admin. Claim XP PR dan member diajukan di app; admin review/adjust/approve/reject. PR 5×GL+25×reservasi, member 25×reservasi |
+| T17 | Email OTP tetap; WA/SMS belum diminta |
+| S1 / OPEN-1 | Regional Admin = satu kota; migrasi menjaga akun/scope, alias lama diterima |
+| S2 / S3 | Dashboard regional scoped; maksimum 5 admin aktif, setting |
+| S4 | Penggantian kartu Rp100.000, paid/unpaid/pencatat/waktu, tanpa batas |
+| S5 | XP expiry 18 bulan, ledger expiry idempoten |
+| S6 | Request pindah kota → HQ approve/reject; NIM/kartu tetap |
+| S7 / S8 | Regional Admin konfirmasi, minimum charge venue/slot; satu unpaid lintas event sampai DP dicatat |
+| S9 | Roaming hub 48 jam, tanpa batas jumlah default |
+| S10 | Keluar: anonimisasi profil, revoke sesi/device, pertahankan data kehadiran/ledger |
 
 ---
 
 ## 13. Changelog keputusan
+
+### 16 Oktober 2026 — Phase 5, keputusan tim + addendum Claim XP
+
+Aturan aktif di §3–§12 menggantikan default historis Phase 3/4: JKT/JOG, Regional Admin satu kota dan dashboard, welcome/reservation XP, venue reward, live draw lima nama, kuartal/free slot, expiry 18 bulan, fee kartu, perpindahan region, DP lintas event, HQ-only timeline, PIC/accountable. Addendum terakhir mengganti admin-entry PR recap dengan Claim XP PR/member yang direview regional. Copy push verbatim, artwork, dan legal masih memerlukan bahan HQ. Entri changelog di bawah mencatat riwayat, bukan aturan operasional saat ini.
 
 ### 16 Oktober 2026 — keputusan owner (mengganti PDF jika berbeda)
 

@@ -14,6 +14,7 @@ import { cn } from '@/lib/cn';
 
 /** Pages built so far; the later ones (PRODUCT.md §5.3) join this list as they ship. */
 const NAV: { href: string; labelKey: MessageKey; icon: LucideIcon }[] = [
+  { href: '/regional', labelKey: 'phase5.operations', icon: LayoutGrid },
   { href: '/overview', labelKey: 'nav.overview', icon: LayoutGrid },
   { href: '/members', labelKey: 'nav.members', icon: Users },
   { href: '/cards', labelKey: 'nav.cards', icon: CreditCard },
@@ -34,7 +35,7 @@ export function Shell({
   badges = {},
   children,
 }: {
-  user: { name: string; email: string };
+  user: { name: string; email: string; regional?: boolean };
   demo: boolean;
   /** Counts that need HQ's attention, by nav href (e.g. pending re-encode requests on /cards). */
   badges?: Record<string, number>;
@@ -62,7 +63,7 @@ export function Shell({
       </div>
       <nav className="flex-1 overflow-y-auto px-2 py-2" aria-label="HQ">
         <ul className="flex flex-col gap-0.5">
-          {NAV.map(({ href, labelKey, icon: Icon }) => {
+          {NAV.filter(item => !user.regional || ['/regional', '/events', '/rewards', '/recaps', '/hub'].includes(item.href)).map(({ href, labelKey, icon: Icon }) => {
             const active = pathname === href || pathname.startsWith(`${href}/`);
             return (
               <li key={href}>

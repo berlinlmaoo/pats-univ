@@ -293,6 +293,7 @@ function FeedScreen({
               {item.mediaUrl && (
                 <Media uri={item.mediaUrl} type={item.mediaType} />
               )}
+              {channel?.kind === 'TIMELINE' && <Button variant="ghost" label={`${t.loose(item.reacted ? 'phase5.reacted' : 'phase5.react')} · ${item.reactionCount ?? 0}`} onPress={() => void run('react', { postId: item.id, active: !item.reacted })} />}
               {admin && channel && (
                 <View style={styles.group}>
                   {channel.kind === "TIMELINE" && (
@@ -367,6 +368,7 @@ function FeedScreen({
           }}
         />
       )}
+      {(channel?.kind !== "TIMELINE" || channel.canPostTimeline) && <>
       <Field label={t("social.message")}>
         <Input
           value={body}
@@ -444,6 +446,7 @@ function FeedScreen({
           }
         }}
       />
+      </>}
     </Screen>
   );
 }

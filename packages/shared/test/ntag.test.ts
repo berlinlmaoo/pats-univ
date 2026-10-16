@@ -175,8 +175,8 @@ describe('card helpers', () => {
   });
 
   it('gates card work by capability, not role', () => {
-    expect(can('LOCAL_ADMIN', 'card.requestReencode')).toBe(true);
-    expect(can('LOCAL_ADMIN', 'card.encode')).toBe(false);
+    expect(can('REGIONAL_ADMIN', 'card.requestReencode')).toBe(true);
+    expect(can('REGIONAL_ADMIN', 'card.encode')).toBe(false);
     expect(can('SUPER_ADMIN', 'card.encode')).toBe(true);
     expect(can('MEMBER', 'card.handover')).toBe(false);
   });

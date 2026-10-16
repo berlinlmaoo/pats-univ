@@ -1,3 +1,4 @@
+import { can } from '@pats/shared';
 import 'server-only';
 import {
   createTranslator,
@@ -86,7 +87,7 @@ export async function exportTable(
     eventId?: string;
   },
 ): Promise<ExportTable> {
-  if (admin.role !== 'SUPER_ADMIN') throw new AppError('FORBIDDEN', 403);
+  if (!can(admin.role, 'hq.manage')) throw new AppError('FORBIDDEN', 403);
   const t = createTranslator(locale);
   const h = (key: string) => t.loose(`loyalty.${key}`);
   const date = (v: Date | null) =>
@@ -215,50 +216,10 @@ export async function exportTable(
       break;
     }
     case 'report': {
-      const rows = await db.promoterReport.findMany({
-        where: { cityId, createdAt: range },
-        include: { member: true, event: true, payouts: true },
-        orderBy: { createdAt: 'asc' },
-      });
+      const rows = await db.xpClaim.findMany({ where: { event: { cityId }, createdAt: range }, include: { member: true, event: true }, orderBy: { createdAt: 'asc' } });
       table = {
-        headers: [
-          'NIM',
-          h('member'),
-          h('event'),
-          h('guestCount'),
-          h('guests'),
-          h('receiptAmount'),
-          t('common.status'),
-          h('bonus'),
-          h('reason'),
-          h('PENDING'),
-          h('PAID'),
-          h('receipt'),
-        ],
-        rows: rows.map((r) => [
-          r.member.nim,
-          r.member.fullName,
-          r.event.title,
-          formatCount(r.guestCount),
-          JSON.stringify(r.guests ?? []),
-          r.receiptAmount === null ? '' : formatRupiah(r.receiptAmount),
-          h(r.status),
-          r.bonusKind === 'CASH'
-            ? formatRupiah(r.bonusValue ?? 0)
-            : `${formatCount(r.bonusValue ?? 0)} XP`,
-          r.rejectReason,
-          formatRupiah(
-            r.payouts
-              .filter((p) => p.status === 'PENDING')
-              .reduce((n, p) => n + p.amount, 0),
-          ),
-          formatRupiah(
-            r.payouts
-              .filter((p) => p.status === 'PAID')
-              .reduce((n, p) => n + p.amount, 0),
-          ),
-          `/api/loyalty/receipts/${r.id}`,
-        ]),
+        headers: ['NIM', h('member'), h('event'), t('phase5.claimForm'), t('phase5.guestCount'), t('phase5.reservationCount'), t('common.status'), h('bonus'), h('reason'), h('receipt')],
+        rows: rows.map(r => [r.member.nim, r.member.fullName, r.event.title, r.formType, formatCount(r.guestCount), formatCount(r.reservationCount), t.loose(`social.${r.status}`), `${formatCount(r.bonusValue ?? 0)} XP`, r.rejectReason, r.receiptUrl ? `/api/loyalty/claims/${r.id}/receipt` : '']),
       };
       break;
     }
@@ -280,6 +241,8 @@ export async function exportTable(
           h('revenueTable'),
           h('revenueFdc'),
           h('total'),
+          t('phase5.personInCharge'),
+          t('phase5.accountablePerson'),
           h('note'),
         ],
         rows: rows.map((r) => [
@@ -293,6 +256,8 @@ export async function exportTable(
           formatRupiah(r.revenueTable),
           formatRupiah(r.revenueFdc),
           formatRupiah(r.total),
+          r.personInCharge,
+          r.accountablePerson,
           r.note,
         ]),
       };

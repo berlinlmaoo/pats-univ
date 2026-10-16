@@ -1,5 +1,5 @@
 import "server-only";
-import type { SocialRoom } from "@pats/shared";
+import { can, type SocialRoom } from "@pats/shared";
 import type { Prisma } from "@/generated/prisma";
 import { db } from "../db";
 import { requireCityAccess, type AuthUser } from "../auth/current-user";
@@ -67,6 +67,7 @@ export async function channelAccess(
   )
     throw new AppError("FORBIDDEN", 403);
   if (write) {
+    if (channel.kind === "TIMELINE" && !can(user.role, "timeline.post")) throw new AppError("FORBIDDEN", 403);
     if (channel.archived) throw new AppError("FORBIDDEN", 403);
     if (user.role === "MEMBER") {
       if ((await mutedUsers(channel.cityId, tx)).includes(user.id))
@@ -111,8 +112,14 @@ export async function roomAccess(user: AuthUser, room: SocialRoom) {
     await conversationAccess(user, room.id);
     return null;
   }
+  if (room.kind === "wallet") {
+    const member = await memberFor(user);
+    if (member.id !== room.id) throw new AppError("FORBIDDEN", 403);
+    return null;
+  }
   const event = await db.event.findUnique({ where: { id: room.id } });
   if (!event) throw new AppError("NOT_FOUND", 404);
-  requireCityAccess(user, event.cityId);
+  if (room.kind === "draw") await cityAccess(user, event.cityId);
+  else requireCityAccess(user, event.cityId);
   return null;
 }

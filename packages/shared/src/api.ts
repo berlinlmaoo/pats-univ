@@ -17,6 +17,12 @@ export interface ApiError {
 }
 
 export type ApiErrorCode =
+  | 'DRAW_FULL'
+  | 'DRAW_COMPLETED'
+  | 'DRAW_NOT_READY'
+  | 'ADMIN_LIMIT'
+  | 'CLAIM_EXISTS'
+  | 'CLAIM_NOT_OPEN'
   | 'VALIDATION'
   | 'UNAUTHENTICATED'
   | 'FORBIDDEN'

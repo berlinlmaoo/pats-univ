@@ -1,9 +1,12 @@
-import { formatPhone } from '@pats/shared';
+import { formatCount, formatPhone, type WalletDto } from '@pats/shared';
 import { router } from 'expo-router';
 import { Bell } from 'lucide-react-native';
 import { useState } from 'react';
 import { Alert, StyleSheet, View } from 'react-native';
 import { useAuth } from '@/auth';
+import { useApi } from '@/lib/use-api';
+import { useSocialRoom } from '@/features/social/realtime';
+import { Badge } from '@/components/badge';
 import { Button } from '@/components/button';
 import { Card } from '@/components/card';
 import { DetailList } from '@/components/detail-list';
@@ -27,7 +30,7 @@ function initials(name: string) {
 
 /** Shared by members and city admins. */
 export function ProfileScreen() {
-  const { me, signOut, reload } = useAuth();
+  const { me, signOut, reload, call } = useAuth();
   const { t } = useI18n();
   const c = useColors();
   const [refreshing, setRefreshing] = useState(false);
@@ -83,6 +86,10 @@ export function ProfileScreen() {
         </View>
       </View>
 
+      {member && <ProfileXp memberId={member.id} />}
+      {member?.isPromoter && <Badge label={t('phase5.prBadge')} tone="accent" />}
+      {member && <Button variant="secondary" label={t('phase5.claimTitle')} onPress={() => router.push('/claims')} />}
+      {member && <Button variant="secondary" label={t('phase5.regionChange')} onPress={() => router.push('/region-change')} />}
       <SectionLabel>{t('app.details')}</SectionLabel>
       <DetailList items={details} />
 
@@ -95,6 +102,7 @@ export function ProfileScreen() {
         <ListRow first icon={Bell} title={t('app.notificationSettingsTitle')} subtitle={t('app.notificationSettingsBody')} onPress={() => router.push('/notification-settings')} />
       </Card>
 
+      {member && <Button variant="danger" label={t('phase5.leave')} onPress={() => Alert.alert(t('phase5.leave'), t('phase5.leaveConfirm'), [{ text: t('common.cancel'), style: 'cancel' }, { text: t('phase5.leave'), style: 'destructive', onPress: () => { void call('POST', '/api/me/leave').then(signOut).catch(() => Alert.alert(t('errors.generic'))); } }])} />}
       <Button variant="secondary" label={t('common.signOut')} onPress={confirmSignOut} style={styles.signOut} />
       <Text variant="caption" tone="textMuted" style={styles.version}>
         {t('app.version', { version: APP_VERSION })}
@@ -112,3 +120,10 @@ const styles = StyleSheet.create({
   clip: { overflow: 'hidden' },
   version: { textAlign: 'center' },
 });
+
+function ProfileXp({ memberId }: { memberId: string }) {
+  const { t } = useI18n();
+  const state = useApi<WalletDto>('/api/loyalty/wallet');
+  useSocialRoom({ kind: 'wallet', id: memberId }, state.reload);
+  return state.data ? <Text variant="title2">{formatCount(state.data.balance)} XP</Text> : <Text tone="textMuted">{t('loyalty.balance')}</Text>;
+}

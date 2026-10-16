@@ -119,13 +119,20 @@ export const CAPABILITIES = [
   'card.decideReencode',
   'reward.validate',
   'city.operations',
+  'dashboard.access',
+  'hq.manage',
+  'timeline.post',
+  'draw.manage',
+  'promoter.manage',
+  'reservation.manage',
 ] as const;
 export type Capability = (typeof CAPABILITIES)[number];
 
 const ROLE_CAPABILITIES: Record<Role, readonly Capability[]> = {
   MEMBER: [],
-  LOCAL_ADMIN: ['checkin.scan', 'card.handover', 'card.reportLost', 'card.requestReencode', 'reward.validate', 'city.operations'],
-  SUPER_ADMIN: ['checkin.scan', 'card.handover', 'card.reportLost', 'card.encode', 'card.decideReencode', 'reward.validate', 'city.operations'],
+  LOCAL_ADMIN: ['checkin.scan', 'card.handover', 'card.reportLost', 'card.requestReencode', 'reward.validate', 'city.operations', 'dashboard.access', 'draw.manage', 'promoter.manage', 'reservation.manage'],
+  REGIONAL_ADMIN: ['checkin.scan', 'card.handover', 'card.reportLost', 'card.requestReencode', 'reward.validate', 'city.operations', 'dashboard.access', 'draw.manage', 'promoter.manage', 'reservation.manage'],
+  SUPER_ADMIN: ['checkin.scan', 'card.handover', 'card.reportLost', 'card.encode', 'card.decideReencode', 'hq.manage', 'timeline.post', 'reward.validate', 'city.operations', 'dashboard.access', 'draw.manage', 'promoter.manage', 'reservation.manage'],
 };
 
 export function capabilitiesOf(role: Role): readonly Capability[] {

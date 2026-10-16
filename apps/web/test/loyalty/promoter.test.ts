@@ -1,101 +1,45 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AuthUser } from '../../src/lib/auth/current-user';
 vi.mock('../../src/lib/db', () => ({ db: {} }));
-const fixture = vi.hoisted(() => ({
-  status: 'SUBMITTED',
-  credits: [] as number[],
-  payouts: [] as { status: string; amount: number }[],
-  kind: 'XP',
-  tx: {} as Record<string, unknown>,
-}));
-vi.mock('../../src/lib/loyalty/transaction', () => ({
-  atomic: (fn: (tx: unknown) => Promise<unknown>) => fn(fixture.tx),
-}));
-vi.mock('../../src/lib/settings', () => ({
-  getSetting: async (_: unknown, key: string) =>
-    key === 'promoterBonusKind'
-      ? fixture.kind
-      : key === 'promoterBonusPerGuestXp'
-        ? 20
-        : 5,
-}));
-import { reviewReport } from '../../src/lib/loyalty/promoter';
-const admin = {
-  id: 'crew',
-  role: 'LOCAL_ADMIN',
-  cityId: 'jakarta',
-} as AuthUser;
-describe('PR crediting', () => {
+vi.mock('../../src/lib/social/realtime', () => ({ publish: vi.fn() }));
+vi.mock('../../src/lib/push/notify', () => ({ deliverStoredNotification: vi.fn() }));
+vi.mock('../../src/lib/loyalty/receipts', () => ({ assertReceiptExists: vi.fn() }));
+const fixture = vi.hoisted(() => ({ status: 'PENDING', credits: [] as number[], notifications: [] as unknown[], tx: {} as Record<string, unknown> }));
+vi.mock('../../src/lib/loyalty/transaction', () => ({ atomic: (fn: (tx: unknown) => Promise<unknown>) => fn(fixture.tx) }));
+vi.mock('../../src/lib/settings', () => ({ getSetting: async (_: unknown, key: string) => key.includes('Reservation') ? 25 : key.includes('Guest') ? 5 : key === 'xpExpiryMonths' ? 18 : 0 }));
+import { reviewClaim } from '../../src/lib/loyalty/claims';
+const admin = { id: 'crew', role: 'REGIONAL_ADMIN', cityId: 'jakarta' } as AuthUser;
+describe('post-event claim approval', () => {
   beforeEach(() => {
-    fixture.status = 'SUBMITTED';
-    fixture.credits = [];
-    fixture.payouts = [];
-    fixture.kind = 'XP';
+    fixture.status = 'PENDING'; fixture.credits = []; fixture.notifications = [];
     fixture.tx = {
-      promoterReport: {
-        findUnique: async () => ({
-          id: 'report',
-          memberId: 'member',
-          cityId: 'jakarta',
-          guestCount: 12,
-          receiptAmount: 6000000,
-          status: fixture.status,
-          bonusKind: fixture.kind,
-          bonusValue: 240,
-          payouts: fixture.payouts,
-        }),
-        update: async ({ data }: { data: { status: string } }) => {
-          fixture.status = data.status;
-          return data;
-        },
+      xpClaim: {
+        findUnique: async () => ({ id: 'claim', memberId: 'member', formType: 'PR', guestCount: 12, reservationCount: 2,
+          status: fixture.status, event: { cityId: 'jakarta', title: 'Night' }, member: { userId: 'user', user: { locale: 'en' } } }),
+        updateMany: async ({ data }: { data: { status: string } }) => { if (fixture.status !== 'PENDING') return { count: 0 }; fixture.status = data.status; return { count: 1 }; },
       },
-      xpLedger: {
-        create: async ({ data }: { data: { delta: number } }) => {
-          fixture.credits.push(data.delta);
-        },
-      },
-      promoterPayout: {
-        create: async ({ data }: { data: { amount: number } }) => {
-          fixture.payouts.push({ status: 'PENDING', amount: data.amount });
-        },
-        deleteMany: async () => {
-          fixture.payouts = [];
-        },
-      },
-      auditLog: { create: async () => ({}) },
+      xpLedger: { create: async ({ data }: { data: { delta: number } }) => { fixture.credits.push(data.delta); } },
+      notification: { create: async ({ data }: { data: unknown }) => { fixture.notifications.push(data); } },
+      auditLog: { create: vi.fn() },
     };
   });
-  it('credits 240 XP exactly once and refuses a second validation', async () => {
-    await reviewReport(admin, 'report', { action: 'validate' });
-    await expect(
-      reviewReport(admin, 'report', { action: 'validate' }),
-    ).rejects.toMatchObject({ code: 'REPORT_REVIEWED' });
-    expect(fixture.credits).toEqual([240]);
+  it('credits 5×GL + 25×reservations once', async () => {
+    await reviewClaim(admin, { id: 'claim', decision: 'APPROVED' });
+    await expect(reviewClaim(admin, { id: 'claim', decision: 'APPROVED' })).rejects.toMatchObject({ code: 'REQUEST_DECIDED' });
+    expect(fixture.credits).toEqual([110]); expect(fixture.notifications).toHaveLength(1);
   });
-  it('rejects another city before crediting', async () => {
-    await expect(
-      reviewReport({ ...admin, cityId: 'bandung' }, 'report', {
-        action: 'validate',
-      }),
-    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
-    expect(fixture.credits).toEqual([]);
+  it('uses the adjusted numbers and audits before/after', async () => {
+    await reviewClaim(admin, { id: 'claim', decision: 'APPROVED', guestCount: 3, reservationCount: 4 });
+    expect(fixture.credits).toEqual([115]);
+    const audit = fixture.tx.auditLog as { create: ReturnType<typeof vi.fn> };
+    expect(audit.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ meta: expect.objectContaining({ before: { guestCount: 12, reservationCount: 2 }, after: { guestCount: 3, reservationCount: 4 } }) }) }));
   });
-  it('writes a pending payout instead of an XP credit for cash', async () => {
-    fixture.kind = 'CASH';
-    await reviewReport(admin, 'report', { action: 'validate' });
-    expect(fixture.credits).toEqual([]);
-    expect(fixture.payouts).toEqual([{ status: 'PENDING', amount: 300000 }]);
+  it('rejects without XP and stores the reason notification', async () => {
+    await reviewClaim(admin, { id: 'claim', decision: 'REJECTED', reason: 'No matching reservation' });
+    expect(fixture.credits).toEqual([]); expect(fixture.notifications[0]).toMatchObject({ body: expect.stringContaining('No matching reservation') });
   });
-  it('reverses a validated XP bonus once, then permits resubmission', async () => {
-    await reviewReport(admin, 'report', { action: 'validate' });
-    await reviewReport(admin, 'report', {
-      action: 'cancel',
-      reason: 'Correct receipt',
-    });
-    expect(fixture.status).toBe('REJECTED');
-    expect(fixture.credits).toEqual([240, -240]);
-    await expect(
-      reviewReport(admin, 'report', { action: 'cancel', reason: 'Again' }),
-    ).rejects.toMatchObject({ code: 'REPORT_REVIEWED' });
+  it('refuses another region before any mutation', async () => {
+    await expect(reviewClaim({ ...admin, cityId: 'jogja' }, { id: 'claim', decision: 'APPROVED' })).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(fixture.credits).toEqual([]); expect(fixture.status).toBe('PENDING');
   });
 });

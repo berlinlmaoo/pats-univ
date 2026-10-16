@@ -1,5 +1,6 @@
 import "server-only";
 import {
+  can,
   channelSchema,
   decisionSchema,
   layoutSchema,
@@ -39,7 +40,7 @@ const memberSelect = { fullName: true } as const;
 async function admins(cityId: string) {
   return (
     await db.user.findMany({
-      where: { role: "LOCAL_ADMIN", cityId, status: "ACTIVE" },
+      where: { role: "REGIONAL_ADMIN", cityId, status: "ACTIVE" },
       select: { id: true },
     })
   ).map((u) => u.id);
@@ -64,7 +65,7 @@ export async function hub(user: AuthUser) {
   const cities = await db.city.findMany({
     where: {
       active: true,
-      ...(user.role === "SUPER_ADMIN" ? {} : { id: { in: cityIds } }),
+      ...(can(user.role, 'hq.manage') ? {} : { id: { in: cityIds } }),
     },
     select: { id: true, name: true },
     orderBy: { name: "asc" },
@@ -82,7 +83,8 @@ export async function hub(user: AuthUser) {
     channels: await Promise.all(
       channels.map(async (c) => ({
         ...c,
-        memberPosting: await memberPosting(c.id),
+        memberPosting: c.kind === "TIMELINE" ? false : await memberPosting(c.id),
+        canPostTimeline: can(user.role, "timeline.post"),
       })),
     ),
     rules: {
@@ -152,12 +154,12 @@ export async function feed(
       ? (await channelAccess(user, room.id)).channel
       : null;
   if (room.kind === "conversation") await conversationAccess(user, room.id);
-  if (room.kind === "attendance") throw new AppError("VALIDATION", 422);
+  if (room.kind !== "channel" && room.kind !== "conversation") throw new AppError("VALIDATION", 422);
   let items: HubItem[];
   if (channel?.kind === "TIMELINE") {
     const rows = await db.post.findMany({
       where: { channelId: room.id, deletedAt: null, createdAt: dateFilter },
-      include: { author: { select: authorSelect } },
+      include: { author: { select: authorSelect }, _count: { select: { reactions: true } }, reactions: { where: { userId: user.id }, select: { userId: true } } },
       orderBy: [{ pinned: "desc" }, { createdAt: "desc" }, { id: "desc" }],
       ...paging,
       take: 50,
@@ -165,6 +167,8 @@ export async function feed(
     items = await Promise.all(
       rows.map(async (p) => ({
         id: p.id,
+        reactionCount: p._count.reactions,
+        reacted: p.reactions.length > 0,
         body: p.body,
         author: p.author,
         createdAt: p.createdAt.toISOString(),
@@ -359,7 +363,7 @@ export async function requestRoaming(user: AuthUser, raw: unknown) {
           status: { not: "REJECTED" },
           createdAt: { gte: month },
         },
-      })) >= limit
+      })) > 0
     )
       throw new AppError("ROAMING_LIMIT", 409);
     return tx.roamingRequest.create({
@@ -397,9 +401,9 @@ export async function decideRoaming(user: AuthUser, raw: unknown) {
     });
     if (!r) throw new AppError("NOT_FOUND", 404);
     if (r.type === "SOCIAL_HUB") {
-      if (user.role !== "SUPER_ADMIN") throw new AppError("FORBIDDEN", 403);
+      if (!can(user.role, 'hq.manage')) throw new AppError("FORBIDDEN", 403);
     } else {
-      if (user.role !== "LOCAL_ADMIN") throw new AppError("FORBIDDEN", 403);
+      if (!can(user.role, 'city.operations')) throw new AppError("FORBIDDEN", 403);
       requireCityAccess(user, r.targetCityId);
     }
     if (r.status !== "PENDING") throw new AppError("REQUEST_DECIDED", 409);
@@ -490,21 +494,22 @@ export async function reserve(user: AuthUser, raw: unknown) {
       })
     )
       throw new AppError("SLOT_TAKEN", 409);
-    const limit = await getSetting(tx, "reservationMaxPerEvent");
+    await tx.$queryRaw`SELECT id FROM "Member" WHERE id = ${m.id} FOR UPDATE`;
     if (
       (await tx.reservation.count({
         where: {
-          eventId: e.id,
           memberId: m.id,
+          downPaymentAt: null,
           status: { in: ["PENDING", "CONFIRMED"] },
         },
-      })) >= limit
+      })) > 0
     )
       throw new AppError("RESERVATION_LIMIT", 409);
     return tx.reservation.create({
       data: {
         ...input,
         venueId: e.venue.id,
+        minimumCharge: slot.minimumCharge ?? e.venue.minimumCharge,
         memberId: m.id,
         conversation: {
           create: { kind: "RESERVATION", cityId: e.cityId, memberId: m.id },
@@ -517,7 +522,7 @@ export async function reserve(user: AuthUser, raw: unknown) {
     cityId: row.event.cityId,
   });
   const recipients =
-    approver === "LOCAL_ADMIN"
+    approver === "REGIONAL_ADMIN"
       ? await admins(row.event.cityId)
       : (
           await db.user.findMany({
@@ -555,13 +560,6 @@ export async function decideReservation(user: AuthUser, raw: unknown) {
         throw new AppError("FORBIDDEN", 403);
     } else {
       requireCityAccess(user, r.event.cityId);
-      if (
-        user.role !==
-        (await getSetting(tx, "reservationApprover", {
-          cityId: r.event.cityId,
-        }))
-      )
-        throw new AppError("FORBIDDEN", 403);
     }
     if (
       !["PENDING", "CONFIRMED"].includes(r.status) ||
@@ -620,7 +618,7 @@ export async function decideReservation(user: AuthUser, raw: unknown) {
 }
 export async function saveLayout(user: AuthUser, raw: unknown) {
   const input = z
-    .object({ venueId: z.string(), layout: layoutSchema })
+    .object({ venueId: z.string(), layout: layoutSchema, minimumCharge: z.number().int().min(0).max(2_000_000_000).optional() })
     .parse(raw);
   await atomic(async (tx) => {
     const v = await tx.venue.findUnique({ where: { id: input.venueId } });
@@ -644,7 +642,7 @@ export async function saveLayout(user: AuthUser, raw: unknown) {
       throw new AppError("SLOT_TAKEN", 409);
     await tx.venue.update({
       where: { id: v.id },
-      data: { layout: input.layout },
+      data: { layout: input.layout, minimumCharge: input.minimumCharge },
     });
     await tx.auditLog.create({
       data: {
@@ -659,7 +657,7 @@ export async function saveLayout(user: AuthUser, raw: unknown) {
 }
 export async function operations(user: AuthUser) {
   const member = user.role === "MEMBER" ? await memberFor(user) : null;
-  const city = user.role === "LOCAL_ADMIN" ? user.cityId! : undefined;
+  const city = can(user.role, 'hq.manage') ? undefined : user.cityId!;
   const [reservations, roaming, venues, events] = await Promise.all([
     db.reservation.findMany({
       where: member ? { memberId: member.id } : { event: { cityId: city } },
@@ -684,7 +682,7 @@ export async function operations(user: AuthUser) {
       ? []
       : db.venue.findMany({
           where: { cityId: city },
-          select: { id: true, name: true, cityId: true, layout: true },
+          select: { id: true, name: true, cityId: true, layout: true, minimumCharge: true },
         }),
     member
       ? []
@@ -734,10 +732,7 @@ export async function operations(user: AuthUser) {
         ...r,
         canDecide:
           !member &&
-          user.role ===
-            (await getSetting(db, "reservationApprover", {
-              cityId: r.event.cityId,
-            })),
+          user.role !== "MEMBER",
       })),
     ),
     roaming: roaming.map((r) => ({
@@ -795,4 +790,18 @@ export async function cleanup() {
     where: { id: { in: old.map((m) => m.id) } },
   });
   return { expired: expired.count, messages: messages.count };
+}
+
+export async function reactToPost(user: AuthUser, raw: unknown) {
+  const input = z.object({ postId: z.string(), active: z.boolean() }).parse(raw);
+  const channelId = await atomic(async tx => {
+    const post = await tx.post.findUnique({ where: { id: input.postId } });
+    if (!post || post.deletedAt) throw new AppError('NOT_FOUND', 404);
+    await channelAccess(user, post.channelId, false, tx);
+    if (input.active) await tx.postReaction.upsert({ where: { postId_userId: { postId: post.id, userId: user.id } }, create: { postId: post.id, userId: user.id }, update: {} });
+    else await tx.postReaction.deleteMany({ where: { postId: post.id, userId: user.id } });
+    return post.channelId;
+  });
+  await publish({ kind: 'channel', id: channelId });
+  return { saved: true };
 }
