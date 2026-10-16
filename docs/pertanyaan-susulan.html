@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pertanyaan Susulan — PATS University</title>
+<style>
+  @page { size: A4; margin: 14mm 15mm 16mm 15mm; }
+  :root {
+    --navy: #14213d;
+    --navy-2: #1f2f55;
+    --ink: #1c2130;
+    --body: #4b5563;
+    --muted: #7b8494;
+    --line: #dde2ea;
+    --bg-soft: #f4f6f9;
+    --accent: #c9a227;
+    --pill-grey-bg: #eceff3; --pill-grey-fg: #4b5563;
+    --pill-blue-bg: #e3ebf8; --pill-blue-fg: #1f3f7a;
+    --pill-amber-bg: #fdf1d6; --pill-amber-fg: #8a5b00;
+    --pill-green-bg: #ddf3e4; --pill-green-fg: #1c6b3a;
+    --pill-red-bg: #fbe1e1; --pill-red-fg: #9a2626;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Helvetica Neue", Helvetica, Arial, "Liberation Sans", sans-serif;
+    color: var(--body);
+    font-size: 10pt;
+    line-height: 1.45;
+    background: #fff;
+  }
+  h1, h2, h3 { color: var(--ink); margin: 0; }
+  p { margin: 0 0 8px; }
+  strong { color: var(--ink); font-weight: 600; }
+  code {
+    font-family: "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    font-size: 9pt; color: var(--ink);
+    background: var(--bg-soft); padding: 1px 5px; border-radius: 3px;
+  }
+  ul { margin: 0 0 8px; padding-left: 18px; }
+  li { margin-bottom: 4px; }
+  li::marker { color: var(--muted); }
+
+  .page { }
+
+  /* Cover / title */
+  .cover {
+    border-bottom: 3px solid var(--navy);
+    padding-bottom: 14px; margin-bottom: 18px;
+  }
+  .cover .kicker {
+    font-size: 8.5pt; letter-spacing: .18em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 6px;
+  }
+  .cover h1 { font-size: 20pt; line-height: 1.2; letter-spacing: -.01em; }
+  .cover .sub { color: var(--muted); font-size: 9.5pt; margin-top: 8px; }
+
+  .intro {
+    padding: 10px 12px; background: var(--bg-soft); border-radius: 6px;
+    font-size: 9.5pt; color: var(--body); margin-bottom: 16px; break-inside: avoid;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .intro p:last-child { margin-bottom: 0; }
+  .intro strong { color: var(--navy); }
+
+  /* Section header bar */
+  .bar {
+    background: var(--navy); color: #fff;
+    padding: 8px 14px; border-radius: 4px;
+    display: flex; align-items: baseline; gap: 12px;
+    margin: 0 0 12px; break-after: avoid; break-inside: avoid;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .bar .num {
+    font-size: 8.5pt; letter-spacing: .14em; text-transform: uppercase;
+    color: #c9d3ea; font-weight: 600;
+  }
+  .bar h2 { color: #fff; font-size: 13.5pt; font-weight: 600; letter-spacing: -.005em; }
+  .bar .tag { margin-left: auto; }
+  .section + .section { margin-top: 18px; }
+
+  /* Question cards */
+  .qs { display: flex; flex-direction: column; gap: 8px; }
+  .q {
+    border: 1px solid var(--line); border-left: 4px solid var(--navy);
+    border-radius: 6px; padding: 8px 12px 9px;
+    display: grid; grid-template-columns: 26px 1fr; gap: 10px; align-items: start;
+    background: #fff; break-inside: avoid;
+  }
+  .q .n {
+    width: 22px; height: 22px; border-radius: 50%;
+    background: var(--navy); color: #fff; font-weight: 700; font-size: 9.5pt;
+    display: flex; align-items: center; justify-content: center; margin-top: 1px;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .q .head { display: block; }
+  .q .title { color: var(--ink); font-weight: 600; font-size: 10.2pt; }
+  .q .ref { color: var(--muted); font-size: 8.5pt; letter-spacing: .06em; margin-left: 6px; white-space: nowrap; }
+  .q .ctx { color: var(--body); font-size: 9.2pt; margin-top: 2px; }
+  .q .ctx::before { content: "Konteks: "; color: var(--muted); font-weight: 600; }
+  .q .def { margin-top: 4px; font-size: 9pt; color: var(--muted); display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+  .q .answer {
+    margin-top: 6px; border: 1px dashed #b7bfcc; border-radius: 5px;
+    min-height: 34px; position: relative; background: #fff;
+  }
+  .q .answer.tall { min-height: 50px; }
+  .q .answer::before {
+    content: "Jawaban"; position: absolute; top: 3px; left: 8px;
+    font-size: 7.8pt; letter-spacing: .12em; text-transform: uppercase; color: #b0b7c3; font-weight: 600;
+  }
+
+  /* Pills */
+  .pill {
+    display: inline-block; white-space: nowrap;
+    font-size: 8.2pt; font-weight: 600; letter-spacing: .02em;
+    padding: 2px 9px; border-radius: 999px; line-height: 1.5;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .pill.grey  { background: var(--pill-grey-bg);  color: var(--pill-grey-fg); }
+  .pill.blue  { background: var(--pill-blue-bg);  color: var(--pill-blue-fg); }
+  .pill.amber { background: var(--pill-amber-bg); color: var(--pill-amber-fg); }
+  .pill.green { background: var(--pill-green-bg); color: var(--pill-green-fg); }
+  .pill.red   { background: var(--pill-red-bg);   color: var(--pill-red-fg); }
+  .pill.navy  { background: var(--navy); color: #fff; }
+  .pill.wrap  { white-space: normal; }
+
+  .foot { margin-top: 14px; color: var(--muted); font-size: 8.5pt; border-top: 1px solid var(--line); padding-top: 8px; }
+</style>
+</head>
+<body>
+
+<div class="page">
+  <div class="cover">
+    <div class="kicker">PATS University · Lembar pertanyaan susulan</div>
+    <h1>Pertanyaan Susulan — PATS University</h1>
+    <div class="sub">Lanjutan dari lembar pertanyaan pertama (nomor 1–14). Isi kotak jawaban, atau coret kalau setuju dengan default sementara. Versi 16 Oktober 2026.</div>
+  </div>
+
+  <div class="intro">
+    <p>Pertanyaan ini muncul setelah Phase 0 selesai dan web dashboard mulai terbentuk. Nomor dilanjutkan dari lembar pertama supaya jawabannya bisa dirujuk bersamaan. Kalau tidak ada jawaban, kami memakai <strong>default sementara</strong> yang tertulis di tiap nomor; semuanya bisa diubah nanti.</p>
+  </div>
+
+  <div class="section">
+    <div class="bar"><span class="num">Bagian 5</span><h2>Peran &amp; akses admin</h2><span class="tag pill amber">Penting untuk dashboard</span></div>
+
+    <div class="qs">
+      <div class="q">
+        <div class="n">15</div>
+        <div>
+          <div class="head"><span class="title">Perlu peran <em>Manager Wilayah</em>? Kalau perlu, satu wilayah berisi kota mana saja, dan siapa yang menunjuk orangnya?</span><span class="ref">S1</span></div>
+          <div class="ctx">Saat ini cuma ada dua peran admin: <strong>Super Admin</strong> (HQ, semua kota) dan <strong>Admin Kota</strong> (satu kota). Manager Wilayah akan berada di antaranya dan memegang beberapa kota sekaligus (misal Jawa Barat: Bandung + Bogor). Sebutkan juga apa saja yang boleh dia lakukan: lihat data, buat event, approve roaming, kelola admin kota, export.</div>
+          <div class="def"><span class="pill grey">Default sementara</span> Belum ada peran ini. Tanpa jawaban, wilayah ditangani HQ.</div>
+          <div class="answer tall"></div>
+        </div>
+      </div>
+      <div class="q">
+        <div class="n">16</div>
+        <div>
+          <div class="head"><span class="title">Apakah Admin Kota juga perlu web dashboard, atau cukup lewat app?</span><span class="ref">S2</span></div>
+          <div class="ctx">Sekarang Admin Kota bekerja dari app HP: scan check-in, serah terima kartu, validasi redeem dan laporan PR, recap kotanya. Web dashboard hanya untuk HQ. Kalau Admin Kota (atau Manager Wilayah) juga dapat web dashboard, isinya dibatasi ke kota/wilayahnya sendiri.</div>
+          <div class="def"><span class="pill grey">Default sementara</span> Admin Kota cukup lewat app; web dashboard hanya HQ.</div>
+          <div class="answer"></div>
+        </div>
+      </div>
+      <div class="q">
+        <div class="n">17</div>
+        <div>
+          <div class="head"><span class="title">Berapa admin per kota, dan apakah ada level <em>crew</em> yang hanya boleh scan?</span><span class="ref">S3</span></div>
+          <div class="ctx">Saat event bisa ada beberapa orang yang scan member di pintu. Pilihannya: semua orang itu menjadi Admin Kota penuh, atau ada peran Crew yang hanya bisa scan check-in dan validasi redeem, tanpa akses data member, recap, dan pengaturan.</div>
+          <div class="def"><span class="pill grey">Default sementara</span> Boleh lebih dari satu Admin Kota; belum ada peran Crew.</div>
+          <div class="answer"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="bar"><span class="num">Bagian 6</span><h2>Kartu, XP, data member</h2></div>
+
+    <div class="qs">
+      <div class="q">
+        <div class="n">18</div>
+        <div>
+          <div class="head"><span class="title">Kalau kartu hilang atau rusak, apakah member dikenai biaya pengganti, dan berapa kali boleh diganti?</span><span class="ref">S4</span></div>
+          <div class="ctx">Kartu lama langsung dinonaktifkan permanen saat dilaporkan hilang. Kartu pengganti dicetak vendor dan di-encode lagi di HQ, jadi ada biaya kartu, cetak, dan kirim.</div>
+          <div class="def"><span class="pill grey">Default sementara</span> Gratis, tanpa batas; pengganti masuk antrean cetak berikutnya.</div>
+          <div class="answer"></div>
+        </div>
+      </div>
+      <div class="q">
+        <div class="n">19</div>
+        <div>
+          <div class="head"><span class="title">Apakah XP punya masa berlaku?</span><span class="ref">S5</span></div>
+          <div class="ctx">Kalau ada, XP yang tidak dipakai dalam jangka tertentu hangus (misal 12 bulan sejak didapat). Ini mendorong member menukar XP, tapi perlu diberitahukan dengan jelas di app.</div>
+          <div class="def"><span class="pill grey">Default sementara</span> XP tidak kedaluwarsa.</div>
+          <div class="answer"></div>
+        </div>
+      </div>
+      <div class="q">
+        <div class="n">20</div>
+        <div>
+          <div class="head"><span class="title">Kalau member pindah domisili, bagaimana kota asalnya diganti?</span><span class="ref">S6</span></div>
+          <div class="ctx">Kota asal menentukan grup WA, social hub, dan leaderboard kota. NIM yang sudah tercetak di kartu memuat kode kota lama.</div>
+          <div class="def"><span class="pill grey">Default sementara</span> HQ yang mengganti kota asal; NIM dan kartu tetap, riwayat XP ikut pindah.</div>
+          <div class="answer"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="bar"><span class="num">Bagian 7</span><h2>Reservasi, roaming, privasi</h2></div>
+
+    <div class="qs">
+      <div class="q">
+        <div class="n">21</div>
+        <div>
+          <div class="head"><span class="title">Reservasi sofa/table: siapa yang menyetujui, dan apakah ada deposit atau minimum spend?</span><span class="ref">S7</span></div>
+          <div class="ctx">Member memilih slot dari denah venue, lalu admin kota (atau marketing venue) mengonfirmasi atau menolak lewat chat di app. Pembayaran tidak diproses di app.</div>
+          <div class="def"><span class="pill grey">Default sementara</span> Admin kota yang konfirmasi; tanpa deposit di app, minimum spend dicatat sebagai teks per slot.</div>
+          <div class="answer"></div>
+        </div>
+      </div>
+      <div class="q">
+        <div class="n">22</div>
+        <div>
+          <div class="head"><span class="title">Berapa reservasi aktif yang boleh dimiliki satu member per event?</span><span class="ref">S8</span></div>
+          <div class="ctx">Batas ini mencegah satu orang mengunci banyak meja sekaligus.</div>
+          <div class="def"><span class="pill grey">Default sementara</span> 1 reservasi per member per event.</div>
+          <div class="answer"></div>
+        </div>
+      </div>
+      <div class="q">
+        <div class="n">23</div>
+        <div>
+          <div class="head"><span class="title">Roaming: berapa lama akses social hub kota lain berlaku, dan berapa kali per bulan member boleh roaming?</span><span class="ref">S9</span></div>
+          <div class="ctx">Member bisa minta absen di event kota lain (disetujui Admin Kota tujuan) dan akses hub kota lain (disetujui HQ). Setelah masa berlaku habis, akses kembali ke hub asal otomatis.</div>
+          <div class="def"><span class="pill grey">Default sementara</span> Akses hub berlaku sampai 48 jam setelah event tujuan selesai; tanpa batas jumlah per bulan.</div>
+          <div class="answer"></div>
+        </div>
+      </div>
+      <div class="q">
+        <div class="n">24</div>
+        <div>
+          <div class="head"><span class="title">Kalau member berhenti atau minta datanya dihapus, apa yang terjadi pada datanya?</span><span class="ref">S10</span></div>
+          <div class="ctx">Ini menyangkut data pribadi (nama, tanggal lahir, email, WA, foto, kehadiran). Pilihannya: data dihapus permanen, atau dianonimkan tapi angka kehadiran tetap masuk rekap.</div>
+          <div class="def"><span class="pill grey">Default sementara</span> Akun dinonaktifkan, data pribadi dianonimkan, angka kehadiran tetap di rekap.</div>
+          <div class="answer tall"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

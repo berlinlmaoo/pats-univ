@@ -1,4 +1,4 @@
-import type { ApiErrorCode, AuthTokens } from '@pats/shared';
+import { errorMessageKey, type ApiErrorCode, type AuthTokens } from '@pats/shared';
 import { API_URL } from './config';
 
 /** Stable error codes + params; screens translate them. */
@@ -12,54 +12,9 @@ export class ApiFailure extends Error {
   }
 }
 
-/** i18n key for an API error code. Mirrors the web's ERROR_MESSAGE_KEY. */
+/** i18n key for an API error code (same mapping as the web). */
 export function errorKey(code: ApiFailure['code']): string {
-  switch (code) {
-    case 'NETWORK':
-      return 'errors.network';
-    case 'ACCOUNT_NOT_FOUND':
-      return 'errors.accountNotFound';
-    case 'ACCOUNT_DISABLED':
-      return 'errors.accountDisabled';
-    case 'OTP_INVALID':
-      return 'errors.otpInvalid';
-    case 'OTP_EXPIRED':
-      return 'errors.otpExpired';
-    case 'OTP_TOO_MANY_ATTEMPTS':
-      return 'errors.otpTooManyAttempts';
-    case 'RATE_LIMITED':
-      return 'errors.rateLimited';
-    case 'OTP_SEND_FAILED':
-      return 'errors.otpSendFailed';
-    case 'UNAUTHENTICATED':
-      return 'errors.unauthenticated';
-    case 'FORBIDDEN':
-      return 'errors.forbidden';
-    case 'VALIDATION':
-      return 'validation.invalid';
-    case 'NOT_FOUND':
-      return 'errors.notFound';
-    case 'EVENT_NOT_OPEN':
-      return 'errors.eventNotOpen';
-    case 'EVENT_ENDED':
-      return 'errors.eventEnded';
-    case 'QR_INVALID':
-      return 'errors.qrInvalid';
-    case 'QR_EXPIRED':
-      return 'errors.qrExpired';
-    case 'QR_USED':
-      return 'errors.qrUsed';
-    case 'TICKET_EXPIRED':
-      return 'errors.ticketExpired';
-    case 'MEMBER_INACTIVE':
-      return 'errors.memberInactive';
-    case 'MEMBER_OTHER_CITY':
-      return 'errors.memberOtherCity';
-    case 'ALREADY_CHECKED_IN':
-      return 'errors.alreadyCheckedIn';
-    default:
-      return 'errors.generic';
-  }
+  return errorMessageKey(code);
 }
 
 async function request<T>(path: string, init: RequestInit & { token?: string } = {}): Promise<T> {
@@ -87,7 +42,7 @@ async function request<T>(path: string, init: RequestInit & { token?: string } =
   return json as T;
 }
 
-export type Method = 'GET' | 'POST' | 'PATCH';
+export type Method = 'GET' | 'POST' | 'PATCH' | 'DELETE';
 
 export const api = {
   get: <T>(path: string, token?: string) => request<T>(path, { method: 'GET', token }),

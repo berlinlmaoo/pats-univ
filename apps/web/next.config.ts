@@ -6,7 +6,11 @@ const nextConfig: NextConfig = {
   output: 'standalone',
   outputFileTracingRoot: path.join(__dirname, '../..'),
   transpilePackages: ['@pats/shared'],
-  serverExternalPackages: ['pg', 'nodemailer'],
+  serverExternalPackages: ['pg', 'nodemailer', 'playwright-core'],
+  experimental: {
+    // Event flyers (up to 5 MB) are uploaded through a server action.
+    serverActions: { bodySizeLimit: '6mb' },
+  },
   poweredByHeader: false,
   // Keep `next dev` from writing extra files into the repo.
   agentRules: false,

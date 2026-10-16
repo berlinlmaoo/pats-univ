@@ -1,6 +1,6 @@
 # PATS University — Design
 
-Version 1.2, 16 Oct 2026 (Phase 1: check-in QR, scanner, event badges; 1.1 brought the brand colours and crest). Applies to the HQ dashboard, the public `/join` page, the Expo app and transactional emails.
+Version 1.3, 16 Oct 2026 (Phase 2: cards, print files, NFC, notifications; 1.2 check-in QR, scanner, event badges; 1.1 brand colours and crest). Applies to the HQ dashboard, the public `/join` page, the Expo app and transactional emails.
 
 **Bar:** Notion/Linear-grade polish, in the NEXUS visual language (PRODUCT.md §5.4), coloured by the PATS crest. This means calm warm neutrals, one brand accent (navy) and clear hierarchy. Nothing may be clipped, and every screen has empty, loading and error states.
 
@@ -93,6 +93,15 @@ Status colour is **meaning**, never decoration. Card status badges, for example,
 | `DELIVERED` | success |
 | `REVOKED` | danger |
 
+Print batches follow the same logic:
+
+| Batch status | Badge colour |
+|---|---|
+| `EXPORTED` (files ready) | neutral |
+| `SENT_TO_VENDOR`, `RECEIVED_HQ`, `SHIPPED_TO_CITY` | accent |
+| `ENCODING` | warning |
+| `DONE` | success |
+
 ## 3. Type
 
 - **Fonts:** Plus Jakarta Sans (display, 600–800) for page titles and stat numbers; Inter (400–700) for everything else.
@@ -160,9 +169,30 @@ Web components are in `apps/web/src/components/ui` and the app's are in `apps/mo
 | Icons | One set: **Lucide** (`lucide-react` / `lucide-react-native`), outline, stroke 1.75 (2 for small status icons), sized 16 in controls and 20 in wells. No emoji as icons. |
 | Check-in QR (app) | Navy modules on white (`light.primary` on `light.surface`) in **both** themes, because scanners need the contrast. A thin accent progress bar shows time to the next code; the screen stays awake while it is shown. |
 | Scanner (app) | Full-screen camera with a dark overlay built from the `dark` tokens whatever the system theme, since the feed is dark. Results come up in a bottom card in the current theme: who it is first (avatar, name, NIM, city), then one primary action. |
+| Step strip (batch) | One tile per batch status, in order: done = check + timestamp, current = accent border on `accentSubtle`, later = muted dot. Wraps to 2/3/6 columns; never scrolls sideways. |
+| Progress bar | 6 high, `surfaceMuted` track, `accent` fill, with the numbers as a caption above (the caption is the accessible name). |
+| NFC tap (app) | The physical card comes first: in the scanner the primary button is **Tap card (NFC)**, the camera keeps reading app QRs, and "Check in by name" stays last (PRODUCT.md §6.1.2). On iOS the system sheet carries a short prompt ("Hold … near the top of the iPhone"). Where NFC can't work (Expo Go, NFC off, no NFC) the button is replaced by one muted line saying why, and the other methods stay. |
+| Encode flow (app) | Identify (printed QR or NIM) → who it is + "does the printed card show this name?" → tap → result. A failure says what happened, whether anything was written, and the one next step. |
+| Notification centre (app) | List rows: unread dot (accent), title, body, date + time. Opening the centre marks everything read. Category switches live in their own settings screen. |
 | Event phase badge | `draft` neutral, `upcoming` accent, `open` success, `closed` warning, `ended` neutral. Check-in method badges: NFC accent, App QR neutral, Manual warning (HQ audits the fallback). |
 
-## 6. Brand assets
+## 6. Card print files
+
+The physical card is not a screen, but it follows the same tokens. Template: `apps/web/card-templates/placeholder/` (swappable, see its README).
+
+| Rule | Value |
+|---|---|
+| Page | 91.6 × 60 mm = CR80 85.6 × 54 mm + 3 mm bleed; TrimBox/BleedBox set in the PDF |
+| Safe area | 4 mm inside the trim: no text or QR closer to the cut |
+| Printed data | Name, NIM, QR only. Song, genre and quote stay digital (PRODUCT.md §10.3) |
+| Colours | `brand.navy`, `brand.maroon`, `brand.cream`, light `bg` / `text` / `textMuted` from `colors.json` |
+| Type | Plus Jakarta Sans 800 for the name (auto-shrinks to fit 2 lines, 13 → 8.5 pt), Inter 500/600 for labels and NIM (tabular). Fonts embedded |
+| QR | Navy on white, error correction M with its quiet zone, 24 mm, on a white tile with 2.4 mm radius |
+| Raster art | ≥ 300 dpi at printed size (the crest is 720 px at 15 mm ≈ 1.200 dpi) |
+
+**Preview with guides** on a batch renders a proof with the trim (red) and safe area (blue) drawn; it never goes to the vendor.
+
+## 7. Brand assets
 
 The crest master (9000 px) is **not** in the repo. [`tools/brand/make-assets.sh`](../tools/brand/make-assets.sh) regenerates every size from it. `sips` does the cropping and resizing; Pillow only masks the shield and centres it on a canvas. The art is never redrawn or recoloured.
 
@@ -176,7 +206,7 @@ The crest master (9000 px) is **not** in the repo. [`tools/brand/make-assets.sh`
 
 The crest replaces the text wordmark on the web (dashboard header, `/join`, `/login`). Its alt text is the name, "PATS University". Never place the crest on a busy or saturated background: it already carries its own white halo.
 
-## 7. Copy and formatting
+## 8. Copy and formatting
 
 - Every string is in `packages/shared/src/i18n/{en,id}.ts`. A test fails when a key exists in only one language. Indonesian is the default and uses "kamu" for members.
 - Code comments are in English.
@@ -193,7 +223,7 @@ The crest replaces the text wordmark on the web (dashboard header, `/join`, `/lo
   Dates and times always use the city's time zone.
 - Error messages say what happened **and** what to do ("This code has expired. Request a new one."). Never show raw codes or stack traces.
 
-## 8. Craft checklist (run on every screen before merging to `dev`)
+## 9. Craft checklist (run on every screen before merging to `dev`)
 
 1. No clipped or overlapping text at 360 px and at 1440 px, in ID **and** EN (Indonesian runs ~20% longer).
 2. Light and dark both checked; no hard-coded colour.

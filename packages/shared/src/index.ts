@@ -1,4 +1,7 @@
 export * from './api';
+export * from './card';
+export * from './ntag';
+export * from './notifications';
 export * from './enums';
 export * from './event';
 export * from './format';

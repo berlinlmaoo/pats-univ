@@ -53,6 +53,14 @@ enum CardBatchStatus {
   DONE
 }
 
+enum ReencodeStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  USED
+  EXPIRED
+}
+
 enum EventStatus {
   DRAFT
   PUBLISHED
@@ -186,43 +194,47 @@ enum SessionClient {
 
 /// A login. Members and admins are both users; the role decides what they can reach.
 model User {
-  id          String     @id @default(cuid())
+  id                String     @id @default(cuid())
   /// Login identity (lower-case). OTP codes are sent here.
-  email       String     @unique
+  email             String     @unique
   /// E.164, required: used to route members into the city WhatsApp group.
-  phone       String
+  phone             String
   /// Display name (members: same as Member.fullName).
-  name        String
-  role        Role       @default(MEMBER)
+  name              String
+  role              Role       @default(MEMBER)
   /// Home city for LOCAL_ADMIN; null for SUPER_ADMIN. Members use Member.cityId.
-  cityId      String?
-  status      UserStatus @default(ACTIVE)
+  cityId            String?
+  status            UserStatus @default(ACTIVE)
   /// Language for emails and push copy.
-  locale      Locale     @default(id)
-  lastLoginAt DateTime?
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  locale            Locale     @default(id)
+  /// Push categories the user turned off: { events?: false, activity?: false }.
+  notificationPrefs Json?
+  lastLoginAt       DateTime?
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
 
-  city                 City?                @relation("CityAdmins", fields: [cityId], references: [id])
+  city                 City?             @relation("CityAdmins", fields: [cityId], references: [id])
   member               Member?
   sessions             Session[]
   otpCodes             OtpCode[]
   devices              Device[]
   notifications        Notification[]
-  auditLogs            AuditLog[]           @relation("AuditActor")
-  createdEvents        Event[]              @relation("EventCreatedBy")
-  checkInsRecorded     CheckIn[]            @relation("CheckInAdmin")
-  cardsEncoded         Card[]               @relation("CardEncodedBy")
-  cardsDelivered       Card[]               @relation("CardDeliveredBy")
-  batchesCreated       CardBatch[]          @relation("BatchCreatedBy")
-  reportsReviewed      PromoterReport[]     @relation("ReportReviewedBy")
-  payoutsPaid          PromoterPayout[]     @relation("PayoutPaidBy")
-  redemptionsFulfilled Redemption[]         @relation("RedemptionFulfilledBy")
+  auditLogs            AuditLog[]        @relation("AuditActor")
+  createdEvents        Event[]           @relation("EventCreatedBy")
+  checkInsRecorded     CheckIn[]         @relation("CheckInAdmin")
+  cardsEncoded         Card[]            @relation("CardEncodedBy")
+  cardsDelivered       Card[]            @relation("CardDeliveredBy")
+  batchesCreated       CardBatch[]       @relation("BatchCreatedBy")
+  reportsReviewed      PromoterReport[]  @relation("ReportReviewedBy")
+  payoutsPaid          PromoterPayout[]  @relation("PayoutPaidBy")
+  redemptionsFulfilled Redemption[]      @relation("RedemptionFulfilledBy")
   posts                Post[]
   messages             Message[]
-  roamingDecided       RoamingRequest[]     @relation("RoamingDecidedBy")
-  recapsSubmitted      TrafficRecap[]       @relation("RecapSubmittedBy")
-  settingsChanged      Setting[]            @relation("SettingUpdatedBy")
+  roamingDecided       RoamingRequest[]  @relation("RoamingDecidedBy")
+  recapsSubmitted      TrafficRecap[]    @relation("RecapSubmittedBy")
+  settingsChanged      Setting[]         @relation("SettingUpdatedBy")
+  reencodeRequested    ReencodeRequest[] @relation("ReencodeRequestedBy")
+  reencodeDecided      ReencodeRequest[] @relation("ReencodeDecidedBy")
 
   @@index([role, cityId])
   @@index([phone])
@@ -231,17 +243,17 @@ model User {
 /// A signed-in device or browser. The app holds a rotating refresh token, the dashboard a
 /// session cookie; both are stored hashed here so HQ can sign anyone out remotely.
 model Session {
-  id           String        @id @default(cuid())
-  userId       String
-  client       SessionClient
+  id         String        @id @default(cuid())
+  userId     String
+  client     SessionClient
   /// SHA-256 of the refresh token (app) or session cookie (web).
-  tokenHash    String        @unique
-  userAgent    String?
-  ip           String?
-  createdAt    DateTime      @default(now())
-  lastUsedAt   DateTime      @default(now())
-  expiresAt    DateTime
-  revokedAt    DateTime?
+  tokenHash  String        @unique
+  userAgent  String?
+  ip         String?
+  createdAt  DateTime      @default(now())
+  lastUsedAt DateTime      @default(now())
+  expiresAt  DateTime
+  revokedAt  DateTime?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -322,19 +334,36 @@ model NimSequence {
   @@id([cityId, year])
 }
 
-/// A physical NFC card (NTAG213). A member may have several over time; at most one DELIVERED.
+/// A physical NFC card (NTAG213). A member may have several over time; at most one that is not
+/// REVOKED (partial unique index), and at most one DELIVERED.
 model Card {
   id                 String     @id @default(cuid())
   memberId           String
-  /// Chip UID, recorded by the Card Station at encode time.
+  /// Chip UID, recorded by the station at encode time.
   nfcUid             String?    @unique
+  /// NTAG213 / NTAG215 / NTAG216, detected at encode time (config pages differ per chip).
+  chipType           String?
   /// Signed token printed as QR and written as NDEF URL. Created when the card joins a batch.
   ndefToken          String?    @unique
   status             CardStatus @default(NOT_PRINTED)
   batchId            String?
+  /// Storage key of the per-member print PDF.
   printFileUrl       String?
+  /// The revoked card this one replaces (lost or damaged).
+  replacesCardId     String?    @unique
+  /// Encode lease: the station holding this card right now (parallel encoding at HQ).
+  leaseId            String?    @unique
+  leaseStation       String?
+  leaseUserId        String?
+  leaseExpiresAt     DateTime?
+  /// "encode" or "reencode", chosen by the operator when claiming.
+  leaseMode          String?
+  /// Approved re-encode request the lease was taken with (a city admin's phone).
+  leaseGrantId       String?
   encodedAt          DateTime?
   encodedByUserId    String?
+  /// Station label that wrote the chip ("Mac Card Station", "iPhone · Rara").
+  encodedStation     String?
   /// When write protection (PWD/PACK + AUTH0) was set. Not a permanent lock.
   lockedAt           DateTime?
   deliveredAt        DateTime?
@@ -344,38 +373,71 @@ model Card {
   createdAt          DateTime   @default(now())
   updatedAt          DateTime   @updatedAt
 
-  member      Member     @relation(fields: [memberId], references: [id], onDelete: Cascade)
-  batch       CardBatch? @relation(fields: [batchId], references: [id])
-  encodedBy   User?      @relation("CardEncodedBy", fields: [encodedByUserId], references: [id])
-  deliveredBy User?      @relation("CardDeliveredBy", fields: [deliveredByAdminId], references: [id])
-  checkIns    CheckIn[]
+  member           Member            @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  batch            CardBatch?        @relation(fields: [batchId], references: [id])
+  encodedBy        User?             @relation("CardEncodedBy", fields: [encodedByUserId], references: [id])
+  deliveredBy      User?             @relation("CardDeliveredBy", fields: [deliveredByAdminId], references: [id])
+  replacesCard     Card?             @relation("CardReplacement", fields: [replacesCardId], references: [id])
+  replacedBy       Card?             @relation("CardReplacement")
+  checkIns         CheckIn[]
+  reencodeRequests ReencodeRequest[]
 
   @@index([status])
   @@index([memberId])
-  @@index([batchId])
+  @@index([batchId, status])
+}
+
+/// A city admin asks HQ to let them rewrite a delivered card whose chip still works (damaged
+/// print, corrupted data). Approval gives the requester one encode of that card within 24 hours.
+model ReencodeRequest {
+  id             String         @id @default(cuid())
+  cardId         String
+  requestedById  String
+  reason         String
+  status         ReencodeStatus @default(PENDING)
+  decidedById    String?
+  decidedAt      DateTime?
+  decisionNote   String?
+  grantExpiresAt DateTime?
+  usedAt         DateTime?
+  createdAt      DateTime       @default(now())
+
+  card        Card  @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  requestedBy User  @relation("ReencodeRequestedBy", fields: [requestedById], references: [id])
+  decidedBy   User? @relation("ReencodeDecidedBy", fields: [decidedById], references: [id])
+
+  @@index([status, createdAt])
+  @@index([cardId])
 }
 
 /// One vendor print run + encode round for one city.
 model CardBatch {
-  id              String          @id @default(cuid())
-  cityId          String
-  status          CardBatchStatus @default(EXPORTED)
-  cardCount       Int             @default(0)
-  encodedCount    Int             @default(0)
-  exportedAt      DateTime        @default(now())
-  sentToVendorAt  DateTime?
-  receivedHqAt    DateTime?
-  shippedToCityAt DateTime?
-  batchPdfUrl     String?
-  manifestCsvUrl  String?
-  vendorNote      String?
-  createdById     String?
-  createdAt       DateTime        @default(now())
+  id               String          @id @default(cuid())
+  cityId           String
+  /// Per-city running number: the batch is "JKT-3" on files and screens.
+  number           Int
+  status           CardBatchStatus @default(EXPORTED)
+  cardCount        Int             @default(0)
+  encodedCount     Int             @default(0)
+  exportedAt       DateTime        @default(now())
+  sentToVendorAt   DateTime?
+  receivedHqAt     DateTime?
+  shippedToCityAt  DateTime?
+  /// Storage keys of the generated files; null until rendered.
+  batchPdfUrl      String?
+  manifestCsvUrl   String?
+  filesGeneratedAt DateTime?
+  /// Last rendering error, shown with a "Generate again" action.
+  filesError       String?
+  vendorNote       String?
+  createdById      String?
+  createdAt        DateTime        @default(now())
 
   city      City   @relation(fields: [cityId], references: [id])
   createdBy User?  @relation("BatchCreatedBy", fields: [createdById], references: [id])
   cards     Card[]
 
+  @@unique([cityId, number])
   @@index([cityId, status])
 }
 
@@ -394,7 +456,7 @@ model City {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  admins          User[]            @relation("CityAdmins")
+  admins          User[]                @relation("CityAdmins")
   members         Member[]
   nimSequences    NimSequence[]
   venues          Venue[]
@@ -628,9 +690,9 @@ model Channel {
   archived   Boolean           @default(false)
   createdAt  DateTime          @default(now())
 
-  city     City      @relation(fields: [cityId], references: [id])
-  posts    Post[]
-  messages Message[]
+  city             City              @relation(fields: [cityId], references: [id])
+  posts            Post[]
+  messages         Message[]
   screenshotEvents ScreenshotEvent[]
 
   @@index([cityId])
@@ -774,14 +836,14 @@ model TrafficRecap {
 }
 
 model Notification {
-  id        String    @id @default(cuid())
-  userId    String
-  kind      String
-  title     String
-  body      String
-  data      Json?
-  sentAt    DateTime  @default(now())
-  readAt    DateTime?
+  id     String    @id @default(cuid())
+  userId String
+  kind   String
+  title  String
+  body   String
+  data   Json?
+  sentAt DateTime  @default(now())
+  readAt DateTime?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -800,6 +862,15 @@ model Device {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+
+/// Scheduled pushes already sent (reminders, follow-ups), so a cron run never sends one twice.
+model PushDispatch {
+  id             String   @id @default(cuid())
+  /// "<kind>:<eventId>", e.g. "reminder1d:ckxyz".
+  key            String   @unique
+  recipientCount Int      @default(0)
+  createdAt      DateTime @default(now())
 }
 
 model AuditLog {

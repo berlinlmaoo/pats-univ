@@ -5,9 +5,12 @@ import { AppError } from '../http/errors';
 
 export type Audience = 'app' | 'hq';
 
-/** Who may log in where: HQ uses the dashboard; members and city admins use the app. */
+/**
+ * Who may log in where. Members and city admins use the app; HQ uses the dashboard and, since
+ * Phase 2, the app too (encoding cards on a phone) and the Mac Card Station.
+ */
 const ALLOWED: Record<Audience, readonly Role[]> = {
-  app: ['MEMBER', 'LOCAL_ADMIN'],
+  app: ['MEMBER', 'LOCAL_ADMIN', 'SUPER_ADMIN'],
   hq: ['SUPER_ADMIN'],
 };
 

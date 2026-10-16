@@ -1,7 +1,7 @@
 import { formatDate, formatTime, type EventDetailResponse } from '@pats/shared';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { CalendarX2, CircleCheck, QrCode } from 'lucide-react-native';
-import { StyleSheet, View } from 'react-native';
+import { Image, StyleSheet, View } from 'react-native';
 import { Button } from '@/components/button';
 import { Card } from '@/components/card';
 import { DetailList } from '@/components/detail-list';
@@ -12,8 +12,9 @@ import { SectionLabel } from '@/components/section-label';
 import { Text } from '@/components/text';
 import { PhaseBadge } from '@/features/event-ui';
 import { useI18n } from '@/i18n';
+import { API_URL } from '@/lib/config';
 import { useApi } from '@/lib/use-api';
-import { size, space, useColors } from '@/theme';
+import { radius, size, space, useColors } from '@/theme';
 
 export default function MemberEventScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -50,6 +51,14 @@ export default function MemberEventScreen() {
   return (
     <Screen edges={[]} refreshing={refreshing} onRefresh={reload}>
       <Stack.Screen options={{ title: '' }} />
+      {e.flyerUrl && (
+        <Image
+          source={{ uri: `${API_URL}${e.flyerUrl}` }}
+          style={[styles.flyer, { backgroundColor: c.surfaceMuted }]}
+          resizeMode="cover"
+          accessibilityLabel={t('events.flyerAlt', { title: e.title })}
+        />
+      )}
       <View style={styles.head}>
         <PhaseBadge phase={e.phase} />
         <Text variant="title1" accessibilityRole="header">
@@ -97,4 +106,5 @@ const styles = StyleSheet.create({
   attended: { flexDirection: 'row', alignItems: 'center', gap: space[3], padding: space[4] },
   flex: { flex: 1 },
   about: { padding: space[4] },
+  flyer: { width: '100%', aspectRatio: 4 / 5, borderRadius: radius.card },
 });

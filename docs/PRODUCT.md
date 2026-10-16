@@ -52,9 +52,9 @@ Satu akun = satu role. Role ditentukan server, bukan dipilih di app.
 | `MEMBER` | App | Profil & kartu digital, check-in (discan admin), XP & leaderboard, reward, social hub kota asal, reservasi, request roaming |
 | `MEMBER` + flag **PR (promoter)** | App (menu PR) | Semua hak member + kirim laporan tamu per event dengan foto struk, lihat status validasi dan bonus |
 | `LOCAL_ADMIN` | App (menu Admin) | Semua hak member di kotanya + scan check-in, serah terima/revoke kartu, validasi redeem, validasi laporan PR, traffic recap, channel hub, approve roaming absensi ke kotanya |
-| `SUPER_ADMIN` | Web dashboard | Kota, admin, event, member, kartu (antrean, batch, file cetak), broadcast, roaming approval (social hub), recap global (termasuk laporan PR), export, settings |
+| `SUPER_ADMIN` | Web dashboard + app (menu HQ) | Kota, admin, event, member, kartu (antrean, batch, file cetak, keputusan encode ulang), broadcast, roaming approval (social hub), recap global (termasuk laporan PR), export, settings. Di app: encode kartu di HP (Phase 2) |
 
-Local Admin terikat ke **satu kota**. Super Admin tidak terikat kota. PR bukan role akun terpisah, melainkan flag `isPromoter` pada `Member` (siapa yang memberi flag masih TBD, lihat §12).
+Local Admin terikat ke **satu kota**. Super Admin tidak terikat kota. Aksi kartu dan check-in dicek lewat **capability** (`checkin.scan`, `card.handover`, `card.reportLost`, `card.requestReencode`, `card.encode`, `card.decideReencode`), bukan nama role, supaya peran baru (mis. regional manager, pertanyaan S1) cukup diberi capability. PR bukan role akun terpisah, melainkan flag `isPromoter` pada `Member` (siapa yang memberi flag masih TBD, lihat §12).
 
 ---
 
@@ -175,7 +175,8 @@ Alur: member membuka event kota lain → *Request roaming* → notifikasi ke app
 |---|---|
 | Scan check-in | Pilih event aktif → mode scan: NFC (tap kartu) dan kamera (QR app). Hasil: nama, foto, NIM, status roaming, lalu konfirmasi 1 tap. Manual check-in (cari nama) tersedia dengan alasan wajib |
 | Serah terima kartu | Tap kartu → app membaca NDEF → server mencocokkan token + UID → kartu `DELIVERED`; tanpa memilih member manual karena binding sudah dilakukan HQ |
-| Lapor kartu hilang | Tandai `REVOKED` (token lama ditolak permanen); kartu pengganti di-encode HQ lewat Card Station dan dikirim lagi |
+| Lapor kartu hilang / rusak | Tandai `REVOKED` (token lama ditolak permanen); kartu pengganti otomatis masuk antrean cetak HQ |
+| Minta encode ulang | Kartu `DELIVERED` rusak tapi chip masih jalan: alasan wajib → HQ setujui/tolak → izin sekali pakai 24 jam untuk meng-encode kartu itu di HP admin yang meminta (password tetap dari server) |
 | Validasi reward | Masukkan/scan kode redeem → lihat reward → tandai diserahkan |
 | Validasi laporan PR | Daftar laporan `SUBMITTED` di kotanya, lihat foto struk, validasi/tolak, nilai bonus dihitung dari setting |
 | Event kota | Buat/edit event kotanya, lihat kehadiran live saat event |
@@ -316,8 +317,9 @@ Nama entitas dan field inti (teknis detail ada di PLAN.md / schema).
 |---|---|---|
 | `User` | id, email (unik, identitas login), phone (wajib, E.164, untuk grup WA kota), role, cityId (admin), status | Akun login lewat email + OTP; member & admin sama-sama `User` |
 | `Member` | id, userId, nim, fullName, dateOfBirth, cityId (asal), favoriteSong, favoriteGenre, quotes, photoUrl, isPromoter, promoterSince, joinedAt, status | Satu `User` role `MEMBER` = satu `Member` |
-| `Card` | id, memberId, nfcUid (unik, nullable, diisi saat encode), ndefToken (unik, ditandatangani, dibuat saat masuk batch = isi QR cetakan), status (`NOT_PRINTED`/`IN_BATCH`/`SENT_TO_VENDOR`/`RECEIVED_HQ`/`ENCODED`/`DELIVERED`/`REVOKED`), batchId, printFileUrl, encodedAt, encodedByUserId, lockedAt, deliveredAt, deliveredByAdminId, revokedAt, revokeReason | Member bisa punya banyak `Card` (riwayat), hanya satu `DELIVERED`. Password tag tidak disimpan per kartu; diturunkan dari kunci server + UID |
-| `CardBatch` | id, cityId, status (`EXPORTED`/`SENT_TO_VENDOR`/`RECEIVED_HQ`/`ENCODING`/`SHIPPED_TO_CITY`/`DONE`), cardCount, encodedCount, exportedAt, sentToVendorAt, receivedHqAt, shippedToCityAt, batchPdfUrl, manifestCsvUrl, vendorNote | Satu batch = satu kali cetak vendor + encode per kota; file per member ada di `Card.printFileUrl` |
+| `Card` | id, memberId, nfcUid (unik, nullable, diisi saat encode), chipType (NTAG213/215/216), lease (stasiun yang sedang memegang kartu, 3 menit), encodedStation, replacesCardId, ndefToken (unik, ditandatangani, dibuat saat masuk batch = isi QR cetakan), status (`NOT_PRINTED`/`IN_BATCH`/`SENT_TO_VENDOR`/`RECEIVED_HQ`/`ENCODED`/`DELIVERED`/`REVOKED`), batchId, printFileUrl, encodedAt, encodedByUserId, lockedAt, deliveredAt, deliveredByAdminId, revokedAt, revokeReason | Member bisa punya banyak `Card` (riwayat), hanya satu `DELIVERED`. Password tag tidak disimpan per kartu; diturunkan dari kunci server + UID |
+| `ReencodeRequest` | id, cardId, requestedById, reason, status (`PENDING`/`APPROVED`/`REJECTED`/`USED`/`EXPIRED`), decidedById, decisionNote, grantExpiresAt, usedAt | Satu permintaan terbuka per kartu |
+| `CardBatch` | id, cityId, number (label `JKT-3`), status (`EXPORTED`/`SENT_TO_VENDOR`/`RECEIVED_HQ`/`ENCODING`/`SHIPPED_TO_CITY`/`DONE`), cardCount, encodedCount, exportedAt, sentToVendorAt, receivedHqAt, shippedToCityAt, batchPdfUrl, manifestCsvUrl, vendorNote | Satu batch = satu kali cetak vendor + encode per kota; file per member ada di `Card.printFileUrl` |
 | `City` | id, code (3 huruf), name, timezone (default `Asia/Jakarta`), waGroupUrl, notificationCopy (JSON), settings (JSON) | Copy push per kota ada di sini |
 | `Venue` | id, cityId, name, address, lat, lng, layout (JSON: slot sofa/table + koordinat) | Denah untuk reservasi |
 | `Event` | id, cityId, venueId, title, description, flyerUrl, startsAt, endsAt, checkInOpensAt, checkInClosesAt, status (`DRAFT`/`PUBLISHED`/`OPEN`/`CLOSED`), maxSpinsPerMember, createdById | Waktu disimpan UTC, ditampilkan WIB |
@@ -545,6 +547,20 @@ Prototype mencakup seluruh visi PRD, tetapi beberapa bagian dibangun pada **demo
 23. **Membuka check-in lebih awal**: kalau admin membuka check-in sebelum jendela yang direncanakan, jendela langsung dimulai saat itu (tercatat di audit log). Membuka setelah jendela lewat ditolak; ubah jam event dulu.
 24. **Draf event** tidak terlihat oleh member; event baru langsung dipublikasikan kecuali "Publikasikan sekarang" dimatikan.
 25. Member dari kota lain hanya lolos check-in bila punya `RoamingRequest` `ATTENDANCE` `APPROVED` (aturan §6.1.5 sudah ditegakkan server; alur request roaming-nya di Phase 4).
+
+### 16 Oktober 2026 — keputusan owner dan keputusan kecil saat build Phase 2
+
+26. **NTAG213, 215, dan 216** didukung (vendor kehabisan 213). Chip dideteksi lewat GET_VERSION + byte ukuran CC; halaman config per chip; jenis chip disimpan per kartu. Lock Control TLV pabrik dibaca dan dipertahankan apa adanya.
+27. **AUTH0 = halaman NDEF pertama (04h)**, bukan 03h seperti tertulis sebelumnya. Password dibuktikan (PWD_AUTH → PACK) sebelum proteksi menutup area NDEF; gagal → proteksi dimatikan lagi.
+28. **Encode di HP** untuk Super Admin (app menu HQ) dengan langkah yang sama dengan Card Station; HP hanya menerima password untuk satu UID dan satu penulisan. Akun HQ kini boleh login di app (sebelumnya ditolak).
+29. **Permintaan encode ulang** oleh admin kota → antrean HQ → izin sekali pakai 24 jam; dibatasi capability, bukan role (S1 belum diputuskan). Chip mati → laporkan hilang/rusak.
+30. **Encode paralel** dengan lease per kartu (3 menit); encode idempoten; dashboard menampilkan progres per batch dan stasiun per kartu.
+31. **File storage**: antarmuka storage dengan driver local disk (volume Docker) sebagai default dan driver S3-compatible di balik config; MinIO dihapus dari Docker Compose (image tidak bisa di-pull).
+32. **File cetak**: template HTML/SVG di `apps/web/card-templates/` (placeholder dari token brand + crest sampai artwork T8c datang; tinggal ganti folder lewat `CARD_TEMPLATE_DIR`). PDF per member 91,6 × 60 mm (CR80 + bleed 3 mm) dengan TrimBox/BleedBox, depan + belakang, font tertanam; teks + QR vektor, gambar raster ≥ 300 dpi. Manifest CSV per batch (urutan, NIM, nama, kota, file, halaman PDF batch, URL QR).
+33. **Kartu hilang/rusak dari mana pun** (app admin atau dashboard) langsung membuat kartu pengganti di antrean cetak; satu member maksimal satu kartu hidup (indeks unik parsial di database), jadi member tidak bisa masuk dua batch.
+34. **Batch** per kota diberi nomor (`JKT-1`, `JKT-2`, …); bisa dibatalkan selama belum dikirim ke vendor (kartu kembali ke antrean). Kirim ke kota hanya bisa bila semua kartu sudah ter-encode atau dicabut.
+35. **Copy push Phase 2 belum menyebut XP** ("Check-in {event} tercatat.", "Thank you udah dateng semalem, {name}."), karena XP baru ditampilkan di Phase 3. Placeholder `{xp}` ditambahkan kembali saat XP tampil. Copy bisa diubah per kota di dashboard (Kota & venue → ikon pesan), EN dan ID.
+36. **Kategori push** yang bisa dimatikan member: *Event* (broadcast, pengingat, follow-up) dan *Check-in & kartu*. Pesan akun/crew (keputusan encode ulang) selalu terkirim. Semua push juga tersimpan di pusat notifikasi.
 
 ### Sebelum 16 Oktober 2026
 

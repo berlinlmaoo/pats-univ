@@ -2,14 +2,17 @@ import { formatCount, type EventDetailResponse } from '@pats/shared';
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { CameraOff, Flashlight, FlashlightOff, Search, X } from 'lucide-react-native';
+import { CameraOff, Flashlight, FlashlightOff, Nfc, Search, X } from 'lucide-react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Linking, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '@/components/button';
 import { Card } from '@/components/card';
 import { Text } from '@/components/text';
+import { nfcErrorKey, useNfcSupport } from '@/features/card-nfc';
 import { ScanResult, useCheckIn } from '@/features/scan';
+import { ApiFailure } from '@/lib/api';
+import { NfcCancelled, readCard } from '@/lib/nfc';
 import { useT } from '@/i18n';
 import { keepAwake } from '@/lib/keep-awake';
 import { useApi } from '@/lib/use-api';
@@ -33,7 +36,25 @@ export default function ScannerScreen() {
   const [focused, setFocused] = useState(true);
   const event = useApi<EventDetailResponse>(`/api/admin/events/${eventId}`);
   const [count, setCount] = useState<number | null>(null);
-  const { state, preview, confirm, reset } = useCheckIn(eventId, (r) => setCount(r.count));
+  const { state, preview, confirm, reset, fail } = useCheckIn(eventId, (r) => setCount(r.count));
+  const { support } = useNfcSupport();
+  const [nfcError, setNfcError] = useState<string | null>(null);
+
+  // The physical card comes first (PRODUCT.md §6.1.2): one tap reads its URL and chip UID.
+  const tapCard = useCallback(async () => {
+    setNfcError(null);
+    try {
+      const card = await readCard(t('nfc.checkInPrompt'), t('nfc.readDone'));
+      if (!card.token) {
+        fail(new ApiFailure('CARD_INVALID'));
+        return;
+      }
+      await preview({ method: 'NFC', token: card.token, nfcUid: card.uid });
+    } catch (err) {
+      if (err instanceof NfcCancelled) return;
+      setNfcError(t.loose(nfcErrorKey(err)));
+    }
+  }, [fail, preview, t]);
   /** The last code handled: the same QR stays in view after a scan and must not fire again. */
   const lastToken = useRef<string | null>(null);
 
@@ -137,14 +158,36 @@ export default function ScannerScreen() {
 
         <View style={styles.bottom}>
           {state.kind === 'idle' ? (
-            <Button
-              variant="secondary"
-              label={t('app.scanManual')}
-              icon={<Search size={size.iconSm} color={ink.text} strokeWidth={2} />}
-              style={{ backgroundColor: ink.surface, borderColor: ink.border }}
-              labelColor={ink.text}
-              onPress={() => router.push({ pathname: '/scan/[eventId]/manual', params: { eventId } })}
-            />
+            <View style={styles.actions}>
+              {nfcError && (
+                <Text variant="bodySm" style={[styles.center, { color: ink.dangerText }]} accessibilityRole="alert">
+                  {nfcError}
+                </Text>
+              )}
+              {support === 'ready' ? (
+                <Button
+                  label={t('app.scanTapCard')}
+                  icon={<Nfc size={size.iconSm} color={ink.primaryText} strokeWidth={2} />}
+                  style={darkPrimary}
+                  labelColor={ink.primaryText}
+                  onPress={() => void tapCard()}
+                />
+              ) : (
+                support && (
+                  <Text variant="caption" style={[styles.center, { color: ink.textMuted }]}>
+                    {support === 'disabled' ? t('nfc.disabledShort') : t('nfc.unavailableShort')}
+                  </Text>
+                )
+              )}
+              <Button
+                variant="secondary"
+                label={t('app.scanManual')}
+                icon={<Search size={size.iconSm} color={ink.text} strokeWidth={2} />}
+                style={{ backgroundColor: ink.surface, borderColor: ink.border }}
+                labelColor={ink.text}
+                onPress={() => router.push({ pathname: '/scan/[eventId]/manual', params: { eventId } })}
+              />
+            </View>
           ) : (
             <ScanResult
               state={state}
@@ -219,6 +262,7 @@ const styles = StyleSheet.create({
   frame: { width: size.scanFrame, height: size.scanFrame },
   hint: { textAlign: 'center', textShadowColor: ink.scrim, textShadowRadius: 6 },
   bottom: { paddingHorizontal: space[4], paddingBottom: space[3] },
+  actions: { gap: space[2.5] },
   blocked: { padding: space[5], gap: space[3], alignItems: 'center', maxWidth: size.formMax },
   center: { textAlign: 'center' },
   tabular: { fontVariant: ['tabular-nums'] },

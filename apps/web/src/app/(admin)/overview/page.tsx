@@ -32,13 +32,13 @@ export default async function OverviewPage() {
   const today = toZonedInput(new Date(), DEFAULT_TIMEZONE).date.split('-').map(Number) as [number, number, number];
   const startOfToday = zonedTimeToUtc({ year: today[0], month: today[1], day: today[2], hour: 0, minute: 0 }, DEFAULT_TIMEZONE);
 
-  const [cities, membersByCity, newByCity, toPrintByCity, recent, checkInsToday] = await Promise.all([
+  const [cities, membersByCity, newByCity, toPrintByCity, recent, checkInsToday, cardsByCity] = await Promise.all([
     db.city.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true, code: true, waGroupUrl: true } }),
     db.member.groupBy({ by: ['cityId'], _count: { _all: true } }),
     db.member.groupBy({ by: ['cityId'], where: { joinedAt: { gte: weekAgo } }, _count: { _all: true } }),
     db.$queryRaw<{ cityId: string; n: bigint }[]>`
       SELECT m."cityId", COUNT(*) AS n FROM "Card" c JOIN "Member" m ON m.id = c."memberId"
-      WHERE c.status = 'NOT_PRINTED' GROUP BY m."cityId"`.then((rows) =>
+      WHERE c.status = 'NOT_PRINTED' AND m.status = 'ACTIVE' GROUP BY m."cityId"`.then((rows) =>
       rows.map((r) => ({ cityId: r.cityId, _count: { _all: Number(r.n) } })),
     ),
     db.member.findMany({
@@ -47,7 +47,11 @@ export default async function OverviewPage() {
       include: { city: { select: { name: true, timezone: true } }, cards: { select: { status: true }, orderBy: { createdAt: 'desc' }, take: 1 } },
     }),
     db.checkIn.count({ where: { checkedInAt: { gte: startOfToday } } }),
+    db.$queryRaw<{ cityId: string; status: string; n: bigint }[]>`
+      SELECT m."cityId", c.status, COUNT(*) AS n FROM "Card" c JOIN "Member" m ON m.id = c."memberId"
+      WHERE c.status IN ('ENCODED', 'DELIVERED') GROUP BY m."cityId", c.status`,
   ]);
+  const cardsIn = (cityId: string, status: 'ENCODED' | 'DELIVERED') => Number(cardsByCity.find((r) => r.cityId === cityId && r.status === status)?.n ?? 0);
 
   const count = (rows: { cityId: string; _count: { _all: number } }[], cityId: string) =>
     rows.find((r) => r.cityId === cityId)?._count._all ?? 0;
@@ -90,6 +94,8 @@ export default async function OverviewPage() {
                   <Th className="text-right">{t('overview.totalMembers')}</Th>
                   <Th className="text-right">{t('overview.newThisWeek')}</Th>
                   <Th className="text-right">{t('overview.cardsToPrint')}</Th>
+                  <Th className="hidden text-right md:table-cell">{t('overview.cardsOnTheWay')}</Th>
+                  <Th className="hidden text-right md:table-cell">{t('overview.cardsActive')}</Th>
                   <Th>{t('cities.colWa')}</Th>
                 </tr>
               </thead>
@@ -103,6 +109,8 @@ export default async function OverviewPage() {
                     <Td className="text-right tabular-nums">{formatCount(count(membersByCity, c.id))}</Td>
                     <Td className="text-right tabular-nums">{formatCount(count(newByCity, c.id))}</Td>
                     <Td className="text-right tabular-nums">{formatCount(count(toPrintByCity, c.id))}</Td>
+                    <Td className="hidden text-right tabular-nums md:table-cell">{formatCount(cardsIn(c.id, 'ENCODED'))}</Td>
+                    <Td className="hidden text-right tabular-nums md:table-cell">{formatCount(cardsIn(c.id, 'DELIVERED'))}</Td>
                     <Td>
                       {c.waGroupUrl ? (
                         <Badge tone="success" dot>

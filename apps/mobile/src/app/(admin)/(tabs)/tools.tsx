@@ -1,6 +1,6 @@
-import type { MessageKey } from '@pats/shared';
+import { can, type Capability, type MessageKey } from '@pats/shared';
 import { router, type Href } from 'expo-router';
-import { CalendarDays, CreditCard, Gift, ScanLine, type LucideIcon } from 'lucide-react-native';
+import { Bell, CalendarDays, CreditCard, Gift, Nfc, PenLine, ScanLine, type LucideIcon } from 'lucide-react-native';
 import { StyleSheet } from 'react-native';
 import { useAuth } from '@/auth';
 import { Card } from '@/components/card';
@@ -10,40 +10,56 @@ import { Screen } from '@/components/screen';
 import { SectionLabel } from '@/components/section-label';
 import { useT } from '@/i18n';
 
-/** Crew tools. Scan and events are live; card handover (Phase 2) and redeem (Phase 3) follow. */
-const LIVE: { icon: LucideIcon; title: MessageKey; body: MessageKey; href: Href }[] = [
-  { icon: ScanLine, title: 'app.adminScan', body: 'app.adminScanBody', href: '/scan' },
-  { icon: CalendarDays, title: 'app.adminEvents', body: 'app.adminEventsBody', href: '/city-events' },
+interface Tool {
+  icon: LucideIcon;
+  title: MessageKey;
+  body: MessageKey;
+  href: Href;
+  /** Shown when the account has this capability (PRODUCT.md §3), not by role name. */
+  needs: Capability;
+}
+
+const DOOR: Tool[] = [
+  { icon: ScanLine, title: 'app.adminScan', body: 'app.adminScanBody', href: '/scan', needs: 'checkin.scan' },
+  { icon: CalendarDays, title: 'app.adminEvents', body: 'app.adminEventsBody', href: '/city-events', needs: 'checkin.scan' },
 ];
-const SOON: { icon: LucideIcon; title: MessageKey; body: MessageKey }[] = [
-  { icon: CreditCard, title: 'app.adminHandover', body: 'app.adminHandoverBody' },
-  { icon: Gift, title: 'app.adminRedeem', body: 'app.adminRedeemBody' },
+const CARDS: Tool[] = [
+  { icon: Nfc, title: 'app.adminEncode', body: 'app.adminEncodeBody', href: '/encode', needs: 'card.encode' },
+  { icon: CreditCard, title: 'app.adminHandover', body: 'app.adminHandoverBody', href: '/handover', needs: 'card.handover' },
+  { icon: PenLine, title: 'app.adminCards', body: 'app.adminCardsBody', href: '/member-cards', needs: 'card.reportLost' },
 ];
+const SOON: { icon: LucideIcon; title: MessageKey; body: MessageKey }[] = [{ icon: Gift, title: 'app.adminRedeem', body: 'app.adminRedeemBody' }];
 
 export default function AdminToolsScreen() {
   const t = useT();
   const { me, offline } = useAuth();
+  const role = me?.user.role ?? 'MEMBER';
+  const hq = role === 'SUPER_ADMIN';
   const city = me?.user.city?.name ?? '';
+  const section = (tools: Tool[]) => tools.filter((x) => can(role, x.needs));
 
-  return (
-    <Screen title={t('app.adminTitle')} subtitle={t('app.adminSubtitle', { city })}>
-      {offline && <Notice tone="danger" text={t('app.offlineBody')} />}
+  const group = (tools: Tool[]) =>
+    tools.length > 0 && (
       <Card style={styles.clip}>
-        {LIVE.map(({ icon, title, body, href }, i) => (
+        {tools.map(({ icon, title, body, href }, i) => (
           <ListRow key={title} first={i === 0} icon={icon} title={t(title)} subtitle={t(body)} onPress={() => router.push(href)} />
         ))}
+      </Card>
+    );
+
+  return (
+    <Screen title={t('app.adminTitle')} subtitle={hq ? t('app.adminSubtitleHq') : t('app.adminSubtitle', { city })}>
+      {offline && <Notice tone="danger" text={t('app.offlineBody')} />}
+      {group(section(DOOR))}
+      <SectionLabel>{t('app.adminCardsSection')}</SectionLabel>
+      {group(section(CARDS))}
+      <Card style={styles.clip}>
+        <ListRow first icon={Bell} title={t('app.notificationsTitle')} subtitle={t('app.adminNotificationsBody')} onPress={() => router.push('/notifications')} />
       </Card>
       <SectionLabel>{t('common.soon')}</SectionLabel>
       <Card style={styles.clip}>
         {SOON.map(({ icon, title, body }, i) => (
-          <ListRow
-            key={title}
-            first={i === 0}
-            icon={icon}
-            title={t(title)}
-            subtitle={t(body)}
-            accessibilityLabel={`${t(title)}. ${t(body)}. ${t('common.soon')}`}
-          />
+          <ListRow key={title} first={i === 0} icon={icon} title={t(title)} subtitle={t(body)} accessibilityLabel={`${t(title)}. ${t(body)}. ${t('common.soon')}`} />
         ))}
       </Card>
     </Screen>

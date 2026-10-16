@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<!--
+  PATS University KTM, placeholder artwork (T8c: the team's artwork replaces this folder).
+  Page = CR80 85.6 × 54 mm + 3 mm bleed on every side = 91.6 × 60 mm. The trim edge sits 3 mm in;
+  keep text and the QR inside the safe area (template.json "safeMm", measured from the trim edge).
+  Slots: {{fullName}} {{nim}} {{qr}} (an inline SVG) and {{asset:<file>}} (a file in this folder,
+  inlined as a data URI). Elements with data-fit shrink their text until it fits.
+  Colours are the brand tokens from packages/shared/src/colors.json.
+-->
+<style>
+  @font-face { font-family: 'Inter'; font-weight: 500; src: url({{asset:fonts/inter-latin-500-normal.woff2}}) format('woff2'); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+  @font-face { font-family: 'Inter'; font-weight: 500; src: url({{asset:fonts/inter-latin-ext-500-normal.woff2}}) format('woff2'); unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+  @font-face { font-family: 'Inter'; font-weight: 600; src: url({{asset:fonts/inter-latin-600-normal.woff2}}) format('woff2'); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+  @font-face { font-family: 'Inter'; font-weight: 600; src: url({{asset:fonts/inter-latin-ext-600-normal.woff2}}) format('woff2'); unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+  @font-face { font-family: 'Plus Jakarta Sans'; font-weight: 700; src: url({{asset:fonts/plus-jakarta-sans-latin-700-normal.woff2}}) format('woff2'); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+  @font-face { font-family: 'Plus Jakarta Sans'; font-weight: 700; src: url({{asset:fonts/plus-jakarta-sans-latin-ext-700-normal.woff2}}) format('woff2'); unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+  @font-face { font-family: 'Plus Jakarta Sans'; font-weight: 800; src: url({{asset:fonts/plus-jakarta-sans-latin-800-normal.woff2}}) format('woff2'); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+  @font-face { font-family: 'Plus Jakarta Sans'; font-weight: 800; src: url({{asset:fonts/plus-jakarta-sans-latin-ext-800-normal.woff2}}) format('woff2'); unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+
+  :root {
+    --navy: #001836;
+    --maroon: #360c0c;
+    --cream: #fcead8;
+    --cream-tint: #fdf6ed;
+    --ink: #23262d;
+    --ink-muted: #5d6370;
+    /* 3 mm bleed + 4 mm safe margin from the trim edge. */
+    --edge: 7mm;
+  }
+  @page { size: 91.6mm 60mm; margin: 0; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 91.6mm; }
+  body { -webkit-print-color-adjust: exact; print-color-adjust: exact; font-family: 'Inter', sans-serif; color: var(--ink); }
+  .page { position: relative; width: 91.6mm; height: 60mm; overflow: hidden; break-after: page; }
+  .page:last-child { break-after: auto; }
+
+  /* ── Front: crest, wordmark, name, NIM ── */
+  .front { background: var(--cream-tint); }
+  .front .band { position: absolute; left: 0; right: 0; bottom: 0; height: 17mm; background: var(--navy); }
+  .front .band::before { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 0.8mm; background: var(--maroon); }
+  .front .crest { position: absolute; top: var(--edge); left: var(--edge); width: 15mm; height: 15mm; }
+  .front .brand { position: absolute; top: calc(var(--edge) + 1.6mm); left: calc(var(--edge) + 18mm); right: var(--edge); }
+  .front .brand .name { font: 800 9.5pt/1.1 'Plus Jakarta Sans', sans-serif; letter-spacing: 0.02em; color: var(--navy); text-transform: uppercase; }
+  .front .brand .kind { margin-top: 0.9mm; font: 600 5.6pt/1.2 'Inter', sans-serif; letter-spacing: 0.08em; color: var(--ink-muted); text-transform: uppercase; }
+  .front .holder { position: absolute; left: var(--edge); right: var(--edge); bottom: calc(17mm + 2.6mm); }
+  .front .holder .label { font: 600 5pt/1 'Inter', sans-serif; letter-spacing: 0.1em; color: var(--ink-muted); text-transform: uppercase; }
+  .front .holder .full-name { margin-top: 1.2mm; font: 800 13pt/1.12 'Plus Jakarta Sans', sans-serif; color: var(--navy); max-height: 2.24em; overflow: hidden; overflow-wrap: anywhere; }
+  .front .nim { position: absolute; left: var(--edge); right: var(--edge); bottom: calc(var(--edge) - 0.4mm); display: flex; align-items: baseline; gap: 2.4mm; color: var(--cream); }
+  .front .nim .label { font: 600 5pt/1 'Inter', sans-serif; letter-spacing: 0.1em; text-transform: uppercase; opacity: 0.8; }
+  .front .nim .value { font: 600 11pt/1 'Inter', sans-serif; letter-spacing: 0.06em; font-variant-numeric: tabular-nums; }
+
+  /* ── Back: QR on white, how to use it ── */
+  .back { background: var(--navy); color: var(--cream); }
+  .back .qr-box { position: absolute; top: 50%; right: var(--edge); transform: translateY(-50%); width: 28mm; height: 28mm; padding: 2mm; background: #ffffff; border-radius: 2.4mm; }
+  .back .qr-box svg { display: block; width: 100%; height: 100%; }
+  .back .copy { position: absolute; left: var(--edge); right: calc(var(--edge) + 28mm + 5mm); top: 50%; transform: translateY(-50%); }
+  .back .copy .title { font: 800 8.5pt/1.2 'Plus Jakarta Sans', sans-serif; letter-spacing: 0.01em; }
+  .back .copy .body { margin-top: 1.6mm; font: 500 5.8pt/1.45 'Inter', sans-serif; opacity: 0.85; }
+  .back .copy .nim { margin-top: 3mm; font: 600 7pt/1 'Inter', sans-serif; letter-spacing: 0.06em; font-variant-numeric: tabular-nums; }
+  .back .url { position: absolute; left: var(--edge); bottom: var(--edge); font: 500 5pt/1 'Inter', sans-serif; letter-spacing: 0.04em; opacity: 0.7; }
+</style>
+</head>
+<body>
+  <section class="page front">
+    <img class="crest" src="{{asset:crest.png}}" alt="">
+    <div class="brand">
+      <p class="name">PATS University</p>
+      <p class="kind">Kartu Tanda Mahasiswa</p>
+    </div>
+    <div class="holder">
+      <p class="label">Nama · Name</p>
+      <p class="full-name" data-fit="lines:2;min:8.5">{{fullName}}</p>
+    </div>
+    <div class="band"></div>
+    <div class="nim">
+      <span class="label">NIM</span>
+      <span class="value">{{nim}}</span>
+    </div>
+  </section>
+
+  <section class="page back">
+    <div class="copy">
+      <p class="title">Tap atau scan kartu ini</p>
+      <p class="body">Tempel ke HP untuk check-in di event PATS. Kartu ini milik pemegangnya dan tidak bisa dipindahtangankan.</p>
+      <p class="nim">{{nim}}</p>
+    </div>
+    <div class="qr-box">{{qr}}</div>
+    <p class="url">patsuniv.znetworks.id</p>
+  </section>
+</body>
+</html>

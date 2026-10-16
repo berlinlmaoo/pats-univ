@@ -25,7 +25,7 @@ XP/leaderboard/reward, laporan PR, social hub, reservasi, dan roaming **menyusul
 | Lapisan | Pilihan | Alasan |
 |---|---|---|
 | Mobile app (member + local admin) | **Expo (React Native)**, TypeScript, Expo Router | Satu codebase iOS + Android; EAS Build untuk TestFlight/APK; ekosistem NFC/kamera/push matang |
-| NFC (app admin) | `react-native-nfc-manager` | Core NFC (iOS) + NFC Android dalam satu API; membaca NDEF URL + UID dalam satu sesi tap |
+| NFC (app admin) | `react-native-nfc-manager` (development build, Expo Go tidak mendukung) | Core NFC (iOS, perintah MIFARE/NTAG) + NfcA transceive (Android) dalam satu API; membaca NDEF URL + UID dalam satu sesi tap, dan meng-encode kartu di HP HQ |
 | Card Station (Mac HQ) | **Rust** dengan crate **`pcsc`** (PC/SC), reader **ACR122U**, kartu **NTAG213** | PC/SC bawaan macOS; `pcsc` memberi akses APDU langsung untuk tulis NDEF + proteksi password PWD/PACK (tanpa lock permanen); binary tunggal tanpa runtime, mudah dijalankan operator HQ. HTTP ke API lewat `reqwest`, CLI lewat `clap` |
 | Kamera / QR | `expo-camera` (barcode scanning bawaan) | Tanpa native module tambahan |
 | Push | `expo-notifications` → APNs / FCM | Satu token Expo, server kirim via Expo Push API |
@@ -35,7 +35,7 @@ XP/leaderboard/reward, laporan PR, social hub, reservasi, dan roaming **menyusul
 | Leaderboard | Query agregat `XpLedger` + snapshot per jam | Tanpa layanan tambahan |
 | Auth | **Email + kode OTP 6 digit** buatan sendiri (tabel `OtpCode`), JWT access + refresh token. Pengirim OTP pluggable lewat `OTP_PROVIDER` = `email` (SMTP, dipakai sekarang) / `demo` (OTP di layar) / nanti `whatsapp-bridge` (Baileys, tidak resmi) / `cloud-api` (WhatsApp Cloud API resmi + SMS fallback) — lihat PRODUCT.md §10.6 | Tanpa vendor; pindah ke OTP HP tinggal ganti provider |
 | Realtime chat | **Socket.IO** (server terpisah kecil di repo yang sama) | Lihat §1.1 |
-| File / media | **S3-compatible object storage** (MinIO di VM, atau bucket S3) | Presigned upload dari app; URL privat |
+| File / media | **Antarmuka storage**: driver **local disk** (volume Docker) sebagai default, driver **S3-compatible** di balik config (`STORAGE_DRIVER=s3`) | File disajikan route handler yang mengecek akses; MinIO dihapus 16 Okt (image tidak bisa di-pull lagi) |
 | Job terjadwal | Cron di server (endpoint `/api/cron/*` dipanggil systemd timer) | Reminder H-3/H-1/H, follow-up 12.00, expiry roaming/redeem |
 | Export | CSV/XLSX via `exceljs`; PDF = print view | Cukup untuk demo |
 | Hosting | Infrastruktur VM owner yang sudah ada (Docker Compose, reverse proxy, TLS), domain **`patsuniv.znetworks.id`** | Tidak butuh layanan baru; DNS + tunnel dipasang sesi server utama di akhir Phase 0 |
@@ -123,28 +123,30 @@ sequenceDiagram
   participant CS as Card Station (Mac)
   participant R as ACR122U
   participant S as API
-  O->>CS: scan QR kartu cetakan (kamera Mac) atau ketik NIM
-  CS->>S: POST /api/hq/cards/prepare {cardToken | nim}
-  S-->>CS: {cardId, member (nama, NIM), ndefUrl, status RECEIVED_HQ}
+  O->>CS: scan QR kartu cetakan (scanner USB / kamera Mac) atau ketik NIM
+  CS->>S: POST /api/hq/cards/prepare {lookup, station, mode}
+  S-->>CS: {lease (3 menit), card, member (nama, NIM), url} — atau "sudah ter-encode", tanpa lease
   O->>CS: cocokkan nama/NIM di layar dengan cetakan → konfirmasi
   O->>R: tempel kartu cetakan itu (chip masih kosong)
-  CS->>R: GET UID (FF CA 00 00 00)
-  CS->>R: cek tag kosong & belum terkunci
-  CS->>S: POST /api/hq/cards/{cardId}/key {nfcUid}
-  S-->>CS: {pwd, pack}
-  CS->>R: tulis NDEF URL (halaman 4..n)
-  CS->>R: tulis PWD (hal. 43), PACK (hal. 44), AUTH0 (hal. 41) = 0x03, ACCESS (hal. 42) PROT=0
-  CS->>R: baca ulang NDEF, verifikasi
-  CS->>S: POST /api/hq/cards/{cardId}/encoded {nfcUid}
+  CS->>R: GET_VERSION → NTAG213/215/216, READ 0 → UID + CC + lock, READ cfg → AUTH0/ACCESS, READ NDEF
+  CS->>S: POST /api/hq/cards/{cardId}/key {leaseId, nfcUid}
+  S-->>CS: {pwd, pack} (diturunkan dari kunci server + UID)
+  CS->>R: tulis NDEF setelah Lock Control TLV pabrik (pesan kosong → isi → panjang), baca ulang
+  CS->>R: PWD, PACK, ACCESS=00, AUTH0=hal. PACK (staging) → PWD_AUTH = PACK? → AUTH0=04
+  CS->>R: baca ulang config
+  CS->>S: POST /api/hq/cards/{cardId}/encoded {leaseId, nfcUid, chipType}
   S-->>CS: Card ENCODED
 ```
 
 Catatan teknis:
 
-- Perintah ke NTAG213 lewat ACR122U memakai APDU pass-through `FF 00 00 00 Lc <perintah ISO14443-3A>`; `READ` = `30 <page>`, `WRITE` = `A2 <page> <4 byte>`, `PWD_AUTH` = `1B <4 byte pwd>`.
-- NDEF URL dengan prefix `https://` memakai URI identifier code `0x04`, dibungkus TLV `03 <len> ... FE` mulai halaman 4. Kapasitas user NTAG213 = 144 byte, cukup untuk `https://patsuniv.znetworks.id/c/<token 32 char>` (±60 byte payload).
+- **Koreksi Phase 2**: perintah ke chip lewat ACR122U memakai `FF B0 00 <page> 10` (READ) dan `FF D6 00 <page> 04 <data>` (WRITE), terverifikasi di reader HQ 16 Okt; `GET_VERSION` dan `PWD_AUTH` lewat Direct Transmit + PN532 InCommunicateThru `FF 00 00 00 Lc D4 42 <perintah>`. (Versi awal plan menulis `FF 00 00 00 Lc <perintah>` tanpa `D4 42`; itu bukan perintah PN532 yang valid.)
+- **Chip**: NTAG213, 215, dan 216 (vendor kehabisan 213). Dideteksi dengan GET_VERSION (byte ukuran 0Fh/11h/13h) dan dicocokkan dengan byte ukuran CC halaman 3 (12h/3Eh/6Dh). Halaman config (dynamic lock, CFG0, CFG1, PWD, PACK) = 28h–2Ch / 82h–86h / E2h–E6h. Jenis chip disimpan di `Card.chipType`.
+- NDEF URL dengan prefix `https://` memakai URI identifier code `0x04`, dibungkus TLV `03 <len> ... FE`, ditulis **setelah TLV yang sudah ada di chip** (Lock Control TLV pabrik `01 03 A0 0C 34` di 213; nilainya beda per chip, dibaca dan dipertahankan apa adanya). Kapasitas user 144/504/888 byte, cukup untuk `https://patsuniv.znetworks.id/c/<token 32 char>` (±60 byte payload).
 - **Domain final `patsuniv.znetworks.id`** dan URL `/c/<token>` **permanen dalam praktik**: tertulis di tag yang diproteksi password dan kartu di lapangan tidak bisa diperbarui dari jauh (hanya Card Station HQ yang bisa menulis ulang), jadi subdomain ini harus dipertahankan selamanya (redirect bila kelak pindah domain). Lihat PRODUCT.md §10.7.
-- `AUTH0 = 0x03` berarti halaman 3 ke atas butuh autentikasi untuk **tulis** (`PROT = 0` = hanya tulis yang diproteksi; baca tetap bebas agar HP member bisa membaca NDEF). `AUTHLIM` diset 0 (tanpa batas percobaan) untuk menghindari kartu terkunci permanen akibat salah proses.
+- `AUTH0 = 0x04` (koreksi Phase 2, keputusan owner: proteksi mulai halaman NDEF pertama) berarti halaman 4 ke atas butuh autentikasi untuk **tulis** (`PROT = 0` = hanya tulis yang diproteksi; baca tetap bebas agar HP member bisa membaca NDEF). `AUTHLIM` diset 0 (tanpa batas percobaan) untuk menghindari kartu terkunci permanen akibat salah proses.
+- Urutan aman: password ditulis lalu **dibuktikan** dengan PWD_AUTH selagi AUTH0 hanya melindungi halaman PACK; baru setelah PACK cocok AUTH0 turun ke 04h. Gagal → AUTH0 kembali FFh. Sesi yang terputus di langkah mana pun meninggalkan chip tanpa proteksi atau terproteksi dengan password yang bisa dihitung server (diuji dengan memutus simulasi di setiap perintah).
+- **Encode paralel**: beberapa stasiun (Card Station Mac + HP Super Admin) bisa meng-encode satu batch bersamaan. `prepare` memberi **lease** 3 menit pada kartu (update bersyarat di baris kartu, jadi dua stasiun tidak bisa memegang kartu yang sama); `key` memperpanjang lease; `encoded` dengan lease yang sudah kedaluwarsa diterima selama belum diambil stasiun lain. Encode idempoten: kartu yang sudah `ENCODED` tidak ditulis ulang kecuali operator memilih re-encode.
 - PWD per kartu diturunkan server dari kunci rahasia + UID (HMAC, 4 byte) sehingga HQ bisa menghitung ulang untuk re-encode; tidak disimpan di DB.
 - **Cetak dulu, encode belakangan**: token kartu dibuat saat batch (isi QR cetakan) dan token yang sama ditulis ke NDEF saat encode, jadi QR cetakan adalah kunci identifikasi kartu fisik di Card Station. Server menolak encode bila status kartu bukan `RECEIVED_HQ` (atau re-encode yang disetujui) dan bila UID sudah terpakai kartu lain.
 - Bit `Capability Container`, `static lock`, dan `dynamic lock` **tidak** disentuh: chip **diproteksi password, bukan dikunci permanen**. Hanya Card Station HQ (yang tahu PWD dari kunci server + UID) yang bisa menulis ulang — untuk memperbaiki kartu salah encode, memakai ulang kartu untuk member lain, atau mengganti token.
@@ -179,10 +181,11 @@ pats-univ/
 │   └── card-station/      # Mac + ACR122U: encode NTAG213 (Rust, crate pcsc)
 │       ├── Cargo.toml
 │       ├── src/
-│       │   ├── main.rs    # CLI: login, pilih batch, identifikasi (scan QR / NIM), loop encode, re-encode, verify
-│       │   ├── ntag213.rs # APDU: read/write/pwd_auth, NDEF encode, proteksi PWD/PACK (tanpa lock bit)
-│       │   ├── qr.rs      # baca QR cetakan via kamera Mac (AVFoundation) atau input manual NIM
-│       │   └── api.rs     # klien API (prepare, key, encoded)
+│       │   ├── main.rs    # CLI: login, batches, encode (scan QR / NIM, re-encode, --dry-run), status, read, plan
+│       │   ├── ntag.rs    # NTAG213/215/216: deteksi chip, NDEF, urutan encode + proteksi PWD/PACK (tanpa lock bit), simulator
+│       │   ├── reader.rs  # ACR122U: APDU FF B0 / FF D6 / D4 42, dry run
+│       │   ├── qr.rs      # identifikasi: URL cetakan atau NIM; kamera Mac lewat helper camera/qr-scan.swift
+│       │   └── api.rs     # klien API (login, batches, prepare, key, encoded, release)
 │       └── README.md      # setup PC/SC + ACR122U di macOS
 ├── docs/
 │   ├── PRODUCT.md
@@ -190,7 +193,7 @@ pats-univ/
 │   ├── DESIGN.md          # token, tipografi, pola komponen (diturunkan sebelum layar pertama)
 │   └── STATUS.md          # progres per fase (diisi saat build)
 ├── infra/
-│   ├── docker-compose.yml # web, realtime, postgres, minio
+│   ├── docker-compose.yml # web (+ Chromium, volume storage), realtime, postgres
 │   └── deploy.sh
 ├── package.json           # pnpm workspaces
 └── README.md
@@ -249,6 +252,13 @@ Setiap fase diakhiri **demo yang bisa diperlihatkan** dan `docs/STATUS.md` diper
 - Audit metode check-in di dashboard (persentase NFC / APP_QR / MANUAL per event).
 
 **Demo**: HQ membuat batch dari antrean dan mengunduh PDF per member + PDF batch + CSV manifest (dicek ukuran CR80 + bleed); batch ditandai `SENT_TO_VENDOR` → `RECEIVED_HQ` (untuk demo: cetak stiker/label dengan QR di NTAG213 kosong); di Mac, Card Station memindai QR cetakan → nama & NIM tampil → tap kartu → tulis + proteksi password → `ENCODED`; scan QR kartu lain lalu tap kartu yang salah → ditolak; mencoba menulis ulang kartu dengan app NFC umum → gagal, tetapi Card Station bisa re-encode kartu yang sama untuk member lain; admin menerima kartu, tap saat serah terima → `DELIVERED`; di event, tap kartu → check-in `NFC`; kartu dilaporkan hilang → revoke, token+UID lama ditolak; member tap kartunya sendiri di iPhone → profil terbuka; push reminder dan FOMO sampai ke HP demo.
+
+**Tambahan owner 16 Okt (masuk Phase 2)**:
+
+- **Encode di HP oleh Super Admin**: menu Admin → Encode kartu, langkah sama dengan Card Station (password per kartu dari server, hanya untuk satu penulisan; HP tidak menyimpan rahasia apa pun). Android: NfcA transceive; iOS: Core NFC MIFARE (NTAG).
+- **Permintaan encode ulang** oleh admin kota (dibatasi capability `card.requestReencode`, bukan nama role, supaya peran regional manager — pertanyaan S1 — bisa menerimanya tanpa ubah alur): alasan wajib → antrean di dashboard HQ (setujui/tolak) → izin **sekali pakai 24 jam** untuk kartu itu saja di HP admin yang meminta → semua tercatat di audit. Chip mati → "Laporkan hilang atau rusak" (REVOKED + pengganti di antrean).
+- **Encode paralel di HQ** dengan lease per kartu (lihat §2.2); halaman Kartu menampilkan progres per batch dan stasiun yang meng-encode tiap kartu.
+- **NTAG215/216** didukung selain 213.
 
 **Effort**: 9–11 hari (termasuk Card Station ±2–3 hari). Hardware sudah ada: NTAG213 PVC + ACR122U; perlu iPhone + Android fisik untuk uji.
 

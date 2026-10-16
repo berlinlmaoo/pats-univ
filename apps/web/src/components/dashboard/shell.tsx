@@ -1,6 +1,6 @@
 'use client';
 
-import { Building2, CalendarDays, LayoutGrid, LogOut, Menu, Settings2, ShieldCheck, Users, X, type LucideIcon } from 'lucide-react';
+import { Building2, CalendarDays, CreditCard, LayoutGrid, LogOut, Menu, Settings2, ShieldCheck, Users, X, type LucideIcon } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState, type ReactNode } from 'react';
@@ -12,17 +12,29 @@ import { Wordmark } from '@/components/ui/wordmark';
 import type { MessageKey } from '@pats/shared';
 import { cn } from '@/lib/cn';
 
-/** Pages built so far. Cards and the later pages join this list as they ship. */
+/** Pages built so far; the later ones (PRODUCT.md §5.3) join this list as they ship. */
 const NAV: { href: string; labelKey: MessageKey; icon: LucideIcon }[] = [
   { href: '/overview', labelKey: 'nav.overview', icon: LayoutGrid },
   { href: '/members', labelKey: 'nav.members', icon: Users },
+  { href: '/cards', labelKey: 'nav.cards', icon: CreditCard },
   { href: '/events', labelKey: 'nav.events', icon: CalendarDays },
   { href: '/cities', labelKey: 'nav.cities', icon: Building2 },
   { href: '/admins', labelKey: 'nav.admins', icon: ShieldCheck },
   { href: '/settings', labelKey: 'nav.settings', icon: Settings2 },
 ];
 
-export function Shell({ user, demo, children }: { user: { name: string; email: string }; demo: boolean; children: ReactNode }) {
+export function Shell({
+  user,
+  demo,
+  badges = {},
+  children,
+}: {
+  user: { name: string; email: string };
+  demo: boolean;
+  /** Counts that need HQ's attention, by nav href (e.g. pending re-encode requests on /cards). */
+  badges?: Record<string, number>;
+  children: ReactNode;
+}) {
   const t = useT();
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
@@ -60,6 +72,11 @@ export function Shell({ user, demo, children }: { user: { name: string; email: s
                 >
                   <Icon className="size-4 shrink-0" strokeWidth={1.75} aria-hidden="true" />
                   <span className="truncate">{t(labelKey)}</span>
+                  {badges[href] ? (
+                    <span className="ml-auto rounded-full bg-accent-subtle px-1.5 text-caption tabular-nums text-accent-subtle-fg" aria-label={t('nav.needsAttention', { count: badges[href] })}>
+                      {badges[href]}
+                    </span>
+                  ) : null}
                 </Link>
               </li>
             );

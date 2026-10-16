@@ -42,3 +42,6 @@ target/
 coverage/
 .vscode/
 .idea/
+
+# Local file storage (print PDFs, flyers)
+apps/web/.data/

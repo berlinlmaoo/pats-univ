@@ -1,6 +1,7 @@
 import type { AuthTokens, LoginResponse, MeResponse } from '@pats/shared';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { api, ApiFailure, type Method } from '@/lib/api';
+import { PUSH_TOKEN_KEY } from '@/lib/push-keys';
 import { storage } from '@/lib/storage';
 
 const TOKENS_KEY = 'pats.tokens';
@@ -102,10 +103,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const signOut = useCallback(async () => {
+    // This phone stops receiving the account's pushes.
+    const pushToken = await storage.get(PUSH_TOKEN_KEY);
+    if (pushToken && tokens.current) {
+      await accessToken()
+        .then((token) => api.send('DELETE', '/api/me/devices', { pushToken }, token))
+        .catch(() => null);
+      await storage.remove(PUSH_TOKEN_KEY);
+    }
     const refreshToken = tokens.current?.refreshToken;
     if (refreshToken) await api.post('/api/auth/logout', { refreshToken }).catch(() => null);
     await clear();
-  }, [clear]);
+  }, [accessToken, clear]);
 
   const call = useCallback(
     async <T,>(method: Method, path: string, body?: unknown): Promise<T> => {
