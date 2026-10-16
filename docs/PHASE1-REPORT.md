@@ -117,11 +117,13 @@ Akun seed tetap sama dengan Phase 0 (HQ `hq@patsuniv.test`, admin kota `admin.jk
 |---|---|
 | Typecheck semua package | lolos |
 | Lint (web + app) | lolos |
-| Unit test | `packages/shared` 20 (baru: fase event, jam kota ↔ UTC, acara lewat tengah malam, validator event/check-in), `apps/web` 6 (baru: token QR & tiket: kedaluwarsa, dimanipulasi, kunci lain, QR ≠ tiket) — semua lolos |
+| `next build` (production) | lolos |
+| Unit test | `packages/shared` 20 (baru: fase event, jam kota ↔ UTC, acara lewat tengah malam, validator event/check-in), `apps/web` 7 (baru: token QR & tiket: kedaluwarsa, dimanipulasi, kunci lain, QR ≠ tiket; deteksi pelanggaran unik) — semua lolos |
 | Matriks interaksi (`pnpm --filter @pats/web e2e:checkin`, API asli + database) | **29/29 lolos**, rincian di bawah |
 | Screenshot web | Dashboard (Ringkasan, Event mendatang/lewat, detail event live + kosong, member, dialog event baru + error, dialog tutup check-in) di 390 px dan 1440 px, ID/EN, terang/gelap: 72 screenshot. Cek otomatis: **0** scroll horizontal, **0** teks terpotong; yang tersisa hanya elipsis yang disengaja di daftar pendaftar terbaru (nama sangat panjang) |
 | Screenshot app (renderer web, kode yang sama) | Member (Kartu + QR, Event, detail event, riwayat) dan admin (Admin, Event kota, detail + live, form baru/ubah, scanner, check-in lewat nama, sudah check-in, alasan wajib, offline) di 390 px, ID/EN, terang/gelap: 68 screenshot. Cek otomatis: **0** temuan |
-<!-- SIM -->
+| App di simulator iOS | iPhone 17 (iOS 27) lewat Expo Go, satu simulator, dimatikan setelahnya. Layar setelah login kali ini **dicek native** (Phase 0 belum bisa): Kartu + QR, Event, detail event (terang/gelap), Kehadiran, menu Admin, detail event + kehadiran live, scanner, check-in lewat nama, form event (date/time picker native). Login di simulator memakai rute bantu sementara yang membaca refresh token dari deep link; rute itu dihapus lagi dan tidak di-commit |
+| QR dari layar simulator | Screenshot layar Kartu di simulator di-decode (zxing) lalu dipindai lewat API sebagai admin Jakarta: **tercatat** (`201`); screenshot yang sama dipindai lagi → `QR_USED`; screenshot lain yang sudah lewat 45 detik → `QR_EXPIRED`. Riwayat dan tanda "Hadir" langsung muncul di app member |
 
 **Matriks interaksi** (semua lewat API asli, event baru dibuat dan dibuka oleh admin Jakarta tiap kali dijalankan):
 
@@ -143,12 +145,13 @@ Akun seed tetap sama dengan Phase 0 (HQ `hq@patsuniv.test`, admin kota `admin.jk
 | Manual dengan alasan | tercatat + `AuditLog checkin.manual` |
 | Feed kehadiran | hitungan per metode benar (QR app 2, manual 1) |
 | Check-in ditutup | scan ditolak; dibuka lagi berjalan |
-| **Scan offline** (app, koneksi diputus di browser) | preview dan konfirmasi: "Server tidak terjangkau. Cek koneksi lalu coba lagi. Belum ada yang tercatat." Setelah online lagi, check-in berjalan normal |
+| **Scan offline** (app, koneksi diputus di browser) | preview dan konfirmasi: "Server tidak terjangkau. Cek koneksi lalu coba lagi. Belum ada yang tercatat." Setelah online lagi, preview member yang sama berjalan normal; tidak ada yang tercatat selama offline |
 | Member offline | QR terakhir tetap tampil sampai habis, lalu pesan offline + tombol coba lagi |
 
 Masalah yang ketemu saat QA dan sudah dibereskan:
 
 - `parseZonedDateTime` menerima 30 Februari (ketahuan unit test).
+- Saat matriks dijalankan ulang setelah `next build`, double check-in dan replay tiket memberi **500**, bukan "sudah check-in"/"QR sudah dipakai": pengecekan `instanceof PrismaClientKnownRequestError` gagal karena runtime Prisma termuat dua kali. Sekarang dicocokkan lewat kode error `P2002` di satu helper; tiga tempat lama dari Phase 0 (registrasi, kota, admin) yang punya pola rapuh yang sama ikut diperbaiki. Matriks kembali 29/29.
 - Layar Kartu dan scanner crash saat izin wake lock ditolak (renderer web); keep-awake sekarang best-effort.
 - Rute admin `/events` bentrok dengan tab Event member di URL yang sama → dipindah ke `/city-events`.
 - QR terlalu kecil di dalam kotak putih → kotak kini mengikuti ukuran QR (224 pt, modul dibulatkan ke poin penuh supaya tidak ada garis tipis).
@@ -158,12 +161,20 @@ Masalah yang ketemu saat QA dan sudah dibereskan:
 - Judul + tanggal event terpotong di tabel 390 px → membungkus di HP; label stat "Baru 7 hari terakhir" tidak lagi terpotong.
 - Rentang jam ("13.30 WIB") pecah di tengah → hanya pecah di antara dua ujung.
 - Tombol Batal/Coba lagi 40 pt → 48 pt (target sentuh minimal 44).
+- Scanner di iPhone: tombol tutup dan judul menimpa status bar (inset hilang di `fullScreenModal`) → scanner kini push biasa dan overlay memakai inset safe area.
 - "Segera" tampil tiga kali di menu Admin → cukup judul seksi.
 
 
 ## 5. Yang belum diverifikasi / catatan jujur
 
-<!-- NOTES -->
+- **Kamera belum diuji dengan QR sungguhan di depan kamera.** Simulator tidak punya kamera; layar scanner, izin kamera, dan alur hasilnya sudah dicek, dan QR yang tampil di simulator terbukti bisa dipindai (di-decode dari screenshot lalu dikirim ke API yang sama). **Mohon dicoba sekali dengan dua HP** lewat Expo Go.
+- **Android belum dijalankan** (aturan: tanpa emulator Android). Kodenya sama; `expo-camera`, `expo-haptics`, `expo-keep-awake`, dan date picker ada di Expo Go Android.
+- **Login di simulator** tetap tidak bisa diketik (Mac ini tidak punya Simulator.app GUI, idb, atau maestro), jadi sesi masuk lewat rute bantu sementara (lihat §4).
+- **Feed live** masih polling (app 5 detik, dashboard 10 detik); realtime Socket.IO di Phase 4 sesuai plan.
+- **Push "Check-in tercatat"** ke member belum ada; push masuk Phase 2.
+- **Wordmark app** di layar login masih "PU" placeholder, belum crest (dari Phase 0/brand). Kotak chip kecil di KTM digital tidak terlihat di mode terang karena warnanya sama dengan kartu. Keduanya di luar Phase 1, dicatat untuk dirapikan.
+- **DB lokal** berisi check-in demo di "PATS Warm-up Night" (6 member) dari uji ini. Event "Matrix …" dari uji otomatis sudah dibersihkan. Event uji baru akan muncul lagi setiap kali `e2e:checkin` dijalankan.
+- **Mac bersama:** semua langkah berat (install, Metro, Playwright, build, simulator) lewat antrean kunci yang sama dengan tim NEXUS, satu per satu, dengan memori bebas ≥ 25%.
 
 ## 6. Keputusan kecil yang diambil (bisa diubah)
 
