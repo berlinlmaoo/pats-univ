@@ -69,5 +69,10 @@ export const ERROR_MESSAGE_KEY: Record<ApiErrorCode, string> = {
   REPORT_REVIEWED: 'loyalty.reportReviewed',
   RECAP_LOCKED: 'loyalty.recapLocked',
   CHECK_IN_REQUIRED: 'loyalty.checkInRequired',
+  RESERVATION_LIMIT: 'errors.reservationLimit',
+  ROAMING_LIMIT: 'errors.roamingLimit',
+  HUB_MUTED: 'errors.hubMuted',
+  SLOT_TAKEN: 'errors.slotTaken',
+  MEDIA_INVALID: 'errors.mediaInvalid',
   INTERNAL: 'errors.generic',
 };

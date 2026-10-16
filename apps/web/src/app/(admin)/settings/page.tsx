@@ -17,6 +17,7 @@ const GROUP_LABEL = {
   roaming: 'settings.groupRoaming',
   notifications: 'settings.groupNotifications',
   app: 'settings.groupApp',
+  hub: 'settings.groupHub',
 } as const satisfies Record<SettingGroup, string>;
 
 export async function generateMetadata(): Promise<Metadata> {

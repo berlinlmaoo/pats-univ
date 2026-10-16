@@ -18,10 +18,16 @@ export async function saveSettingAction(key: string, _prev: ActionResult | null,
   }
   const id = settingId(key);
   const before = await db.setting.findUnique({ where: { id } });
-  await db.setting.upsert({
-    where: { id },
-    create: { id, key, scope: 'GLOBAL', value: parsed.data, updatedById: hq.id },
-    update: { value: parsed.data, updatedById: hq.id },
+  await db.$transaction(async tx => {
+    await tx.setting.upsert({
+      where: { id },
+      create: { id, key, scope: 'GLOBAL', value: parsed.data, updatedById: hq.id },
+      update: { value: parsed.data, updatedById: hq.id },
+    });
+    if (key === 'roamingHubExpiryHours' && typeof parsed.data === 'number') {
+      const grants = await tx.roamingRequest.findMany({ where: { type: 'SOCIAL_HUB', status: 'APPROVED' }, include: { event: { select: { endsAt: true } } } });
+      for (const grant of grants) await tx.roamingRequest.updateMany({ where: { id: grant.id, status: 'APPROVED' }, data: { accessExpiresAt: new Date(grant.event.endsAt.getTime() + parsed.data * 3600000) } });
+    }
   });
   await audit(hq.id, 'setting.updated', { type: 'Setting', id }, { from: before?.value ?? null, to: parsed.data });
   revalidatePath('/settings');

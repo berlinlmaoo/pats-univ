@@ -8,7 +8,7 @@ import { ok, route } from '@/lib/http/respond';
 export const GET = route(async (req: Request) => {
   const { member } = await requireMember(req);
   const now = new Date();
-  const { upcoming, past } = await listEvents({ cityId: member.cityId, status: { not: 'DRAFT' } }, now);
+  const { upcoming, past } = await listEvents({ ...(new URL(req.url).searchParams.get('scope') === 'all' ? {} : { cityId: member.cityId }), status: { not: 'DRAFT' } }, now);
   const ids = [...upcoming, ...past].map((e) => e.id);
   const mine = await db.checkIn.findMany({
     where: { memberId: member.id, eventId: { in: ids } },

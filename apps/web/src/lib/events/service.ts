@@ -1,6 +1,7 @@
 import 'server-only';
 import {
   eventPhase,
+  roamingExpiry,
   eventTimesFromInput,
   toZonedInput,
   type EventAction,
@@ -8,6 +9,9 @@ import {
   type EventSummary,
 } from '@pats/shared';
 import type { Prisma } from '@/generated/prisma';
+import { atomic } from '../loyalty/transaction';
+import { getSetting } from '../settings';
+import { publish } from '../social/realtime';
 import { audit } from '../audit';
 import { requireCityAccess, type AuthUser } from '../auth/current-user';
 import { db } from '../db';
@@ -97,35 +101,25 @@ export async function createEvent(actor: AuthUser, fields: EventFields): Promise
 }
 
 export async function updateEvent(actor: AuthUser, id: string, fields: EventFields): Promise<EventWithPlace> {
-  const existing = await db.event.findUnique({ where: { id }, include: { _count: { select: { checkIns: true } } } });
-  if (!existing) throw new AppError('NOT_FOUND', 404);
-  requireCityAccess(actor, existing.cityId);
-  if (existing.cityId !== fields.cityId && existing._count.checkIns > 0) {
-    throw new AppError('VALIDATION', 422, 'City locked', { fields: { cityId: 'events.cityLocked' } });
-  }
   const { city, times } = await resolvePlace(actor, fields);
-  // Publishing from the form only moves a draft forward; open/closed events keep their state.
-  // A published event can go back to draft while nobody has checked in.
-  const status =
-    existing.status === 'DRAFT' && fields.publish
-      ? 'PUBLISHED'
-      : existing.status === 'PUBLISHED' && !fields.publish && existing._count.checkIns === 0
-        ? 'DRAFT'
-        : existing.status;
-  const event = await db.event.update({
-    where: { id },
-    data: {
-      cityId: city.id,
-      venueId: fields.venueId || null,
-      title: fields.title,
-      description: fields.description,
-      capacity: fields.capacity ?? null,
-      ...times,
-      status,
-    },
-    include: eventInclude,
+  const event = await atomic(async tx => {
+    const existing = await tx.event.findUnique({ where: { id }, include: { _count: { select: { checkIns: true, reservations: true, roamingRequests: true } } } });
+    if (!existing) throw new AppError('NOT_FOUND', 404);
+    requireCityAccess(actor, existing.cityId);
+    if (existing.cityId !== fields.cityId && (existing._count.checkIns || existing._count.reservations || existing._count.roamingRequests)) {
+      throw new AppError('VALIDATION', 422, 'City locked', { fields: { cityId: 'events.cityLocked' } });
+    }
+    if (existing.venueId !== (fields.venueId || null) && existing._count.reservations) throw new AppError('SLOT_TAKEN', 409);
+    const status = existing.status === 'DRAFT' && fields.publish ? 'PUBLISHED' : existing.status === 'PUBLISHED' && !fields.publish && !existing._count.checkIns && !existing._count.reservations && !existing._count.roamingRequests ? 'DRAFT' : existing.status;
+    const updated = await tx.event.update({ where: { id }, data: { cityId: city.id, venueId: fields.venueId || null, title: fields.title, description: fields.description, capacity: fields.capacity ?? null, ...times, status }, include: eventInclude });
+    const hours = await getSetting(tx, 'roamingHubExpiryHours');
+    for (const type of ['ATTENDANCE', 'SOCIAL_HUB'] as const) {
+      await tx.roamingRequest.updateMany({ where: { eventId: id, type, status: 'APPROVED' }, data: { accessExpiresAt: roamingExpiry(updated.endsAt, type, hours) } });
+    }
+    await tx.auditLog.create({ data: { actorId: actor.id, action: 'event.updated', targetType: 'Event', targetId: id, meta: { status } } });
+    return updated;
   });
-  await audit(actor.id, 'event.updated', { type: 'Event', id }, { status });
+  await publish({ kind: 'attendance', id });
   return event;
 }
 
@@ -160,6 +154,7 @@ export async function transitionEvent(actor: AuthUser, id: string, action: Event
   }
   const event = await db.event.update({ where: { id }, data, include: eventInclude });
   await audit(actor.id, `event.${action === 'open' ? 'opened' : action === 'close' ? 'closed' : 'published'}`, { type: 'Event', id }, meta);
+  await publish({ kind: 'attendance', id });
   return event;
 }
 

@@ -12,6 +12,9 @@ import { saveSettingAction } from '@/lib/hq/settings';
 import { cn } from '@/lib/cn';
 
 const UNIT_LABEL = {
+  requests: 'settings.unitRequests',
+  days: 'settings.unitDays',
+  mb: 'settings.unitMb',
   years: 'settings.unitYears',
   xp: 'settings.unitXp',
   minutes: 'settings.unitMinutes',

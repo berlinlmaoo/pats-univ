@@ -383,6 +383,12 @@ Pengiriman: Expo Push → APNs (iOS) / FCM (Android). Setiap push juga tersimpan
 | `redeemCodeTtlMinutes` | GLOBAL | 15 |
 | `appQrTtlSeconds` | GLOBAL | 45 (rentang 30–60) |
 | `roamingHubExpiryHours` | GLOBAL | 48 |
+| `roamingMaxPerMonth` | GLOBAL | 0 = tanpa batas, per jenis per bulan UTC (TBD) |
+| `hubTimelinePosting` | GLOBAL / CITY | `MEMBERS` = admin + member (TBD); override per channel |
+| `hubHistoryDays` | GLOBAL | 30 hari |
+| `hubMediaMaxSeconds` / `hubMediaMaxMb` | GLOBAL | 60 detik / 25 MB (TBD) |
+| `reservationApprover` | GLOBAL / CITY | `LOCAL_ADMIN` (TBD) |
+| `reservationMaxPerEvent` | GLOBAL | 1 reservasi aktif per member (TBD) |
 | `leaderboardPeriod` | GLOBAL | `MONTHLY` (TBD) |
 | `leaderboardTopN` | GLOBAL | 50 |
 | `promoterBonusKind` | GLOBAL | `XP` (TBD) |
@@ -573,3 +579,13 @@ Prototype mencakup seluruh visi PRD, tetapi beberapa bagian dibangun pada **demo
 28. Refund memakai jumlah debit asli di ledger, bukan harga katalog terbaru. Leaderboard mengikuti definisi ledger positif di §7, termasuk kredit refund; pengurangan saldo tidak mengurangi XP periode.
 29. Laporan PR yang ditolak dapat diperbaiki dan dikirim ulang pada baris laporan yang sama. Pembatalan validasi XP menulis entri pembalik; payout uang yang masih menunggu dihapus saat pembatalan. Payout yang sudah dibayar tidak bisa dibatalkan lewat alur ini.
 30. Export CSV/XLSX memakai nilai tampilan berformat (`3.800`, `Rp 6.000.000`) sebagai teks agar hasil sama di semua locale spreadsheet. PDF tersedia lewat tampilan cetak web (demo depth).
+
+
+### 16 Oktober 2026 — implementasi Phase 4
+
+- Social hub memakai Socket.IO dengan JWT/sesi app; konten tetap dibaca melalui API yang memeriksa akses. Riwayat chat default 30 hari; cron menghapus batch pesan lama dan media yang tidak lagi dipakai.
+- T10 memakai admin + member sebagai default, dapat diganti global/kota atau per channel. Kebijakan channel dan mute memakai `Setting`; tidak diperlukan migrasi schema.
+- S7: admin kota menyetujui reservasi secara default; dashboard dapat mengalihkannya ke HQ. Minimum spend berupa catatan per slot; deposit/pembayaran tidak diproses di app. S8: default satu reservasi pending/dikonfirmasi per member per event, dapat disetel. Permintaan boleh berebut slot, tetapi konfirmasi tetap unik per slot/event.
+- S9: tanpa kuota roaming bulanan secara default (0); bila diaktifkan dihitung per jenis pada bulan kalender UTC, tidak menghitung permintaan yang ditolak. ATTENDANCE hanya disetujui admin kota tujuan dan berakhir bersama event; SOCIAL_HUB hanya oleh HQ dan berakhir setelah jendela setting (default 48 jam). Perubahan jam event atau setting menghitung ulang expiry grant yang masih APPROVED.
+- Percakapan reservasi tetap dapat diakses pemohon dan crew setelah roaming hub habis, agar tindak lanjut reservasi tidak terputus. Batas retensi chat tetap berlaku.
+- Media menggunakan driver storage Phase 2 dengan upload bertanda tangan dan URL baca privat sementara. Default batas rekaman 60 detik / 25 MB dapat diturunkan dari dashboard. Detail verifikasi dan batas demo: [PHASE4-REPORT.md](PHASE4-REPORT.md).

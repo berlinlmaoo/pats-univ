@@ -40,6 +40,10 @@ const schema = z.object({
   /** Bearer secret the systemd timer sends to /api/cron/*. */
   CRON_SECRET: z.string().min(16).optional(),
 
+  REALTIME_INTERNAL_URL: z.url().optional(),
+  REALTIME_PUBLIC_URL: z.url().default('http://localhost:4000'),
+  REALTIME_SECRET: z.string().min(32).optional(),
+
   // Universal / app links for card URLs (served from /.well-known).
   APPLE_TEAM_ID: z.string().regex(/^[A-Z0-9]{10}$/).optional(),
   /** Comma-separated SHA-256 fingerprints of the Android signing certificates. */

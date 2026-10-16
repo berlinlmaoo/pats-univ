@@ -29,6 +29,7 @@ const CARDS: Tool[] = [
   { icon: PenLine, title: 'app.adminCards', body: 'app.adminCardsBody', href: '/member-cards', needs: 'card.reportLost' },
 ];
 const CREW: Tool[] = [
+  { icon: CalendarDays, title: 'social.operations', body: 'social.operationsBody', href: '/social-operations', needs: 'city.operations' },
   { icon: Gift, title: 'loyalty.validateReward', body: 'app.adminRedeemBody', href: '/reward-validation', needs: 'reward.validate' },
   { icon: CalendarDays, title: 'loyalty.operations', body: 'loyalty.operationsBody', href: '/operations', needs: 'city.operations' },
 ];

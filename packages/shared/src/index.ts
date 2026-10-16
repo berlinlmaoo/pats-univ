@@ -10,3 +10,4 @@ export * from './validation';
 export * from './i18n';
 export * from './settings';
 export * from './loyalty';
+export * from './social';

@@ -50,6 +50,9 @@ services:
       S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-}
       S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-}
       PUSH_PROVIDER: ${PUSH_PROVIDER:-expo}
+      REALTIME_INTERNAL_URL: http://realtime:4000
+      REALTIME_PUBLIC_URL: ${REALTIME_PUBLIC_URL:?set REALTIME_PUBLIC_URL}
+      REALTIME_SECRET: ${REALTIME_SECRET:?set REALTIME_SECRET}
       EXPO_ACCESS_TOKEN: ${EXPO_ACCESS_TOKEN:-}
       CRON_SECRET: ${CRON_SECRET:?set CRON_SECRET}
       APPLE_TEAM_ID: ${APPLE_TEAM_ID:-}
@@ -65,14 +68,22 @@ services:
       retries: 3
 
   realtime:
-    image: node:22-alpine
+    build:
+      context: ..
+      dockerfile: apps/realtime/Dockerfile
     restart: unless-stopped
-    working_dir: /app
-    command: ['node', 'src/server.mjs']
-    volumes:
-      - ../apps/realtime:/app:ro
+    environment:
+      API_URL: http://web:3000
+      AUTH_SECRET: ${AUTH_SECRET:?set AUTH_SECRET}
+      REALTIME_SECRET: ${REALTIME_SECRET:?set REALTIME_SECRET}
+      CORS_ORIGINS: ${APP_URL:-https://patsuniv.znetworks.id}
     ports:
       - '127.0.0.1:3101:4000'
+    healthcheck:
+      test: ['CMD', 'node', '-e', "fetch('http://127.0.0.1:4000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
 
 volumes:
   pgdata:

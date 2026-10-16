@@ -92,6 +92,11 @@ function Navigator({ ready }: { ready: boolean }) {
         {/* Open to everyone: a tapped card URL (universal link), and the notification centre. */}
         <Stack.Screen name="c/[token]" options={{ ...stackOptions(c), title: '' }} />
         <Stack.Protected guard={status === 'signedIn'}>
+          <Stack.Screen name="social-hub" options={{ ...stackOptions(c), title: t('social.title') }} />
+          <Stack.Screen name="social-channel" options={{ ...stackOptions(c), title: t('social.title') }} />
+          <Stack.Screen name="social-operations" options={{ ...stackOptions(c), title: t('social.operations') }} />
+          <Stack.Screen name="roaming" options={{ ...stackOptions(c), title: t('social.roaming') }} />
+          <Stack.Screen name="reservation" options={{ ...stackOptions(c), title: t('social.reserve') }} />
           <Stack.Screen name="notifications" options={{ ...stackOptions(c), title: t('app.notificationsTitle') }} />
           <Stack.Screen name="notification-settings" options={{ ...stackOptions(c), title: t('app.notificationSettingsTitle') }} />
         </Stack.Protected>

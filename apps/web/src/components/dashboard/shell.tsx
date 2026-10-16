@@ -24,6 +24,7 @@ const NAV: { href: string; labelKey: MessageKey; icon: LucideIcon }[] = [
   { href: '/leaderboard', labelKey: 'loyalty.leaderboard', icon: Users },
   { href: '/recaps', labelKey: 'loyalty.recap', icon: CalendarDays },
   { href: '/exports', labelKey: 'loyalty.export', icon: LayoutGrid },
+  { href: '/hub', labelKey: 'social.title', icon: Users },
   { href: '/settings', labelKey: 'nav.settings', icon: Settings2 },
 ];
 

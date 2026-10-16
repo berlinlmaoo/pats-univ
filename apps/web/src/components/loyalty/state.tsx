@@ -50,7 +50,7 @@ export function useLoyalty<T>(url: string) {
       active = false;
     };
   }, [request]);
-  return { data, error, reload };
+  return { data, error, reload, setData };
 }
 export function DataState({
   error,
