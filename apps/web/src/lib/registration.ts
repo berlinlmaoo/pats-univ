@@ -1,7 +1,7 @@
 import 'server-only';
 import { ageOn, parseIsoDate, type Registration, type RegistrationResponse } from '@pats/shared';
-import { Prisma } from '@/generated/prisma';
 import { db } from './db';
+import { isUniqueViolation } from './db-errors';
 import { welcomeEmail } from './email/templates';
 import { AppError } from './http/errors';
 import { sendMail, smtpConfigured } from './mail';
@@ -77,7 +77,7 @@ export async function registerMember(input: Registration): Promise<RegistrationR
     });
   } catch (err) {
     // Two tabs submitting the same email at once.
-    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+    if (isUniqueViolation(err)) {
       throw new AppError('EMAIL_TAKEN', 409, 'Email already registered', { fields: { email: 'errors.emailTaken' } });
     }
     throw err;

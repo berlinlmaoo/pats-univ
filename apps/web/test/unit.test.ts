@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { otpEmail, welcomeEmail } from '../src/lib/email/templates';
 import { newNonce, signQr, signTicket, verifyQr, verifyTicket } from '../src/lib/checkin/token';
+import { isUniqueViolation } from '../src/lib/db-errors';
 import { hit } from '../src/lib/rate-limit';
 
 describe('rate limit', () => {
@@ -70,5 +71,13 @@ describe('check-in tokens', () => {
     expect(ok.ok && ok.claims).toMatchObject({ adminId: 'cadmin00000000001', eventId: 'cevent00000000001', nonce });
     expect(verifyTicket(key, signQr(key, { memberId, nonce, expiresAt: in45s }), now).ok).toBe(false);
     expect(verifyQr(key, ticket, now).ok).toBe(false);
+  });
+});
+
+describe('database errors', () => {
+  it('recognises a unique violation by code, whichever Prisma runtime threw it', () => {
+    expect(isUniqueViolation(Object.assign(new Error('dup'), { code: 'P2002' }))).toBe(true);
+    expect(isUniqueViolation({ code: 'P2025' })).toBe(false);
+    expect(isUniqueViolation(null)).toBe(false);
   });
 });

@@ -15,7 +15,7 @@ export default function AdminLayout() {
       <Stack.Screen name="city-events/new" options={{ title: t('app.adminNewEvent'), presentation: 'modal' }} />
       <Stack.Screen name="city-events/[id]/edit" options={{ title: t('events.editTitle'), presentation: 'modal' }} />
       <Stack.Screen name="scan/index" options={{ title: t('app.scanPickTitle') }} />
-      <Stack.Screen name="scan/[eventId]/index" options={{ headerShown: false, presentation: 'fullScreenModal', animation: 'fade' }} />
+      <Stack.Screen name="scan/[eventId]/index" options={{ headerShown: false, animation: 'fade' }} />
       <Stack.Screen name="scan/[eventId]/manual" options={{ title: t('app.manualTitle'), presentation: 'modal' }} />
     </Stack>
   );

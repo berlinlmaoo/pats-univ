@@ -5,7 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { CameraOff, Flashlight, FlashlightOff, Search, X } from 'lucide-react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Linking, Platform, Pressable, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '@/components/button';
 import { Card } from '@/components/card';
 import { Text } from '@/components/text';
@@ -26,6 +26,7 @@ const RETRYABLE = new Set(['NETWORK', 'TICKET_EXPIRED', 'RATE_LIMITED', 'INTERNA
 export default function ScannerScreen() {
   const { eventId } = useLocalSearchParams<{ eventId: string }>();
   const t = useT();
+  const insets = useSafeAreaInsets();
   const [permission, requestPermission] = useCameraPermissions();
   const [available, setAvailable] = useState(Platform.OS !== 'web');
   const [torch, setTorch] = useState(false);
@@ -86,7 +87,8 @@ export default function ScannerScreen() {
         />
       )}
 
-      <SafeAreaView style={styles.flex} edges={['top', 'bottom']}>
+      {/* Full-bleed camera: the overlay pads itself by the safe-area insets. */}
+      <View style={[styles.flex, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
         <View style={styles.top}>
           <RoundButton label={t('common.close')} onPress={() => router.back()}>
             <X size={size.icon + 2} color={ink.text} strokeWidth={2} />
@@ -158,7 +160,7 @@ export default function ScannerScreen() {
             />
           )}
         </View>
-      </SafeAreaView>
+      </View>
     </View>
   );
 }

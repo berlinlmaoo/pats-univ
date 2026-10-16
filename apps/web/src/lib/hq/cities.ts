@@ -3,9 +3,9 @@
 import { cityCodeSchema, fieldErrors } from '@pats/shared';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import { Prisma } from '@/generated/prisma';
 import { audit } from '../audit';
 import { db } from '../db';
+import { isUniqueViolation } from '../db-errors';
 import type { ActionResult } from './action-result';
 import { requireHq } from './guard';
 
@@ -44,7 +44,7 @@ export async function saveCityAction(cityId: string | null, _prev: ActionResult 
       await audit(hq.id, 'city.created', { type: 'City', id: city.id }, input);
     }
   } catch (err) {
-    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+    if (isUniqueViolation(err)) {
       return { ok: false, fields: { code: 'cities.codeTaken' } };
     }
     throw err;

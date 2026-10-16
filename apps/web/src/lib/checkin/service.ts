@@ -12,9 +12,10 @@ import {
 } from '@pats/shared';
 import type { z } from 'zod';
 import type { checkInCommitSchema, checkInPreviewSchema } from '@pats/shared';
-import { Prisma } from '@/generated/prisma';
+import type { Prisma } from '@/generated/prisma';
 import { requireCityAccess, type AuthUser } from '../auth/current-user';
 import { db } from '../db';
+import { isUniqueViolation } from '../db-errors';
 import { env } from '../env';
 import { AppError } from '../http/errors';
 import { getSetting } from '../settings';
@@ -137,8 +138,6 @@ export async function previewCheckIn(admin: AuthUser, input: PreviewInput, now =
     capacityReached: event.capacity != null && count >= event.capacity,
   };
 }
-
-const isUniqueViolation = (err: unknown) => err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002';
 
 /**
  * Step 2: record the check-in. Every rule is checked again; the QR nonce, the check-in row and
