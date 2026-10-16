@@ -16,7 +16,7 @@ import {
   registrationSchema,
   translate,
 } from '../src';
-import { toCssVariables } from '../src/tokens';
+import { brand, colors, toCssVariables, type ColorTokens } from '../src/tokens';
 
 describe('format', () => {
   it('formats counts and money in house style', () => {
@@ -129,7 +129,82 @@ describe('i18n', () => {
 describe('tokens', () => {
   it('emits light and dark variables', () => {
     const css = toCssVariables();
-    expect(css).toContain('--pats-accent:#7b68ee;');
+    expect(css).toContain('--pats-accent:#001836;');
     expect(css).toContain('prefers-color-scheme: dark');
   });
+
+  it('uses the crest navy as the light primary and accent', () => {
+    expect(colors.light.primary).toBe(brand.navy);
+    expect(colors.light.accent).toBe(brand.navy);
+    expect(colors.light.secondary).toBe(brand.maroon);
+  });
+
+  it('keeps errors a real red, not the brand maroon', () => {
+    for (const scheme of ['light', 'dark'] as const) {
+      const c = colors[scheme];
+      for (const key of ['danger', 'dangerText', 'dangerSolid'] as const) {
+        expect(c[key]).not.toBe(c.secondary);
+        expect(c[key]).not.toBe(brand.maroon);
+      }
+    }
+  });
+
+  // Every text/background pair the components use; DESIGN.md §2 lists the ratios.
+  const TEXT_PAIRS: [keyof ColorTokens, keyof ColorTokens][] = [
+    ['text', 'bg'],
+    ['text', 'surface'],
+    ['text', 'surfaceMuted'],
+    ['text', 'surfaceHover'],
+    ['textMuted', 'bg'],
+    ['textMuted', 'surface'],
+    ['textMuted', 'surfaceMuted'],
+    ['textMuted', 'surfaceHover'],
+    ['placeholder', 'surface'],
+    ['primaryText', 'primary'],
+    ['accentText', 'bg'],
+    ['accentText', 'surface'],
+    ['accentSubtleText', 'accentSubtle'],
+    ['secondaryText', 'secondary'],
+    ['secondarySubtleText', 'secondarySubtle'],
+    ['successText', 'successSubtle'],
+    ['successText', 'surface'],
+    ['warningText', 'warningSubtle'],
+    ['warningText', 'surface'],
+    ['dangerText', 'dangerSubtle'],
+    ['dangerText', 'surface'],
+    ['dangerText', 'bg'],
+    ['onSolid', 'dangerSolid'],
+  ];
+  // Non-text UI that must stay visible (WCAG 1.4.11, 3:1): focus ring, primary button edge.
+  const UI_PAIRS: [keyof ColorTokens, keyof ColorTokens][] = [
+    ['accent', 'surface'],
+    ['accent', 'bg'],
+    ['primary', 'surface'],
+    ['primary', 'bg'],
+  ];
+
+  for (const scheme of ['light', 'dark'] as const) {
+    it(`passes WCAG AA for every text pair in ${scheme}`, () => {
+      const c = colors[scheme];
+      for (const [fg, bg] of TEXT_PAIRS) {
+        expect(contrast(c[fg], c[bg]), `${fg} on ${bg}`).toBeGreaterThanOrEqual(4.5);
+      }
+      for (const [fg, bg] of UI_PAIRS) {
+        expect(contrast(c[fg], c[bg]), `${fg} on ${bg}`).toBeGreaterThanOrEqual(3);
+      }
+    });
+  }
 });
+
+/** WCAG 2.x contrast ratio of two #rrggbb colours. */
+function contrast(a: string, b: string): number {
+  const lum = (hex: string) => {
+    const [r, g, bl] = [1, 3, 5].map((i) => {
+      const v = parseInt(hex.slice(i, i + 2), 16) / 255;
+      return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * r! + 0.7152 * g! + 0.0722 * bl!;
+  };
+  const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
+  return (hi! + 0.05) / (lo! + 0.05);
+}

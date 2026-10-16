@@ -1,8 +1,9 @@
 /**
  * Design tokens: the single source of truth for colour, type, radius, spacing and motion.
  * Consumed by the web dashboard (as CSS variables, see `toCssVariables`) and by the Expo app
- * (as plain values, see apps/mobile/src/theme). Values follow the NEXUS visual language:
- * calm neutrals, a near-black primary action, and one violet accent. See docs/DESIGN.md.
+ * (as plain values, see apps/mobile/src/theme). Structure follows the NEXUS token conventions;
+ * colours come from the PATS crest: navy primary/accent, maroon secondary, cream-tinted
+ * surfaces. Status colours stay separate from the brand. See docs/DESIGN.md.
  */
 
 import palette from './colors.json';
@@ -26,13 +27,13 @@ export interface ColorTokens {
   text: string;
   /** Secondary text: descriptions, meta, labels. Passes 4.5:1 on surface. */
   textMuted: string;
-  /** Placeholder text only (never for content). */
+  /** Placeholder text only (never for content). Passes 4.5:1 on surface. */
   placeholder: string;
-  /** Primary action fill (onyx in light, near-white in dark). */
+  /** Primary action fill (crest navy in light, a light navy tint in dark). */
   primary: string;
   /** Text and icons on top of `primary`. */
   primaryText: string;
-  /** The single accent: focus rings, selection, switches, links. */
+  /** The brand accent (navy): focus rings, selection, switches, links. */
   accent: string;
   /** Accent used as text on surface (contrast-safe). */
   accentText: string;
@@ -40,6 +41,14 @@ export interface ColorTokens {
   accentSubtle: string;
   /** Text on `accentSubtle`. */
   accentSubtleText: string;
+  /** Secondary brand accent (crest maroon). Never used for errors: those are `danger*`. */
+  secondary: string;
+  /** Text and icons on top of `secondary`. */
+  secondaryText: string;
+  /** Tinted background for maroon chips and highlights. */
+  secondarySubtle: string;
+  /** Text on `secondarySubtle`. */
+  secondarySubtleText: string;
   success: string;
   successSubtle: string;
   successText: string;
@@ -58,7 +67,13 @@ export interface ColorTokens {
 }
 
 /** Raw palette lives in colors.json so plain Node (Expo's app.config.ts) can read it too. */
-export const colors: Record<ColorScheme, ColorTokens> = palette;
+export const colors: Record<ColorScheme, ColorTokens> = { light: palette.light, dark: palette.dark };
+
+/**
+ * The three colours sampled from the official crest. Use them for brand artwork (icon and
+ * splash backgrounds); UI code reads the semantic tokens in `colors` instead.
+ */
+export const brand: { navy: string; maroon: string; cream: string } = palette.brand;
 
 export const fonts = {
   /** Headings, numbers in stat tiles, the wordmark. */
@@ -131,6 +146,8 @@ export const size = {
   iconSm: 16,
   avatar: 40,
   logoMark: 28,
+  /** The crest in the web header and auth pages (files exist up to 6x this). */
+  crest: 40,
   /** App tab bar, excluding the home-indicator inset. */
   tabBar: 66,
   sidebar: 248,
