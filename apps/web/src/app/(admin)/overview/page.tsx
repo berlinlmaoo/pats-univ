@@ -1,4 +1,4 @@
-import { formatCount, formatDate } from '@pats/shared';
+import { DEFAULT_TIMEZONE, formatCount, formatDate, toZonedInput, zonedTimeToUtc } from '@pats/shared';
 import { ChevronRight, UserPlus } from 'lucide-react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
@@ -28,7 +28,11 @@ export default async function OverviewPage() {
   const t = await getT();
   const weekAgo = daysAgo(7);
 
-  const [cities, membersByCity, newByCity, toPrintByCity, recent] = await Promise.all([
+  // "Today" is the WIB calendar day; cities in other zones still count toward the HQ total.
+  const today = toZonedInput(new Date(), DEFAULT_TIMEZONE).date.split('-').map(Number) as [number, number, number];
+  const startOfToday = zonedTimeToUtc({ year: today[0], month: today[1], day: today[2], hour: 0, minute: 0 }, DEFAULT_TIMEZONE);
+
+  const [cities, membersByCity, newByCity, toPrintByCity, recent, checkInsToday] = await Promise.all([
     db.city.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true, code: true, waGroupUrl: true } }),
     db.member.groupBy({ by: ['cityId'], _count: { _all: true } }),
     db.member.groupBy({ by: ['cityId'], where: { joinedAt: { gte: weekAgo } }, _count: { _all: true } }),
@@ -42,6 +46,7 @@ export default async function OverviewPage() {
       take: 6,
       include: { city: { select: { name: true, timezone: true } }, cards: { select: { status: true }, orderBy: { createdAt: 'desc' }, take: 1 } },
     }),
+    db.checkIn.count({ where: { checkedInAt: { gte: startOfToday } } }),
   ]);
 
   const count = (rows: { cityId: string; _count: { _all: number } }[], cityId: string) =>
@@ -62,7 +67,7 @@ export default async function OverviewPage() {
         <Stat label={t('overview.totalMembers')} value={total} />
         <Stat label={t('overview.newThisWeek')} value={sum(newByCity)} />
         <Stat label={t('overview.cardsToPrint')} value={sum(toPrintByCity)} />
-        <Stat label={t('overview.cities')} value={cities.length} />
+        <Stat label={t('overview.checkInsToday')} value={checkInsToday} />
       </div>
 
       {total === 0 ? (

@@ -2,7 +2,7 @@
 
 Aplikasi keanggotaan PATS: KTM ber-NFC, check-in event oleh admin, XP & leaderboard, reward, laporan PR, social hub per kota, reservasi venue, roaming antar kota, dan dashboard HQ.
 
-Repo privat. Status: showcase prototype — **Phase 0 selesai** (lihat [docs/PHASE0-REPORT.md](docs/PHASE0-REPORT.md)). Prioritas: sistem absensi berbasis kartu (Phase 0–2).
+Repo privat. Status: showcase prototype — **Phase 0 dan 1 selesai** (lihat [docs/PHASE0-REPORT.md](docs/PHASE0-REPORT.md) dan [docs/PHASE1-REPORT.md](docs/PHASE1-REPORT.md)). Prioritas: sistem absensi berbasis kartu (Phase 0–2).
 
 ## Dokumen
 
@@ -38,7 +38,7 @@ pnpm dev:mobile                              # Expo; app memakai server di port 
 
 Akun demo (seed): HQ `hq@patsuniv.test`, admin kota `admin.jkt@patsuniv.test` / `admin.bdg@patsuniv.test`, member `rara.anindya@patsuniv.test` dst. Dengan `OTP_PROVIDER=demo` kode OTP tampil di layar.
 
-Cek sebelum push: `pnpm typecheck && pnpm lint && pnpm test`, plus `cargo test` di `tools/card-station`.
+Cek sebelum push: `pnpm typecheck && pnpm lint && pnpm test`, plus `cargo test` di `tools/card-station`. Matriks interaksi check-in (butuh `pnpm dev:web` jalan): `pnpm --filter @pats/web e2e:checkin`.
 
 ## Branch
 

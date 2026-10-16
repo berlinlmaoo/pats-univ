@@ -1,6 +1,6 @@
 'use client';
 
-import { Building2, LayoutGrid, LogOut, Menu, Settings2, ShieldCheck, Users, X, type LucideIcon } from 'lucide-react';
+import { Building2, CalendarDays, LayoutGrid, LogOut, Menu, Settings2, ShieldCheck, Users, X, type LucideIcon } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState, type ReactNode } from 'react';
@@ -12,10 +12,11 @@ import { Wordmark } from '@/components/ui/wordmark';
 import type { MessageKey } from '@pats/shared';
 import { cn } from '@/lib/cn';
 
-/** Pages built so far. Cards, Events and the later pages join this list as they ship. */
+/** Pages built so far. Cards and the later pages join this list as they ship. */
 const NAV: { href: string; labelKey: MessageKey; icon: LucideIcon }[] = [
   { href: '/overview', labelKey: 'nav.overview', icon: LayoutGrid },
   { href: '/members', labelKey: 'nav.members', icon: Users },
+  { href: '/events', labelKey: 'nav.events', icon: CalendarDays },
   { href: '/cities', labelKey: 'nav.cities', icon: Building2 },
   { href: '/admins', labelKey: 'nav.admins', icon: ShieldCheck },
   { href: '/settings', labelKey: 'nav.settings', icon: Settings2 },

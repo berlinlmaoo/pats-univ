@@ -94,7 +94,8 @@ export function formatDateTime(date: Date, locale: Locale, opts: DateFormatOptio
   return `${formatDate(date, locale, opts)}, ${formatTime(date, { timeZone: opts.timeZone })}`;
 }
 
-function zoneLabel(date: Date, timeZone: string): string {
+/** "WIB", "WITA", "WIT", or the UTC offset for other zones. */
+export function zoneLabel(date: Date, timeZone: string): string {
   const known = ZONE_LABEL[timeZone];
   if (known) return known;
   const name = new Intl.DateTimeFormat('en-US', { timeZone, timeZoneName: 'shortOffset' })

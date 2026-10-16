@@ -1,17 +1,21 @@
-import type { CardStatus } from '@pats/shared';
-import { QrCode, UserRound } from 'lucide-react-native';
+import { formatCount, type CardStatus, type CheckInHistoryResponse } from '@pats/shared';
+import { router } from 'expo-router';
+import { History, UserRound } from 'lucide-react-native';
 import { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { useAuth } from '@/auth';
 import { Badge, type BadgeTone } from '@/components/badge';
 import { Card } from '@/components/card';
 import { EmptyState } from '@/components/empty-state';
+import { ListRow } from '@/components/list-row';
 import { Notice } from '@/components/notice';
 import { Screen } from '@/components/screen';
 import { Text } from '@/components/text';
+import { CardQr } from '@/features/card-qr';
 import { KtmCard } from '@/features/ktm-card';
 import { useT } from '@/i18n';
-import { size, space, useColors } from '@/theme';
+import { useApi } from '@/lib/use-api';
+import { space } from '@/theme';
 
 const CARD_TONE: Record<CardStatus, BadgeTone> = {
   NOT_PRINTED: 'neutral',
@@ -26,10 +30,11 @@ const CARD_TONE: Record<CardStatus, BadgeTone> = {
 export default function CardScreen() {
   const { me, offline, reload } = useAuth();
   const t = useT();
-  const c = useColors();
   const [refreshing, setRefreshing] = useState(false);
   const member = me?.member;
+  const history = useApi<CheckInHistoryResponse>(member ? '/api/me/check-ins' : null);
   const firstName = (member?.fullName ?? me?.user.name ?? '').split(' ')[0] ?? '';
+  const attended = history.data?.checkIns.length ?? 0;
 
   return (
     <Screen
@@ -37,7 +42,7 @@ export default function CardScreen() {
       refreshing={refreshing}
       onRefresh={async () => {
         setRefreshing(true);
-        await reload();
+        await Promise.all([reload(), history.reload()]);
         setRefreshing(false);
       }}
     >
@@ -47,19 +52,21 @@ export default function CardScreen() {
       ) : (
         <>
           <KtmCard member={member} />
-          <Card style={styles.qr}>
-            <View style={[styles.qrIcon, { backgroundColor: c.surfaceMuted }]}>
-              <QrCode size={size.icon} color={c.textMuted} strokeWidth={1.75} />
-            </View>
-            <Text variant="bodySm" tone="textMuted" style={styles.flex}>
-              {t('app.cardQrSoon')}
-            </Text>
-          </Card>
+          <CardQr />
           <Card style={styles.status}>
             <Text variant="body" weight={500}>
               {t('app.physicalCard')}
             </Text>
             <Badge dot tone={CARD_TONE[member.cardStatus]} label={t(`cardStatusMember.${member.cardStatus}`)} />
+          </Card>
+          <Card style={styles.clip}>
+            <ListRow
+              first
+              icon={History}
+              title={t('app.attendanceRow')}
+              subtitle={history.data ? (attended ? t('app.attendanceCount', { count: formatCount(attended) }) : t('app.attendanceNone')) : undefined}
+              onPress={() => router.push('/history')}
+            />
           </Card>
         </>
       )}
@@ -68,8 +75,6 @@ export default function CardScreen() {
 }
 
 const styles = StyleSheet.create({
-  qr: { flexDirection: 'row', alignItems: 'center', gap: space[3], padding: space[4] },
-  qrIcon: { width: size.avatar, height: size.avatar, borderRadius: size.avatar / 2, alignItems: 'center', justifyContent: 'center' },
-  flex: { flex: 1 },
   status: { padding: space[4], gap: space[2] },
+  clip: { overflow: 'hidden' },
 });

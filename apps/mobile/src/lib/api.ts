@@ -37,6 +37,26 @@ export function errorKey(code: ApiFailure['code']): string {
       return 'errors.forbidden';
     case 'VALIDATION':
       return 'validation.invalid';
+    case 'NOT_FOUND':
+      return 'errors.notFound';
+    case 'EVENT_NOT_OPEN':
+      return 'errors.eventNotOpen';
+    case 'EVENT_ENDED':
+      return 'errors.eventEnded';
+    case 'QR_INVALID':
+      return 'errors.qrInvalid';
+    case 'QR_EXPIRED':
+      return 'errors.qrExpired';
+    case 'QR_USED':
+      return 'errors.qrUsed';
+    case 'TICKET_EXPIRED':
+      return 'errors.ticketExpired';
+    case 'MEMBER_INACTIVE':
+      return 'errors.memberInactive';
+    case 'MEMBER_OTHER_CITY':
+      return 'errors.memberOtherCity';
+    case 'ALREADY_CHECKED_IN':
+      return 'errors.alreadyCheckedIn';
     default:
       return 'errors.generic';
   }
@@ -67,9 +87,13 @@ async function request<T>(path: string, init: RequestInit & { token?: string } =
   return json as T;
 }
 
+export type Method = 'GET' | 'POST' | 'PATCH';
+
 export const api = {
   get: <T>(path: string, token?: string) => request<T>(path, { method: 'GET', token }),
   post: <T>(path: string, body: unknown, token?: string) =>
     request<T>(path, { method: 'POST', body: JSON.stringify(body), token }),
+  send: <T>(method: Method, path: string, body: unknown, token?: string) =>
+    request<T>(path, { method, body: body === undefined ? undefined : JSON.stringify(body), token }),
   refresh: (refreshToken: string) => request<AuthTokens>('/api/auth/refresh', { method: 'POST', body: JSON.stringify({ refreshToken }) }),
 };

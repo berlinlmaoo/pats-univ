@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
-const DASHBOARD = ['/overview', '/members', '/cities', '/admins', '/settings'];
+const DASHBOARD = ['/overview', '/members', '/events', '/cities', '/admins', '/settings'];
 
 /**
  * Cheap gate for dashboard routes: no session cookie means straight to /login. The session
@@ -19,5 +19,5 @@ export function proxy(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/overview/:path*', '/members/:path*', '/cities/:path*', '/admins/:path*', '/settings/:path*'],
+  matcher: ['/overview/:path*', '/members/:path*', '/events/:path*', '/cities/:path*', '/admins/:path*', '/settings/:path*'],
 };

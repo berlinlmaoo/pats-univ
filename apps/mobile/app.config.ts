@@ -34,6 +34,16 @@ const config: ExpoConfig = {
     'expo-localization',
     'expo-font',
     [
+      'expo-camera',
+      {
+        // Crew scan member QR codes at the door. The member app never opens the camera.
+        cameraPermission: 'PATS University uses the camera to scan member check-in QR codes. / PATS University memakai kamera untuk memindai QR check-in member.',
+        microphonePermission: false,
+        recordAudioAndroid: false,
+      },
+    ],
+    '@react-native-community/datetimepicker',
+    [
       'expo-splash-screen',
       {
         // The full crest; the same art sits on the light and the dark background.

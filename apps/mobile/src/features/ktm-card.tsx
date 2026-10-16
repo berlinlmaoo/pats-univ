@@ -5,7 +5,7 @@ import { Text } from '@/components/text';
 import { useI18n } from '@/i18n';
 import { radius, space, useColors } from '@/theme';
 
-/** Digital KTM (member card), CR80 proportions. The rotating QR joins in Phase 1. */
+/** Digital KTM (member card), CR80 proportions. The rotating check-in QR sits below it (features/card-qr). */
 export function KtmCard({ member }: { member: NonNullable<MeResponse['member']> }) {
   const c = useColors();
   const { t, locale } = useI18n();

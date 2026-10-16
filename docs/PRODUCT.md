@@ -538,6 +538,14 @@ Prototype mencakup seluruh visi PRD, tetapi beberapa bagian dibangun pada **demo
 19. **Login = email + kode OTP 6 digit lewat email (SMTP)** untuk saat ini — membatalkan poin 16. Registrasi: email wajib (identitas login), nomor WhatsApp tetap wajib (untuk grup WA kota, bukan login). `OTP_PROVIDER` tetap pluggable (§10.6): `email` dipakai sekarang, `demo` (kode di layar) untuk showcase, provider HP (`whatsapp-bridge`, `cloud-api`/Firebase) tercatat sebagai jalur pindah nanti. Dashboard super admin mendapat daftar halaman tetap (§5.3): Ringkasan, Member, Kartu, Kota & venue, Admin lokal, Event sebagai fokus Phase 0–2; Broadcast, Reward & XP, Roaming, Rekap traffic, Pengaturan, Audit log menyusul.
 20. **Standar desain** (§5.4): app + dashboard bersih setara Notion/Linear dengan bahasa visual NEXUS — netral tenang, satu aksen, hierarki jelas, spasi lega, tanpa teks terpotong, ikon konsisten, empty/error state wajib, angka `Rp 6.000.000` / `3.800`, tanggal `14 Oct`. Token desain sekali di `packages/shared` untuk Expo + web. Sebelum layar pertama: `DESIGN.md` pats-univ (konvensi token NEXUS) dan tiap layar dicek dengan checklist craft Impeccable.
 
+### 16 Oktober 2026 — keputusan kecil saat build Phase 1 (bisa diubah)
+
+21. **Scan dua langkah**: scan QR → layar hasil (nama, foto, NIM, kota) tanpa mencatat apa pun → admin menekan *Konfirmasi*. Agar admin tidak berpacu dengan TTL QR (45 detik), server memberi **tiket konfirmasi** bertanda tangan (berlaku 120 detik, terikat ke admin, event, dan nonce QR itu). Nonce QR baru dipakai saat konfirmasi, jadi QR yang sama tetap tidak bisa dipakai dua kali.
+22. **Kuota event = peringatan**, bukan blokir: saat kuota tercapai crew melihat peringatan dan tetap bisa check-in (crew yang memutuskan di pintu).
+23. **Membuka check-in lebih awal**: kalau admin membuka check-in sebelum jendela yang direncanakan, jendela langsung dimulai saat itu (tercatat di audit log). Membuka setelah jendela lewat ditolak; ubah jam event dulu.
+24. **Draf event** tidak terlihat oleh member; event baru langsung dipublikasikan kecuali "Publikasikan sekarang" dimatikan.
+25. Member dari kota lain hanya lolos check-in bila punya `RoamingRequest` `ATTENDANCE` `APPROVED` (aturan §6.1.5 sudah ditegakkan server; alur request roaming-nya di Phase 4).
+
 ### Sebelum 16 Oktober 2026
 
 - PRD + Visual Flowchart tim (4 bagian): KTM & registrasi, self check-in & gamification, social hub & roaming, admin & HQ.

@@ -1,10 +1,10 @@
-import { ageOn, formatDate, formatPhone } from '@pats/shared';
+import { ageOn, formatCount, formatDate, formatPhone, formatTime } from '@pats/shared';
 import { ChevronLeft } from 'lucide-react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { DetailList } from '@/components/dashboard/detail-list';
-import { ActiveBadge, CardStatusBadge } from '@/components/dashboard/status';
+import { ActiveBadge, CardStatusBadge, MethodBadge } from '@/components/dashboard/status';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardHeader } from '@/components/ui/card';
 import { db } from '@/lib/db';
@@ -21,6 +21,17 @@ async function load(id: string) {
       user: { select: { email: true, phone: true } },
       city: { select: { id: true, name: true, code: true, timezone: true } },
       cards: { orderBy: { createdAt: 'desc' }, take: 1, select: { status: true } },
+      checkIns: {
+        orderBy: { checkedInAt: 'desc' },
+        take: 20,
+        select: {
+          id: true,
+          checkedInAt: true,
+          method: true,
+          event: { select: { id: true, title: true, city: { select: { timezone: true } } } },
+        },
+      },
+      _count: { select: { checkIns: true } },
     },
   });
 }
@@ -79,24 +90,56 @@ export default async function MemberPage({ params }: Params) {
       </div>
 
       <div className="grid items-start gap-6 lg:grid-cols-5">
-        <Card className="min-w-0 lg:col-span-3">
-          <CardHeader title={t('members.profile')} className="pb-3" />
-          <div className="border-t border-border">
-            <DetailList
-              items={[
-                { label: t('members.fullName'), value: member.fullName },
-                {
-                  label: t('members.dateOfBirth'),
-                  value: `${formatDate(dob, t.locale, { timeZone: 'UTC', withYear: true })} · ${t('members.age', { age: ageOn(dobParts, new Date(), tz) })}`,
-                },
-                { label: t('members.city'), value: `${member.city.name} (${member.city.code})` },
-                { label: t('members.song'), value: member.favoriteSong || dash },
-                { label: t('members.genre'), value: member.favoriteGenre || dash },
-                { label: t('members.quotes'), value: member.quotes ? `“${member.quotes}”` : dash },
-              ]}
+        <div className="flex min-w-0 flex-col gap-6 lg:col-span-3">
+          <Card className="min-w-0">
+            <CardHeader title={t('members.profile')} className="pb-3" />
+            <div className="border-t border-border">
+              <DetailList
+                items={[
+                  { label: t('members.fullName'), value: member.fullName },
+                  {
+                    label: t('members.dateOfBirth'),
+                    value: `${formatDate(dob, t.locale, { timeZone: 'UTC', withYear: true })} · ${t('members.age', { age: ageOn(dobParts, new Date(), tz) })}`,
+                  },
+                  { label: t('members.city'), value: `${member.city.name} (${member.city.code})` },
+                  { label: t('members.song'), value: member.favoriteSong || dash },
+                  { label: t('members.genre'), value: member.favoriteGenre || dash },
+                  { label: t('members.quotes'), value: member.quotes ? `“${member.quotes}”` : dash },
+                ]}
+              />
+            </div>
+          </Card>
+
+          <Card className="min-w-0">
+            <CardHeader
+              title={t('members.attendance')}
+              action={<span className="font-display text-title3 tabular-nums text-fg">{formatCount(member._count.checkIns)}</span>}
+              className="pb-3"
             />
-          </div>
-        </Card>
+            {member.checkIns.length === 0 ? (
+              <p className="border-t border-border px-5 py-4 text-body-sm text-muted">{t('members.attendanceEmpty')}</p>
+            ) : (
+              <ul className="divide-y divide-border border-t border-border">
+                {member.checkIns.map((c) => {
+                  const ctz = c.event.city.timezone;
+                  return (
+                    <li key={c.id} className="relative flex items-center gap-3 px-5 py-3 transition-colors hover:bg-surface-hover">
+                      <div className="min-w-0 flex-1">
+                        <Link href={`/events/${c.event.id}`} className="block truncate text-body-sm font-medium text-fg after:absolute after:inset-0">
+                          {c.event.title}
+                        </Link>
+                        <p className="truncate text-caption tabular-nums text-muted">
+                          {formatDate(c.checkedInAt, t.locale, { timeZone: ctz })}, {formatTime(c.checkedInAt, { timeZone: ctz })}
+                        </p>
+                      </div>
+                      <MethodBadge method={c.method} t={t} />
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </Card>
+        </div>
 
         <div className="flex min-w-0 flex-col gap-6 lg:col-span-2">
           <Card>

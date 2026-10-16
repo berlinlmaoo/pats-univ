@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { otpEmail, welcomeEmail } from '../src/lib/email/templates';
+import { newNonce, signQr, signTicket, verifyQr, verifyTicket } from '../src/lib/checkin/token';
 import { hit } from '../src/lib/rate-limit';
 
 describe('rate limit', () => {
@@ -35,5 +36,39 @@ describe('emails', () => {
     expect(mail.html).not.toContain('<script>');
     expect(mail.html).toContain('&lt;script&gt;');
     expect(mail.text).toContain('will share the WhatsApp group link');
+  });
+});
+
+describe('check-in tokens', () => {
+  const key = 'k'.repeat(40);
+  const now = new Date('2026-10-16T13:00:00Z');
+  const in45s = new Date(now.getTime() + 45_000);
+  const memberId = 'cmva7sbb5001wr3ufh6bi8en0';
+
+  it('round-trips a QR and refuses it once expired', () => {
+    const token = signQr(key, { memberId, nonce: newNonce(), expiresAt: in45s });
+    const ok = verifyQr(key, token, now);
+    expect(ok.ok && ok.claims.memberId).toBe(memberId);
+    expect(verifyQr(key, token, new Date(now.getTime() + 46_000))).toEqual({ ok: false, reason: 'expired' });
+  });
+
+  it('rejects tampering, other keys and foreign codes', () => {
+    const token = signQr(key, { memberId, nonce: newNonce(), expiresAt: in45s });
+    const parts = token.split('.');
+    // Pushing the expiry out breaks the signature.
+    const forged = [parts[0], parts[1], parts[2], 'zzzzzz', parts[4]].join('.');
+    expect(verifyQr(key, forged, now)).toEqual({ ok: false, reason: 'invalid' });
+    expect(verifyQr('x'.repeat(40), token, now)).toEqual({ ok: false, reason: 'invalid' });
+    expect(verifyQr(key, 'https://example.com', now)).toEqual({ ok: false, reason: 'invalid' });
+    expect(verifyQr(key, '', now)).toEqual({ ok: false, reason: 'invalid' });
+  });
+
+  it('binds a ticket to its admin and event, and a QR is not a ticket', () => {
+    const nonce = newNonce();
+    const ticket = signTicket(key, { adminId: 'cadmin00000000001', eventId: 'cevent00000000001', memberId, nonce, expiresAt: in45s });
+    const ok = verifyTicket(key, ticket, now);
+    expect(ok.ok && ok.claims).toMatchObject({ adminId: 'cadmin00000000001', eventId: 'cevent00000000001', nonce });
+    expect(verifyTicket(key, signQr(key, { memberId, nonce, expiresAt: in45s }), now).ok).toBe(false);
+    expect(verifyQr(key, ticket, now).ok).toBe(false);
   });
 });
