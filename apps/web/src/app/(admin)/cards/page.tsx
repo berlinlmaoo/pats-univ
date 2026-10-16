@@ -214,7 +214,7 @@ export default async function CardsPage({ searchParams }: { searchParams: Promis
               <Tr key={c.id} className="relative">
                 <Td className="w-full max-w-0 sm:w-auto sm:max-w-72">
                   <Link href={`/members/${c.member.id}`} className="block min-w-0 after:absolute after:inset-0 focus-visible:outline-none">
-                    <span className="block truncate font-medium text-fg">{c.member.fullName}</span>
+                    <span className="block break-words font-medium text-fg">{c.member.fullName}</span>
                     <span className="block truncate text-caption tabular-nums text-muted">
                       {c.member.nim} · {c.member.city.name}
                     </span>

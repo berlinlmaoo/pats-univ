@@ -1,4 +1,4 @@
-import { inspectTag, normalizeUid, tokenFromCardUrl, type TagInspection, type Transceive } from '@pats/shared';
+import { inspectTag, ndefLayout, normalizeUid, SimulatedNtag, tokenFromCardUrl, type TagInspection, type Transceive } from '@pats/shared';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { Platform } from 'react-native';
 
@@ -30,7 +30,25 @@ function load(): NfcModule | null {
 
 export type NfcSupport = 'ready' | 'disabled' | 'unsupported' | 'needsDevBuild';
 
+/**
+ * Dev-only chip simulator, for simulators (no NFC) and screenshots: EXPO_PUBLIC_NFC_SIM=blank
+ * (a factory-blank NTAG215) or "<uid>,<card url>" (an encoded card). Never active in a release build.
+ */
+const SIM = __DEV__ ? process.env.EXPO_PUBLIC_NFC_SIM : undefined;
+let simTag: SimulatedNtag | null = null;
+
+function simulated(): SimulatedNtag {
+  if (simTag) return simTag;
+  if (!SIM || SIM === 'blank') return (simTag = new SimulatedNtag('NTAG215', '04A1B2C3D4E5F6'));
+  const [uid, url] = SIM.split(',');
+  const tag = new SimulatedNtag('NTAG215', uid);
+  const layout = ndefLayout(url!, tag.memory.slice(16, 21), tag.chip);
+  for (const p of layout.pages) tag.memory.splice(p.page * 4, 4, ...p.data);
+  return (simTag = tag);
+}
+
 export async function nfcSupport(): Promise<NfcSupport> {
+  if (SIM) return 'ready';
   const m = load();
   if (!m) return Platform.OS === 'web' ? 'unsupported' : 'needsDevBuild';
   const manager = m.default;
@@ -67,6 +85,12 @@ function isCancel(err: unknown): boolean {
  * `prompt` is the line in the system sheet and `done` replaces it on success.
  */
 export async function withTag<T>(prompt: string, fn: (io: Transceive, tagId: string | null) => Promise<T>, done?: (result: T) => string): Promise<T> {
+  if (SIM) {
+    const tag = simulated();
+    tag.reset();
+    await new Promise((r) => setTimeout(r, 600));
+    return fn(tag.transceive, null);
+  }
   const m = load();
   if (!m) throw new Error('NFC_UNAVAILABLE');
   const { default: manager, NfcTech } = m;
