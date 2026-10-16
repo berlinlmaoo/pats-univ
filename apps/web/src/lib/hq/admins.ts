@@ -3,10 +3,10 @@
 import { emailSchema, fieldErrors, phoneSchema } from '@pats/shared';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import { Prisma } from '@/generated/prisma';
 import { audit } from '../audit';
 import { revokeAllSessions } from '../auth/sessions';
 import { db } from '../db';
+import { isUniqueViolation } from '../db-errors';
 import type { ActionResult } from './action-result';
 import { requireHq } from './guard';
 
@@ -29,7 +29,7 @@ export async function createAdminAction(_prev: ActionResult | null, form: FormDa
     const user = await db.user.create({ data: { ...parsed.data, role: 'LOCAL_ADMIN' } });
     await audit(hq.id, 'admin.created', { type: 'User', id: user.id }, { cityId: city.id, email: user.email });
   } catch (err) {
-    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+    if (isUniqueViolation(err)) {
       return { ok: false, fields: { email: 'admins.emailTaken' } };
     }
     throw err;

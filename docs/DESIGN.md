@@ -1,6 +1,6 @@
 # PATS University — Design
 
-Version 1.1, 16 Oct 2026 (brand colours and crest from the official logo). Applies to the HQ dashboard, the public `/join` page, the Expo app and transactional emails.
+Version 1.2, 16 Oct 2026 (Phase 1: check-in QR, scanner, event badges; 1.1 brought the brand colours and crest). Applies to the HQ dashboard, the public `/join` page, the Expo app and transactional emails.
 
 **Bar:** Notion/Linear-grade polish, in the NEXUS visual language (PRODUCT.md §5.4), coloured by the PATS crest. This means calm warm neutrals, one brand accent (navy) and clear hierarchy. Nothing may be clipped, and every screen has empty, loading and error states.
 
@@ -132,6 +132,7 @@ Status colour is **meaning**, never decoration. Card status badges, for example,
   | `pill` | — | Badges, avatars |
 
 - **Control heights:** 32 / 40 / 48. Primary form actions use 48 (`lg`). The minimum touch target in the app is 44.
+- **Check-in sizes** (Phase 1): the member's QR is drawn at `size.qr` (224, snapped to whole points per module so no seams show), the crew viewfinder is `size.scanFrame` (248), and the scan result avatar is `size.avatarLg` (64).
 - **Layout widths:**
   - Sidebar: 248
   - Dashboard content: max 1120
@@ -157,6 +158,9 @@ Web components are in `apps/web/src/components/ui` and the app's are in `apps/mo
 | Page header (dashboard) | Left-aligned title1, then the muted description (max 2 lines), actions on the right, and a hairline below. |
 | Table (dashboard) | Header row 40 on `surfaceMuted`; body rows 56. Secondary columns hide at small widths. A table scrolls inside its card, never the page. The row's primary link covers the whole row. |
 | Icons | One set: **Lucide** (`lucide-react` / `lucide-react-native`), outline, stroke 1.75 (2 for small status icons), sized 16 in controls and 20 in wells. No emoji as icons. |
+| Check-in QR (app) | Navy modules on white (`light.primary` on `light.surface`) in **both** themes, because scanners need the contrast. A thin accent progress bar shows time to the next code; the screen stays awake while it is shown. |
+| Scanner (app) | Full-screen camera with a dark overlay built from the `dark` tokens whatever the system theme, since the feed is dark. Results come up in a bottom card in the current theme: who it is first (avatar, name, NIM, city), then one primary action. |
+| Event phase badge | `draft` neutral, `upcoming` accent, `open` success, `closed` warning, `ended` neutral. Check-in method badges: NFC accent, App QR neutral, Manual warning (HQ audits the fallback). |
 
 ## 6. Brand assets
 

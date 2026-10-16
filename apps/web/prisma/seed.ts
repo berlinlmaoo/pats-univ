@@ -1,6 +1,7 @@
 /**
- * Demo data for Phase 0 (PLAN.md §4): 3 cities, 1 HQ account, 2 city admins, 20 members,
- * 2 venues, 3 events and every setting at its default. Safe to re-run: existing rows are kept.
+ * Demo data (PLAN.md §4): 3 cities, 1 HQ account, 2 city admins, 20 members, 2 venues,
+ * 3 upcoming events plus one live Jakarta event with check-in open, and every setting at its
+ * default. Safe to re-run: existing rows are kept.
  * City codes are placeholders until the team confirms the launch cities (D2 / T7).
  */
 import { PrismaPg } from '@prisma/adapter-pg';
@@ -166,6 +167,27 @@ async function main() {
         checkInOpensAt: new Date(startsAt.getTime() - hour),
         checkInClosesAt: new Date(startsAt.getTime() + 6 * hour),
         status: 'PUBLISHED',
+      },
+    });
+  }
+
+  // Phase 1 demo: one Jakarta event that is on right now, with check-in already open.
+  const liveTitle = 'PATS Warm-up Night';
+  const jktId = cities.get('JKT')!.id;
+  if (!(await db.event.findFirst({ where: { cityId: jktId, title: liveTitle } }))) {
+    const venue = await db.venue.findFirst({ where: { cityId: jktId, name: 'PATS Senopati' } });
+    const startsAt = new Date(Math.floor((now - hour) / (30 * 60 * 1000)) * 30 * 60 * 1000);
+    await db.event.create({
+      data: {
+        cityId: jktId,
+        venueId: venue?.id,
+        title: liveTitle,
+        description: 'Live demo event: check-in is open, so the crew can scan right away.',
+        startsAt,
+        endsAt: new Date(startsAt.getTime() + 6 * hour),
+        checkInOpensAt: new Date(startsAt.getTime() - hour),
+        checkInClosesAt: new Date(startsAt.getTime() + 6 * hour),
+        status: 'OPEN',
       },
     });
   }

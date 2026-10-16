@@ -1,6 +1,6 @@
 import type { AuthTokens, LoginResponse, MeResponse } from '@pats/shared';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { api, ApiFailure } from '@/lib/api';
+import { api, ApiFailure, type Method } from '@/lib/api';
 import { storage } from '@/lib/storage';
 
 const TOKENS_KEY = 'pats.tokens';
@@ -17,6 +17,8 @@ interface Auth {
   signOut: () => Promise<void>;
   /** Re-fetches /api/me; returns false when offline. */
   reload: () => Promise<boolean>;
+  /** Authenticated API call. A revoked or disabled session signs the user out. */
+  call: <T>(method: Method, path: string, body?: unknown) => Promise<T>;
 }
 
 const AuthContext = createContext<Auth | null>(null);
@@ -105,7 +107,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await clear();
   }, [clear]);
 
-  const value = useMemo(() => ({ status, me, offline, signIn, signOut, reload }), [status, me, offline, signIn, signOut, reload]);
+  const call = useCallback(
+    async <T,>(method: Method, path: string, body?: unknown): Promise<T> => {
+      try {
+        return await api.send<T>(method, path, body, await accessToken());
+      } catch (err) {
+        if (err instanceof ApiFailure && err.code === 'UNAUTHENTICATED') await clear();
+        throw err;
+      }
+    },
+    [accessToken, clear],
+  );
+
+  const value = useMemo(
+    () => ({ status, me, offline, signIn, signOut, reload, call }),
+    [status, me, offline, signIn, signOut, reload, call],
+  );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

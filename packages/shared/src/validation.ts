@@ -129,3 +129,62 @@ export function fieldErrors(error: z.ZodError): Record<string, string> {
   }
   return out;
 }
+
+// ─── Events & check-in (Phase 1) ──────────────────────────────────────────────
+
+const optionalInt = (min: number, max: number) =>
+  z.preprocess(
+    (v) => (v === '' || v === null || v === undefined ? undefined : v),
+    z.coerce.number('validation.numberInvalid').int('validation.numberInvalid').min(min, 'validation.numberRange').max(max, 'validation.numberRange').optional(),
+  );
+
+/**
+ * Create/edit an event, from the dashboard form or the admin app. Times are wall-clock in the
+ * event city's zone; the server turns them into UTC with `eventTimesFromInput`.
+ */
+export const eventInputSchema = z.object({
+  title: z.string('validation.required').trim().min(2, 'validation.required').max(120, 'validation.tooLong'),
+  description: z.string().trim().max(2000, 'validation.tooLong').optional().default(''),
+  cityId: z.string('validation.cityRequired').trim().min(1, 'validation.cityRequired'),
+  venueId: z.preprocess((v) => (v === '' ? undefined : v), z.string().trim().optional()),
+  date: z.string('validation.required').trim().refine((v) => parseIsoDate(v) !== null, 'validation.dateInvalid'),
+  startTime: z.string('validation.required').trim().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'validation.timeInvalid'),
+  endTime: z.string('validation.required').trim().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'validation.timeInvalid'),
+  opensBeforeMinutes: z.preprocess(
+    (v) => (v === '' || v === null || v === undefined ? undefined : v),
+    z.coerce.number('validation.numberInvalid').int('validation.numberInvalid').min(0, 'validation.numberRange').max(720, 'validation.numberRange').default(60),
+  ),
+  capacity: optionalInt(1, 100_000),
+  /** Draft events are hidden from members. */
+  publish: z.preprocess((v) => v === true || v === 'true' || v === 'on', z.boolean()).default(true),
+});
+export type EventInput = z.input<typeof eventInputSchema>;
+export type EventFields = z.output<typeof eventInputSchema>;
+
+export const eventActionSchema = z.object({ action: z.enum(['publish', 'open', 'close']) });
+export type EventAction = z.output<typeof eventActionSchema>['action'];
+
+export const MANUAL_REASON_MIN = 3;
+
+/** What the scanner sends: a scanned app QR, or a member picked by name (manual). */
+export const checkInSubjectSchema = z.discriminatedUnion('method', [
+  z.object({ method: z.literal('APP_QR'), token: z.string().trim().min(1).max(512) }),
+  z.object({ method: z.literal('MANUAL'), memberId: z.string().trim().min(1).max(64) }),
+]);
+
+export const checkInPreviewSchema = z.object({ eventId: z.string().trim().min(1) }).and(checkInSubjectSchema);
+
+/** Confirm after the preview: APP_QR carries the preview's ticket, MANUAL a mandatory reason. */
+export const checkInCommitSchema = z.discriminatedUnion('method', [
+  z.object({ method: z.literal('APP_QR'), eventId: z.string().trim().min(1), ticket: z.string().trim().min(1).max(1024) }),
+  z.object({
+    method: z.literal('MANUAL'),
+    eventId: z.string().trim().min(1),
+    memberId: z.string().trim().min(1).max(64),
+    reason: z
+      .string('validation.reasonRequired')
+      .trim()
+      .min(MANUAL_REASON_MIN, 'validation.reasonRequired')
+      .max(200, 'validation.tooLong'),
+  }),
+]);

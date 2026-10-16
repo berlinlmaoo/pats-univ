@@ -13,6 +13,7 @@ export function Button({
   icon,
   style,
   compact,
+  labelColor,
   ...props
 }: Omit<PressableProps, 'style' | 'children'> & {
   label: string;
@@ -21,6 +22,8 @@ export function Button({
   icon?: ReactNode;
   style?: ViewStyle;
   compact?: boolean;
+  /** Overrides the label colour, for buttons on a fixed dark backdrop (the scanner). */
+  labelColor?: string;
 }) {
   const c = useColors();
   const fill: Record<Variant, ViewStyle> = {
@@ -56,7 +59,7 @@ export function Button({
             variant={compact ? 'bodySm' : 'body'}
             weight={600}
             tone={tone}
-            style={variant === 'danger' ? { color: c.onSolid } : undefined}
+            style={labelColor ? { color: labelColor } : variant === 'danger' ? { color: c.onSolid } : undefined}
             numberOfLines={1}
           >
             {label}

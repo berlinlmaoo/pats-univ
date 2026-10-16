@@ -28,3 +28,10 @@ export type OtpPurpose = (typeof OTP_PURPOSES)[number];
 /** Values of the `OTP_PROVIDER` env var (PRODUCT.md §10.6). */
 export const OTP_PROVIDERS = ['email', 'demo', 'whatsapp-bridge', 'cloud-api'] as const;
 export type OtpProvider = (typeof OTP_PROVIDERS)[number];
+
+export const EVENT_STATUSES = ['DRAFT', 'PUBLISHED', 'OPEN', 'CLOSED'] as const;
+export type EventStatus = (typeof EVENT_STATUSES)[number];
+
+/** Order of preference at the door (PRODUCT.md §6.1): physical card, app QR, then manual. */
+export const CHECK_IN_METHODS = ['NFC', 'APP_QR', 'MANUAL'] as const;
+export type CheckInMethod = (typeof CHECK_IN_METHODS)[number];

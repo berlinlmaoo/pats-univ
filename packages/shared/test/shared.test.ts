@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
   ageOn,
+  fieldErrors,
+  checkInCommitSchema,
+  eventInputSchema,
+  eventPhase,
+  eventTimesFromInput,
+  isCheckInOpen,
+  toZonedInput,
+  zonedTimeToUtc,
   dictionaries,
   en,
   formatCount,
@@ -208,3 +216,50 @@ function contrast(a: string, b: string): number {
   const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
   return (hi! + 0.05) / (lo! + 0.05);
 }
+
+describe('events', () => {
+  const base = {
+    startsAt: new Date('2026-10-18T13:00:00Z'),
+    endsAt: new Date('2026-10-18T19:00:00Z'),
+    checkInOpensAt: new Date('2026-10-18T12:00:00Z'),
+    checkInClosesAt: new Date('2026-10-18T19:00:00Z'),
+  };
+
+  it('derives the phase from status and window', () => {
+    const at = (iso: string) => new Date(iso);
+    expect(eventPhase({ ...base, status: 'DRAFT' }, at('2026-10-18T14:00:00Z'))).toBe('draft');
+    expect(eventPhase({ ...base, status: 'PUBLISHED' }, at('2026-10-18T14:00:00Z'))).toBe('upcoming');
+    expect(eventPhase({ ...base, status: 'OPEN' }, at('2026-10-18T11:00:00Z'))).toBe('upcoming');
+    expect(eventPhase({ ...base, status: 'OPEN' }, at('2026-10-18T14:00:00Z'))).toBe('open');
+    expect(eventPhase({ ...base, status: 'OPEN' }, at('2026-10-18T19:00:01Z'))).toBe('ended');
+    expect(eventPhase({ ...base, status: 'CLOSED' }, at('2026-10-18T14:00:00Z'))).toBe('closed');
+    expect(eventPhase({ ...base, status: 'CLOSED' }, at('2026-10-19T00:00:00Z'))).toBe('ended');
+    expect(isCheckInOpen({ ...base, status: 'PUBLISHED' }, at('2026-10-18T14:00:00Z'))).toBe(false);
+  });
+
+  it('converts city wall time to UTC and back', () => {
+    expect(zonedTimeToUtc({ year: 2026, month: 10, day: 18, hour: 20, minute: 0 }, 'Asia/Jakarta').toISOString()).toBe('2026-10-18T13:00:00.000Z');
+    expect(zonedTimeToUtc({ year: 2026, month: 10, day: 18, hour: 20, minute: 0 }, 'Asia/Jayapura').toISOString()).toBe('2026-10-18T11:00:00.000Z');
+    expect(toZonedInput(new Date('2026-10-18T17:30:00Z'), 'Asia/Jakarta')).toEqual({ date: '2026-10-19', time: '00:30' });
+  });
+
+  it('rolls a night past midnight and opens the window early', () => {
+    const times = eventTimesFromInput({ date: '2026-10-18', startTime: '20:00', endTime: '02:00', opensBeforeMinutes: 60 }, 'Asia/Jakarta')!;
+    expect(times.startsAt.toISOString()).toBe('2026-10-18T13:00:00.000Z');
+    expect(times.endsAt.toISOString()).toBe('2026-10-18T19:00:00.000Z');
+    expect(times.checkInOpensAt.toISOString()).toBe('2026-10-18T12:00:00.000Z');
+    expect(times.checkInClosesAt).toEqual(times.endsAt);
+    expect(eventTimesFromInput({ date: '2026-02-30', startTime: '20:00', endTime: '02:00', opensBeforeMinutes: 0 }, 'Asia/Jakarta')).toBeNull();
+  });
+
+  it('validates event and check-in input with i18n keys', () => {
+    const ok = eventInputSchema.parse({ title: ' Friday ', cityId: 'c1', date: '2026-10-18', startTime: '20:00', endTime: '02:00', capacity: '' });
+    expect(ok).toMatchObject({ title: 'Friday', opensBeforeMinutes: 60, capacity: undefined, publish: true });
+    const bad = eventInputSchema.safeParse({ title: '', cityId: 'c1', date: 'x', startTime: '25:00', endTime: '02:00' });
+    expect(bad.success).toBe(false);
+    expect(fieldErrors(bad.error!)).toMatchObject({ title: 'validation.required', date: 'validation.dateInvalid', startTime: 'validation.timeInvalid' });
+    const manual = checkInCommitSchema.safeParse({ method: 'MANUAL', eventId: 'e1', memberId: 'm1', reason: ' ' });
+    expect(manual.success).toBe(false);
+    expect(fieldErrors(manual.error!)).toEqual({ reason: 'validation.reasonRequired' });
+  });
+});

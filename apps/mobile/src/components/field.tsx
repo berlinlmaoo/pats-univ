@@ -1,5 +1,5 @@
 import { useState, type ComponentRef, type Ref } from 'react';
-import { StyleSheet, TextInput, View, type TextInputProps } from 'react-native';
+import { Platform, StyleSheet, TextInput, View, type TextInputProps } from 'react-native';
 import { radius, size, space, textStyle, useColors } from '@/theme';
 import { Text } from './text';
 
@@ -34,6 +34,8 @@ export function Input({
           backgroundColor: c.surface,
           borderColor: invalid ? c.danger : focused ? c.accent : c.borderStrong,
         },
+        // Web preview: the accent border is the focus indicator, as on native.
+        Platform.OS === 'web' && styles.noOutline,
         style,
       ]}
       {...props}
@@ -70,4 +72,5 @@ const styles = StyleSheet.create({
     paddingVertical: 0,
   },
   field: { gap: space[1.5] },
+  noOutline: { outlineWidth: 0 },
 });

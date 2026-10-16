@@ -145,6 +145,12 @@ export const size = {
   icon: 20,
   iconSm: 16,
   avatar: 40,
+  /** Large avatar on the scan result. */
+  avatarLg: 64,
+  /** The member's check-in QR (needs ~220 pt to scan from arm's length). */
+  qr: 224,
+  /** Viewfinder square on the crew scanner. */
+  scanFrame: 248,
   logoMark: 28,
   /** The crest in the web header and auth pages (files exist up to 6x this). */
   crest: 40,
