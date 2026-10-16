@@ -1,17 +1,17 @@
 import 'server-only';
 import { randomInt } from 'node:crypto';
 import {
-  canSpin,
   isRedeemExpired,
-  pickWeighted,
   redeemExpiry,
   rewardInput,
+  can,
 } from '@pats/shared';
 import type { Prisma } from '@/generated/prisma';
 import { requireCityAccess, type AuthUser } from '../auth/current-user';
 import { db } from '../db';
 import { AppError } from '../http/errors';
 import { getSetting } from '../settings';
+import { expireXp, xpLots, spendingSlices } from './xp';
 import { atomic } from './transaction';
 
 type Tx = Prisma.TransactionClient;
@@ -22,6 +22,7 @@ const newCode = () =>
   );
 
 export async function balance(tx: Tx, memberId: string) {
+  await expireXp(tx, memberId);
   return (
     (
       await tx.xpLedger.aggregate({
@@ -55,16 +56,15 @@ export async function expireInTransaction(
         reason: { in: ['REDEEM', 'SPIN'] },
       },
     });
-    if (debit)
-      await tx.xpLedger.create({
-        data: {
-          memberId: row.memberId,
-          delta: -debit.delta,
-          reason: 'REFUND',
-          refType: 'Redemption',
-          refId: row.id,
-        },
-      });
+    if (debit) {
+      const slices = Array.isArray(debit.allocations) && debit.allocations.length
+        ? debit.allocations as { amount: number; expiresAt: string | null }[]
+        : await spendingSlices(tx, row.memberId, -debit.delta, debit);
+      for (const [i, slice] of slices.entries()) await tx.xpLedger.create({ data: {
+        memberId: row.memberId, delta: slice.amount, reason: 'REFUND', expiresAt: slice.expiresAt ? new Date(slice.expiresAt) : null,
+        awardKey: `refund:${row.id}:${i}`, refType: 'Redemption', refId: row.id,
+      } });
+    }
     await tx.reward.updateMany({
       where: { id: row.rewardId, stock: { not: null } },
       data: { stock: { increment: 1 } },
@@ -105,36 +105,11 @@ export async function issueReward(
     const now = new Date();
     await expireInTransaction(tx, memberId, now);
     const event = await eligibleEvent(tx, memberId, input.eventId, now);
-    const city = { OR: [{ cityId: null }, { cityId: event.cityId }] };
-    let reward;
-    let cost: number;
-    if (spin) {
-      const limit =
-        event.maxSpinsPerMember ??
-        (await getSetting(tx, 'maxSpinsPerEvent', { eventId: event.id }));
-      // Expired/refunded spins still count as attempts, so expiry never bypasses the cap.
-      const used = await tx.redemption.count({
-        where: { memberId, eventId: event.id, kind: 'SPIN' },
-      });
-      if (!canSpin(used, limit)) throw new AppError('SPIN_LIMIT', 409);
-      const pool = await tx.reward.findMany({
-        where: {
-          ...city,
-          active: true,
-          type: 'SPIN_PRIZE',
-          spinWeight: { gt: 0 },
-          AND: [{ OR: [{ stock: null }, { stock: { gt: 0 } }] }],
-        },
-        orderBy: { id: 'asc' },
-      });
-      reward = pickWeighted(pool, randomInt(2 ** 32) / 2 ** 32);
-      cost = await getSetting(tx, 'spinCostXp');
-    } else {
-      reward = await tx.reward.findFirst({
-        where: { ...city, id: input.rewardId, active: true, type: 'DIRECT' },
-      });
-      cost = reward?.xpCost ?? 0;
-    }
+    if (spin) throw new AppError('FORBIDDEN', 403);
+    const reward = await tx.reward.findFirst({ where: {
+      id: input.rewardId, active: true, type: 'DIRECT', venueId: event.venueId ?? '__none__',
+    } });
+    const cost = reward?.xpCost ?? 0;
     if (!reward || (reward.stock !== null && reward.stock <= 0))
       throw new AppError('REWARD_UNAVAILABLE', 409);
     if ((await balance(tx, memberId)) < cost)
@@ -163,6 +138,8 @@ export async function issueReward(
       data: {
         memberId,
         delta: -cost,
+        allocations: await spendingSlices(tx, memberId, cost),
+        expiresAt: (await xpLots(tx, memberId))[0]?.expiresAt,
         reason: spin ? 'SPIN' : 'REDEEM',
         refType: 'Redemption',
         refId: redemption.id,
@@ -228,8 +205,8 @@ export async function inspectCode(
 export async function wallet(memberId: string, cityId: string) {
   await expireRedemptions(memberId);
   const now = new Date();
+  const current = await atomic(tx => balance(tx, memberId));
   const [
-    current,
     ledger,
     rewards,
     redemptions,
@@ -237,14 +214,13 @@ export async function wallet(memberId: string, cityId: string) {
     spinCostXp,
     maxSpinsPerEvent,
   ] = await Promise.all([
-    balance(db, memberId),
     db.xpLedger.findMany({
       where: { memberId },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: 100,
     }),
     db.reward.findMany({
-      where: { active: true, OR: [{ cityId: null }, { cityId }] },
+      where: { active: true, type: 'DIRECT', venue: { cityId } },
       orderBy: [{ xpCost: 'asc' }, { name: 'asc' }],
     }),
     db.redemption.findMany({
@@ -263,6 +239,7 @@ export async function wallet(memberId: string, cityId: string) {
       select: {
         id: true,
         title: true,
+        venueId: true,
         maxSpinsPerMember: true,
         redemptions: {
           where: { memberId, kind: 'SPIN' },
@@ -292,6 +269,7 @@ export async function wallet(memberId: string, cityId: string) {
     balance: current,
     isPromoter: profile?.isPromoter ?? false,
     ledger,
+    expiring: (await xpLots(db, memberId)).filter(l => l.expiresAt).map(l => ({ xp: l.remaining, expiresAt: l.expiresAt!.toISOString() })),
     rewards,
     redemptions,
     spinCostXp,
@@ -309,6 +287,7 @@ export async function wallet(memberId: string, cityId: string) {
       events.map(async (e) => ({
         id: e.id,
         title: e.title,
+        venueId: e.venueId,
         spinsUsed: e.redemptions.length,
         spinLimit:
           e.maxSpinsPerMember ??
@@ -319,9 +298,18 @@ export async function wallet(memberId: string, cityId: string) {
 }
 
 export async function saveReward(admin: AuthUser, raw: unknown) {
-  if (admin.role !== 'SUPER_ADMIN') throw new AppError('FORBIDDEN', 403);
+  if (!can(admin.role, 'city.operations')) throw new AppError('FORBIDDEN', 403);
   const { id, ...data } = rewardInput.parse(raw);
   return atomic(async (tx) => {
+    const venue = await tx.venue.findUnique({ where: { id: data.venueId } });
+    if (!venue) throw new AppError('NOT_FOUND', 404);
+    requireCityAccess(admin, venue.cityId);
+    if (id) {
+      const old = await tx.reward.findUnique({ where: { id } });
+      if (!old?.cityId) { if (!can(admin.role, 'hq.manage')) throw new AppError('FORBIDDEN', 403); }
+      else requireCityAccess(admin, old.cityId);
+    }
+    data.cityId = venue.cityId;
     const reward = id
       ? await tx.reward.update({ where: { id }, data })
       : await tx.reward.create({ data });

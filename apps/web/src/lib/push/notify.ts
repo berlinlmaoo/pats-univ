@@ -51,12 +51,12 @@ export async function notifyUsers(userIds: readonly string[], input: NotifyInput
         where: { id: { in: ids }, status: 'ACTIVE' },
         select: { id: true, name: true, locale: true, notificationPrefs: true, devices: { select: { pushToken: true } } },
       }),
-      input.cityId ? db.city.findUnique({ where: { id: input.cityId }, select: { notificationCopy: true } }) : null,
+      input.cityId ? db.city.findUnique({ where: { id: input.cityId }, select: { notificationCopy: true, name: true } }) : null,
     ]);
     const category = NOTIFICATION_CATEGORY[input.kind];
     const rows = users.map((u) => {
       const t = createTranslator(u.locale);
-      const values: Record<string, string> = { name: u.name.split(/\s+/)[0] ?? u.name };
+      const values: Record<string, string> = { name: u.name.split(/\s+/)[0] ?? u.name, city: city?.name ?? '' };
       for (const [k, v] of Object.entries(input.values ?? {})) values[k] = typeof v === 'function' ? v(u.locale) : v;
       const body = cityCopy(city?.notificationCopy, input.kind, u.locale) ?? t(`push.${input.kind}.body` as MessageKey);
       return {
@@ -138,4 +138,14 @@ async function sendPush(messages: PushMessage[]): Promise<number> {
     }
   }
   return sent;
+}
+
+/** A claim decision stores its notification in the same transaction as the XP award. */
+export async function deliverStoredNotification(id: string) {
+  const row = await db.notification.findUnique({ where: { id }, include: { user: { include: { devices: true } } } });
+  if (!row || !prefsOf(row.user.notificationPrefs).activity) return;
+  try {
+    await sendPush(row.user.devices.map(d => ({ to: d.pushToken, title: row.title, body: row.body,
+      sound: 'default' as const, data: { notificationId: row.id, screen: 'claims' } })));
+  } catch { console.warn('[push] claim notification delivery pending', id); }
 }

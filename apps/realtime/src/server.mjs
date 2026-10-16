@@ -24,7 +24,7 @@ export function createRealtime({
   const roomName = (r) => `${r.kind}:${r.id}`;
   const validRoom = (r) =>
     r &&
-    ["channel", "conversation", "attendance"].includes(r.kind) &&
+    ["channel", "conversation", "attendance", "draw", "wallet"].includes(r.kind) &&
     typeof r.id === "string" &&
     /^[A-Za-z0-9_-]{1,100}$/.test(r.id);
   async function api(token, path, body) {

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   AccessibilityInfo,
   Animated,
@@ -6,8 +6,8 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
-import Svg, { Path, Circle } from 'react-native-svg';
-import type { RewardDto } from '@pats/shared';
+import Svg, { Path, Circle, Text as SvgText } from 'react-native-svg';
+import { wheelAngle } from '@pats/shared';
 import { Text } from '@/components/text';
 import { useT } from '@/i18n';
 import { motion, radius, size, space, useColors } from '@/theme';
@@ -18,13 +18,13 @@ export function PrizeWheel({
   winner,
   running,
 }: {
-  rewards: RewardDto[];
-  winner: RewardDto | null;
+  rewards: { id: string; name: string }[];
+  winner: { id: string; name: string } | null;
   running: boolean;
 }) {
   const c = useColors();
   const t = useT();
-  const spin = useRef(new Animated.Value(0)).current;
+  const [spin] = useState(() => new Animated.Value(0));
   const [reduced, setReduced] = useState(false);
   useEffect(() => {
     void AccessibilityInfo.isReduceMotionEnabled().then(setReduced);
@@ -36,12 +36,7 @@ export function PrizeWheel({
   }, []);
   useEffect(() => {
     if (!winner) return;
-    const index = Math.max(
-      0,
-      rewards.findIndex((r) => r.id === winner.id),
-    );
-    const angle =
-      1440 + 360 - ((index + 0.5) * 360) / Math.max(1, rewards.length);
+    const angle = wheelAngle(rewards.map(r => r.id), winner.id);
     spin.setValue(0);
     const animation = Animated.timing(spin, {
       toValue: angle,
@@ -99,6 +94,10 @@ export function PrizeWheel({
                 fill={c.accentSubtle}
               />
             );
+          })}
+          {rewards.map((p, i) => {
+            const angle = ((i + 0.5) / rewards.length) * Math.PI * 2 - Math.PI / 2;
+            return <SvgText key={`label-${p.id}`} x={center + r * 0.6 * Math.cos(angle)} y={center + r * 0.6 * Math.sin(angle)} fill={c.text} textAnchor="middle">{i + 1}</SvgText>;
           })}
           <Circle cx={center} cy={center} r={space[5]} fill={c.primary} />
         </Svg>

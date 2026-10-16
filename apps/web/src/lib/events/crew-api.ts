@@ -1,3 +1,4 @@
+import { can } from '@pats/shared';
 import 'server-only';
 import { eventInputSchema, type EventSummary } from '@pats/shared';
 import type { AuthUser } from '../auth/current-user';
@@ -8,12 +9,12 @@ import { type EventWithPlace, toEventSummary } from './service';
 /** City admins only ever work in their own city; the form doesn't even send it. */
 export function parseCrewEventInput(admin: AuthUser, raw: unknown) {
   const body = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
-  const cityId = admin.role === 'LOCAL_ADMIN' ? admin.cityId : body.cityId;
+  const cityId = can(admin.role, 'hq.manage') ? body.cityId : admin.cityId;
   return eventInputSchema.parse({ ...body, cityId });
 }
 
 export function crewEventScope(admin: AuthUser) {
-  if (admin.role === 'SUPER_ADMIN') return {};
+  if (can(admin.role, 'hq.manage')) return {};
   if (!admin.cityId) throw new AppError('FORBIDDEN', 403);
   return { cityId: admin.cityId };
 }

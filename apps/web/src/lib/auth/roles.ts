@@ -1,4 +1,5 @@
 import 'server-only';
+import { can } from '@pats/shared';
 import { db } from '../db';
 import { AppError } from '../http/errors';
 import { hit } from '../rate-limit';
@@ -15,7 +16,9 @@ export async function requireMember(req: Request) {
 
 /** City crew in the app (HQ may call the same endpoints with its dashboard session). */
 export async function requireCrew(req: Request): Promise<AuthUser> {
-  return requireApiUser(req, ['LOCAL_ADMIN', 'SUPER_ADMIN']);
+  const user = await requireApiUser(req);
+  if (!can(user.role, 'city.operations')) throw new AppError('FORBIDDEN', 403);
+  return user;
 }
 
 /** Scan endpoints: generous for a busy door, tight enough to stop scripted guessing. */

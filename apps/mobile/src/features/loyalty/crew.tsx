@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { useState, useRef } from 'react';
 import { Alert, Linking, StyleSheet, View } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -250,6 +251,7 @@ export function CrewOperationsScreen() {
                 ),
               )}
             </Card>
+            <Button label={t('phase5.claimReview')} onPress={() => router.push('/claims-review')} />
             <SectionLabel>{t('loyalty.promoter')}</SectionLabel>
             {!state.data.reports.length ? (
               <EmptyState
@@ -262,7 +264,6 @@ export function CrewOperationsScreen() {
                 <CrewReport
                   key={`${r.id}-${r.status}`}
                   report={r}
-                  reload={state.reload}
                 />
               ))
             )}
@@ -334,44 +335,12 @@ export function CrewOperationsScreen() {
 }
 function CrewReport({
   report: r,
-  reload,
 }: {
   report: ReportDto;
-  reload: () => Promise<void>;
 }) {
   const t = useT();
   const { call } = useAuth();
-  const [reason, setReason] = useState('');
   const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
-  async function review(action: 'validate' | 'reject' | 'cancel') {
-    setBusy(true);
-    setError('');
-    try {
-      await call('POST', `/api/admin/loyalty/reports/${r.id}`, {
-        action,
-        reason,
-      });
-      await reload();
-    } catch (err) {
-      setError(failure(err));
-    } finally {
-      setBusy(false);
-    }
-  }
-  const confirm = (action: 'validate' | 'reject' | 'cancel') =>
-    Alert.alert(
-      t('loyalty.confirm'),
-      action === 'cancel'
-        ? t('loyalty.cancelBonusConfirm')
-        : action === 'reject'
-          ? reason
-          : t('loyalty.reviewHint'),
-      [
-        { text: t('common.cancel'), style: 'cancel' },
-        { text: t('common.continue'), onPress: () => void review(action) },
-      ],
-    );
   return (
     <Card style={styles.card}>
       <Text variant="title3">{r.member.fullName}</Text>
@@ -417,43 +386,6 @@ function CrewReport({
       ))}
       {r.rejectReason && <Text tone="dangerText">{r.rejectReason}</Text>}
       {error && <Notice tone="danger" text={t.loose(error)} />}
-      {r.status !== 'REJECTED' && (
-        <>
-          <Field label={t('loyalty.reason')}>
-            <Input
-              value={reason}
-              onChangeText={setReason}
-              accessibilityLabel={t('loyalty.reason')}
-            />
-          </Field>
-          {r.status === 'SUBMITTED' ? (
-            <>
-              <Button
-                label={t('loyalty.validate')}
-                loading={busy}
-                onPress={() => confirm('validate')}
-              />
-              <Button
-                label={t('loyalty.reject')}
-                variant="danger"
-                disabled={busy || reason.trim().length < 3}
-                onPress={() => confirm('reject')}
-              />
-            </>
-          ) : (
-            <Button
-              label={t('loyalty.cancelBonus')}
-              variant="danger"
-              disabled={
-                busy ||
-                reason.trim().length < 3 ||
-                r.payouts.some((p) => p.status === 'PAID')
-              }
-              onPress={() => confirm('cancel')}
-            />
-          )}
-        </>
-      )}
     </Card>
   );
 }
@@ -499,6 +431,7 @@ function CrewRecap({
           />
         </Field>
       ))}
+      {(['personInCharge', 'accountablePerson'] as const).map(k => <Field key={k} label={t(`phase5.${k}`)}><Input accessibilityLabel={t(`phase5.${k}`)} value={values[k] ?? recap?.[k] ?? ''} onChangeText={v => setValues({ ...values, [k]: v })} editable={!recap?.lockedAt} /></Field>)}
       <Field label={t('loyalty.note')}>
         <Input
           accessibilityLabel={t('loyalty.note')}
@@ -518,6 +451,8 @@ function CrewRecap({
               ...Object.fromEntries(
                 keys.map((k) => [k, Number(values[k] ?? recap?.[k] ?? 0)]),
               ),
+              personInCharge: values.personInCharge ?? recap?.personInCharge ?? '',
+              accountablePerson: values.accountablePerson ?? recap?.accountablePerson ?? '',
               note: values.note ?? recap?.note ?? '',
             });
             if (!parsed.success) {

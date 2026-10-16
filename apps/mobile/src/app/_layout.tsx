@@ -54,7 +54,7 @@ function Navigator({ ready }: { ready: boolean }) {
   const { locale } = useI18n();
   const scheme = useColorScheme();
   const loading = status === 'loading' || !ready;
-  const isAdmin = me?.user.role === 'LOCAL_ADMIN' || me?.user.role === 'SUPER_ADMIN';
+  const isAdmin = me?.user.capabilities.includes('city.operations') ?? false;
   const userId = me?.user.id;
 
   useEffect(() => {

@@ -5,6 +5,7 @@ const db = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
 });
 async function main() {
+  if (process.env.NODE_ENV === 'production' || process.env.SEED_MODE === 'production') throw new Error('Demo seed is disabled in production');
   try {
     const cities = await db.city.findMany();
     for (const city of cities) {

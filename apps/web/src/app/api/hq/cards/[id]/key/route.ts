@@ -9,7 +9,7 @@ type Params = { params: Promise<{ id: string }> };
 
 /** Station step 2: the chip's PWD/PACK for this UID, after the UID rules pass. Never stored. */
 export const POST = route(async (req: Request, { params }: Params) => {
-  const user = await requireApiUser(req, ['SUPER_ADMIN', 'LOCAL_ADMIN']);
+  const user = await requireApiUser(req, ['SUPER_ADMIN', 'REGIONAL_ADMIN']);
   const input = stationKeySchema.parse(await readJson(req));
   const { id } = await params;
   const held = await db.card.findUnique({ where: { leaseId: input.leaseId }, select: { id: true } });

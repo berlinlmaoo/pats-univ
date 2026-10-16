@@ -77,6 +77,7 @@ export const POST = route(async (req: Request, ctx: Context) => {
     return ok({ expiresAt: await roomAccess(user, roomSchema.parse(body)) });
   if (action === "channels") return ok(await social.saveChannel(user, body));
   if (action === "messages") return ok(await social.sendMessage(user, body));
+  if (action === "react") return ok(await social.reactToPost(user, body));
   if (action === "posts") return ok(await social.createPost(user, body));
   if (action === "moderate") return ok(await social.moderate(user, body));
   if (action === "roaming") return ok(await social.requestRoaming(user, body));

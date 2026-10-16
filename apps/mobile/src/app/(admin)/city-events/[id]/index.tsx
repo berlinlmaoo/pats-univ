@@ -1,3 +1,4 @@
+import { LiveDraw } from '@/features/loyalty/draw';
 import {
   formatCount,
   formatDate,
@@ -124,8 +125,9 @@ export default function AdminEventScreen() {
         ]}
       />
 
+      <LiveDraw eventId={e.id} />
       <View style={styles.liveHead}>
-        <SectionLabel>{t('app.adminLive')}</SectionLabel>
+          <SectionLabel>{t('app.adminLive')}</SectionLabel>
         <Text variant="bodySm" tone="textMuted" style={styles.tabular}>
           {e.capacity
             ? t('app.adminCheckedInOf', { count: formatCount(count), capacity: formatCount(e.capacity) })

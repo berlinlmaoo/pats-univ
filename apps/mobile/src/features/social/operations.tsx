@@ -169,7 +169,7 @@ export function OperationsScreen() {
                 {admin &&
                   r.status === "PENDING" &&
                   (r.type === "ATTENDANCE"
-                    ? me?.user.role === "LOCAL_ADMIN"
+                    ? Boolean(me?.user.capabilities.includes("city.operations"))
                     : me?.user.role === "SUPER_ADMIN") && (
                     <>
                       <Button

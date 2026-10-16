@@ -1,10 +1,15 @@
 import 'server-only';
+import { can } from '@pats/shared';
 import { redirect } from 'next/navigation';
 import { getWebUser, type AuthUser } from '../auth/current-user';
 
-/** Dashboard pages and actions: HQ only, otherwise back to /login. */
-export async function requireHq(): Promise<AuthUser> {
+export async function requireDashboard(): Promise<AuthUser> {
   const user = await getWebUser();
-  if (!user || user.role !== 'SUPER_ADMIN') redirect('/login');
+  if (!user || !can(user.role, 'dashboard.access')) redirect('/login');
+  return user;
+}
+export async function requireHq(): Promise<AuthUser> {
+  const user = await requireDashboard();
+  if (!can(user.role, 'hq.manage')) redirect('/regional');
   return user;
 }

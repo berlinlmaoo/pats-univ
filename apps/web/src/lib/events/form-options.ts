@@ -5,10 +5,10 @@ import { db } from '../db';
 import { getSetting } from '../settings';
 
 /** Cities with their venues, for the event form. Shared with the event page. */
-export async function eventFormOptions(): Promise<{ cities: CityOption[]; defaults: { opensBeforeMinutes: number; date: string } }> {
+export async function eventFormOptions(cityId?: string): Promise<{ cities: CityOption[]; defaults: { opensBeforeMinutes: number; date: string } }> {
   const [cities, opensBeforeMinutes] = await Promise.all([
     db.city.findMany({
-      where: { active: true },
+      where: { active: true, id: cityId },
       orderBy: { name: 'asc' },
       select: { id: true, name: true, timezone: true, venues: { select: { id: true, name: true }, orderBy: { name: 'asc' } } },
     }),

@@ -9,7 +9,7 @@ type Params = { params: Promise<{ id: string }> };
 
 /** Give a held card back: cancelled, or the write failed (audited with the failure). */
 export const POST = route(async (req: Request, { params }: Params) => {
-  const user = await requireApiUser(req, ['SUPER_ADMIN', 'LOCAL_ADMIN']);
+  const user = await requireApiUser(req, ['SUPER_ADMIN', 'REGIONAL_ADMIN']);
   const input = stationReleaseSchema.parse(await readJson(req));
   const { id } = await params;
   const held = await db.card.findUnique({ where: { leaseId: input.leaseId }, select: { id: true } });

@@ -78,7 +78,7 @@ const eventIds: string[] = [];
 const cityIds: string[] = [];
 const rewardIds: string[] = [];
 async function newUser(
-  role: 'MEMBER' | 'LOCAL_ADMIN' | 'SUPER_ADMIN',
+  role: 'MEMBER' | 'REGIONAL_ADMIN' | 'SUPER_ADMIN',
   cityId?: string,
   number = 0,
 ) {
@@ -89,7 +89,7 @@ async function newUser(
       phone: '+6281234567890',
       name,
       role,
-      cityId: role === 'LOCAL_ADMIN' ? cityId : null,
+      cityId: role === 'REGIONAL_ADMIN' ? cityId : null,
       ...(role === 'MEMBER'
         ? {
             member: {
@@ -123,8 +123,8 @@ async function main() {
   });
   cityIds.push(other.id);
   const hq = await newUser('SUPER_ADMIN');
-  const crew = await newUser('LOCAL_ADMIN', city.id);
-  const outsider = await newUser('LOCAL_ADMIN', other.id, 1);
+  const crew = await newUser('REGIONAL_ADMIN', city.id);
+  const outsider = await newUser('REGIONAL_ADMIN', other.id, 1);
   const a = await newUser('MEMBER', city.id, 1);
   const b = await newUser('MEMBER', city.id, 2);
   const c = await newUser('MEMBER', city.id, 3);

@@ -1,3 +1,4 @@
+import { can } from '@pats/shared';
 import 'server-only';
 import { recapInput } from '@pats/shared';
 import type { Prisma } from '@/generated/prisma';
@@ -7,8 +8,8 @@ import { AppError } from '../http/errors';
 import { atomic } from './transaction';
 
 export function cityScope(admin: AuthUser, cityId?: string) {
-  if (admin.role === 'SUPER_ADMIN') return cityId;
-  if (admin.role !== 'LOCAL_ADMIN' || !admin.cityId)
+  if (can(admin.role, 'hq.manage')) return cityId;
+  if (!can(admin.role, 'city.operations') || !admin.cityId)
     throw new AppError('FORBIDDEN', 403);
   if (cityId) requireCityAccess(admin, cityId);
   return admin.cityId;
@@ -50,6 +51,7 @@ export async function operations(
     db.redemption.count({ where: { status: 'FULFILLED', event: eventWhere } }),
   ]);
   return {
+    canLockRecap: can(admin.role, 'hq.manage'),
     events,
     reports,
     members,
@@ -95,7 +97,7 @@ export async function saveRecap(admin: AuthUser, raw: unknown) {
   });
 }
 export async function lockRecap(admin: AuthUser, eventId: string) {
-  if (admin.role !== 'SUPER_ADMIN') throw new AppError('FORBIDDEN', 403);
+  if (!can(admin.role, 'hq.manage')) throw new AppError('FORBIDDEN', 403);
   return atomic(async (tx) => {
     const row = await tx.trafficRecap.findUnique({ where: { eventId } });
     if (!row) throw new AppError('NOT_FOUND', 404);

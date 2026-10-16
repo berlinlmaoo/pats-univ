@@ -23,6 +23,7 @@ export function RewardsPage() {
   const state = useLoyalty<{
     rewards: RewardDto[];
     cities: { id: string; name: string }[];
+    venues: { id: string; name: string; cityId: string }[];
   }>('/api/admin/loyalty/rewards');
   const [editing, setEditing] = useState<RewardDto | 'new' | null>(null);
   return (
@@ -87,7 +88,7 @@ export function RewardsPage() {
                       : t('loyalty.stockLeft', {
                           count: formatCount(r.stock),
                         })}{' '}
-                    · {t('loyalty.weight')}: {formatCount(r.spinWeight)}
+                    · {state.data!.venues.find(v => v.id === r.venueId)?.name ?? '—'}
                   </p>
                   <div className="flex items-center justify-between gap-3">
                     <span className="text-caption text-muted">
@@ -105,7 +106,7 @@ export function RewardsPage() {
             <RewardForm
               key={typeof editing === 'string' ? editing : editing.id}
               reward={editing === 'new' ? undefined : editing}
-              cities={state.data.cities}
+              venues={state.data.venues}
               close={() => setEditing(null)}
               saved={() => {
                 setEditing(null);
@@ -120,12 +121,12 @@ export function RewardsPage() {
 }
 function RewardForm({
   reward,
-  cities,
+  venues,
   close,
   saved,
 }: {
   reward?: RewardDto;
-  cities: { id: string; name: string }[];
+  venues: { id: string; name: string; cityId: string }[];
   close: () => void;
   saved: () => void;
 }) {
@@ -141,11 +142,12 @@ function RewardForm({
       id: reward?.id,
       name: f.get('name'),
       description: f.get('description'),
-      type: f.get('type'),
+      type: 'DIRECT',
       xpCost: Number(f.get('xpCost')),
       stock: f.get('stock') === '' ? null : Number(f.get('stock')),
-      cityId: f.get('cityId') || null,
-      spinWeight: Number(f.get('spinWeight')),
+      venueId: f.get('venueId'),
+      cityId: venues.find(v => v.id === f.get('venueId'))?.cityId ?? null,
+      spinWeight: 0,
       active: f.has('active'),
     });
     if (!input.success) {
@@ -201,34 +203,12 @@ function RewardForm({
             defaultValue={reward?.description}
           />
         </Field>
-        <Field htmlFor="reward-type" label={t('loyalty.type')}>
-          <Select
-            id="reward-type"
-            name="type"
-            defaultValue={reward?.type ?? 'DIRECT'}
-          >
-            {['DIRECT', 'SPIN_PRIZE'].map((v) => (
-              <option key={v} value={v}>
-                {t.loose(`loyalty.${v}`)}
-              </option>
-            ))}
+        <Field htmlFor="reward-venue" label={t('phase5.venue')}>
+          <Select id="reward-venue" name="venueId" defaultValue={reward?.venueId ?? ''} required>
+            <option value="">—</option>{venues.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
           </Select>
         </Field>
-        <Field htmlFor="reward-city" label={t('loyalty.city')}>
-          <Select
-            id="reward-city"
-            name="cityId"
-            defaultValue={reward?.cityId ?? ''}
-          >
-            <option value="">{t('loyalty.global')}</option>
-            {cities.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        {(['xpCost', 'stock', 'spinWeight'] as const).map((key) => (
+        {(['xpCost', 'stock'] as const).map((key) => (
           <Field
             key={key}
             htmlFor={`reward-${key}`}

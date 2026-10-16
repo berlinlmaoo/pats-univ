@@ -6,6 +6,7 @@ import { welcomeEmail } from './email/templates';
 import { AppError } from './http/errors';
 import { sendMail, smtpConfigured } from './mail';
 import { allocateNim } from './nim';
+import { creditXp } from './loyalty/xp';
 import { getSetting } from './settings';
 
 /**
@@ -64,6 +65,7 @@ export async function registerMember(input: Registration): Promise<RegistrationR
         },
         include: { member: true },
       });
+      await creditXp(tx, { memberId: user.member!.id, delta: await getSetting(tx, 'welcomeBonusXp'), reason: 'WELCOME', awardKey: `welcome:${user.member!.id}`, refType: 'Member', refId: user.member!.id });
       await tx.auditLog.create({
         data: {
           actorId: user.id,

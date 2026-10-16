@@ -54,7 +54,7 @@ async function api(
   return { status: res.status, json };
 }
 async function actor(
-  role: "MEMBER" | "LOCAL_ADMIN" | "SUPER_ADMIN",
+  role: "MEMBER" | "REGIONAL_ADMIN" | "SUPER_ADMIN",
   cityId?: string,
 ) {
   const id = `${prefix}-${users.length}`;
@@ -65,7 +65,7 @@ async function actor(
       phone: `+628111${Date.now()}${users.length}`,
       name: id,
       role,
-      cityId: role === "LOCAL_ADMIN" ? cityId : undefined,
+      cityId: role === "REGIONAL_ADMIN" ? cityId : undefined,
     },
   });
   users.push(user);
@@ -107,8 +107,8 @@ async function main() {
   cityIds.push(...existing.map((c) => c.id));
   const [cityA, cityB] = cityIds;
   const hq = await actor("SUPER_ADMIN"),
-    adminA = await actor("LOCAL_ADMIN", cityA),
-    adminB = await actor("LOCAL_ADMIN", cityB),
+    adminA = await actor("REGIONAL_ADMIN", cityA),
+    adminB = await actor("REGIONAL_ADMIN", cityB),
     a = await actor("MEMBER", cityA),
     a2 = await actor("MEMBER", cityA),
     b = await actor("MEMBER", cityB);
@@ -596,7 +596,7 @@ async function main() {
         })
       ).status === 200,
   );
-  await setting("reservationApprover", "LOCAL_ADMIN", cityA);
+  await setting("reservationApprover", "REGIONAL_ADMIN", cityA);
   check(
     "Minimum spend reaches slot selection",
     (await api(`social/slots?eventId=${event.id}`, a.token)).json.slots.find(

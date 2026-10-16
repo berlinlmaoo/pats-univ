@@ -1,3 +1,4 @@
+import { can } from '@pats/shared';
 import { cardUrl } from '@pats/shared';
 import { getWebUser } from '@/lib/auth/current-user';
 import { renderCardPdf } from '@/lib/card-print/render';
@@ -16,7 +17,7 @@ type Params = { params: Promise<{ id: string; file: string[] }> };
  */
 export const GET = route(async (_req: Request, { params }: Params) => {
   const user = await getWebUser();
-  if (!user || user.role !== 'SUPER_ADMIN') throw new AppError('UNAUTHENTICATED', 401);
+  if (!user || !can(user.role, 'hq.manage')) throw new AppError('UNAUTHENTICATED', 401);
   const { id, file } = await params;
   const batch = await db.cardBatch.findUnique({ where: { id }, include: { city: { select: { code: true } } } });
   if (!batch) throw new AppError('NOT_FOUND', 404);

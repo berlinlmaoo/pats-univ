@@ -51,6 +51,7 @@ export async function leaderboard(
     };
   const ledgerWhere: Prisma.XpLedgerWhereInput = {
     delta: { gt: 0 },
+    reason: { not: 'REFUND' },
     createdAt: { gte: window.start, lt: window.end },
   };
   if (mode === 'EVENT' && selectedEvent) {
@@ -173,12 +174,12 @@ export async function snapshotLeaderboards() {
   const mode = await getSetting(db, 'leaderboardPeriod');
   const currentMonth = zonedParts(hour);
   const previous = new Date(
-    Date.UTC(currentMonth.year, currentMonth.month - 1, 0),
+    Date.UTC(currentMonth.year, mode === 'QUARTERLY' ? Math.floor((currentMonth.month - 1) / 3) * 3 : currentMonth.month - 1, 0),
   );
   const previousMonth = `${previous.getUTCFullYear()}-${String(previous.getUTCMonth() + 1).padStart(2, '0')}`;
   for (const cityId of [undefined, ...cities.map((c) => c.id)]) {
     // Keep one final snapshot for the closed month as well as hourly snapshots of the open one.
-    for (const month of mode === 'MONTHLY'
+    for (const month of (mode === 'MONTHLY' || mode === 'QUARTERLY')
       ? [undefined, previousMonth]
       : [undefined]) {
       const board = await leaderboard({ cityId, month });
