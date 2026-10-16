@@ -45,13 +45,14 @@ export default function CardScreen() {
       ) : (
         <>
           <KtmCard member={member} />
-          <CardQr />
+          {/* Where the physical card is, right under the digital one (visible without scrolling). */}
           <Card style={styles.status}>
-            <Text variant="body" weight={500}>
+            <Text variant="body" weight={500} style={styles.flex}>
               {t('app.physicalCard')}
             </Text>
             <Badge dot tone={CARD_TONE[member.cardStatus]} label={t(`cardStatusMember.${member.cardStatus}`)} />
           </Card>
+          <CardQr />
           <Card style={styles.clip}>
             <ListRow
               first
@@ -75,6 +76,7 @@ export default function CardScreen() {
 }
 
 const styles = StyleSheet.create({
-  status: { padding: space[4], gap: space[2] },
+  status: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: space[4], paddingVertical: space[3], gap: space[2] },
+  flex: { flexShrink: 1 },
   clip: { overflow: 'hidden' },
 });

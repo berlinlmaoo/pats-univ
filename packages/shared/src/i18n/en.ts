@@ -647,7 +647,7 @@ export const en = {
     adminSubtitleHq: 'HQ tools',
     adminCardsSection: 'Cards',
     adminEncode: 'Encode cards',
-    adminEncodeBody: 'Write printed cards on this phone, alongside the Mac Card Station.',
+    adminEncodeBody: 'Write printed cards on this phone, next to the Mac Card Station.',
     adminCards: 'Lost or damaged card',
     adminCardsBody: 'Report a card lost, or ask HQ to re-encode a damaged one.',
     adminNotificationsBody: 'Re-encode decisions from HQ and other updates.',

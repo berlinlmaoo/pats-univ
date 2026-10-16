@@ -18,7 +18,7 @@ import { useColorScheme } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider, useAuth } from '@/auth';
 import { stackOptions } from '@/features/stack-options';
-import { I18nProvider, useT } from '@/i18n';
+import { I18nProvider, useI18n, useT } from '@/i18n';
 import { listenForTaps, registerPush } from '@/lib/push';
 import { useColors } from '@/theme';
 
@@ -51,6 +51,7 @@ function Navigator({ ready }: { ready: boolean }) {
   const { status, me, call } = useAuth();
   const c = useColors();
   const t = useT();
+  const { locale } = useI18n();
   const scheme = useColorScheme();
   const loading = status === 'loading' || !ready;
   const isAdmin = me?.user.role === 'LOCAL_ADMIN' || me?.user.role === 'SUPER_ADMIN';
@@ -59,6 +60,12 @@ function Navigator({ ready }: { ready: boolean }) {
   useEffect(() => {
     if (!loading) void SplashScreen.hideAsync();
   }, [loading]);
+
+  // Pushes are written in the account's language: keep it in step with the app's.
+  const serverLocale = me?.user.locale;
+  useEffect(() => {
+    if (status === 'signedIn' && serverLocale && serverLocale !== locale) void call('PATCH', '/api/me', { locale }).catch(() => null);
+  }, [status, serverLocale, locale, call]);
 
   // Push: register this phone once signed in (asking the first time), open tapped notifications.
   useEffect(() => {

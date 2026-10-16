@@ -649,7 +649,7 @@ export const id: DictionaryShape<typeof en> = {
     adminSubtitleHq: 'Alat HQ',
     adminCardsSection: 'Kartu',
     adminEncode: 'Encode kartu',
-    adminEncodeBody: 'Tulis kartu cetakan di HP ini, bersamaan dengan Card Station di Mac.',
+    adminEncodeBody: 'Tulis kartu cetakan di HP ini, bersama Card Station di Mac.',
     adminCards: 'Kartu hilang atau rusak',
     adminCardsBody: 'Laporkan kartu hilang, atau minta HQ meng-encode ulang kartu yang rusak.',
     adminNotificationsBody: 'Keputusan encode ulang dari HQ dan kabar lain.',

@@ -102,6 +102,29 @@ export default function MemberCardScreen() {
 
       {notice && <Notice text={notice} />}
 
+      {/* The form comes first, so it isn't under the keyboard. */}
+      {mode !== 'none' && (
+        <Card style={styles.panel}>
+          <Text variant="title3">{mode === 'lost' ? t('app.cardsLostTitle') : t('app.cardsReencodeTitle')}</Text>
+          <Text variant="bodySm" tone="textMuted">
+            {mode === 'lost' ? t('app.cardsLostBody') : t('app.cardsReencodeBody')}
+          </Text>
+          <Field label={t('app.manualReason')} error={error} hint={t('app.manualReasonHint')}>
+            <Input
+              value={reason}
+              onChangeText={setReason}
+              placeholder={mode === 'lost' ? t('app.cardsLostPlaceholder') : t('app.cardsReencodePlaceholder')}
+              invalid={Boolean(error)}
+              maxLength={200}
+              returnKeyType="done"
+              onSubmitEditing={() => void submit()}
+            />
+          </Field>
+          <Button variant={mode === 'lost' ? 'danger' : 'primary'} label={mode === 'lost' ? t('app.cardsLostConfirm') : t('app.cardsReencodeSend')} loading={busy} onPress={() => void submit()} />
+          <Button variant="ghost" label={t('common.cancel')} disabled={busy} onPress={() => (setMode('none'), setError(undefined))} />
+        </Card>
+      )}
+
       <Card style={styles.clip}>
         <View style={styles.cardHead}>
           <Text variant="body" weight={500}>
@@ -152,28 +175,7 @@ export default function MemberCardScreen() {
         </Card>
       )}
 
-      {mode !== 'none' ? (
-        <Card style={styles.panel}>
-          <Text variant="title3">{mode === 'lost' ? t('app.cardsLostTitle') : t('app.cardsReencodeTitle')}</Text>
-          <Text variant="bodySm" tone="textMuted">
-            {mode === 'lost' ? t('app.cardsLostBody') : t('app.cardsReencodeBody')}
-          </Text>
-          <Field label={t('app.manualReason')} error={error} hint={t('app.manualReasonHint')}>
-            <Input
-              value={reason}
-              onChangeText={setReason}
-              placeholder={mode === 'lost' ? t('app.cardsLostPlaceholder') : t('app.cardsReencodePlaceholder')}
-              invalid={Boolean(error)}
-              autoFocus
-              maxLength={200}
-              returnKeyType="done"
-              onSubmitEditing={() => void submit()}
-            />
-          </Field>
-          <Button variant={mode === 'lost' ? 'danger' : 'primary'} label={mode === 'lost' ? t('app.cardsLostConfirm') : t('app.cardsReencodeSend')} loading={busy} onPress={() => void submit()} />
-          <Button variant="ghost" label={t('common.cancel')} disabled={busy} onPress={() => (setMode('none'), setError(undefined))} />
-        </Card>
-      ) : (
+      {mode === 'none' &&
         (canRequest || canReport) && (
           <>
             <SectionLabel>{t('app.cardsActions')}</SectionLabel>
@@ -185,8 +187,7 @@ export default function MemberCardScreen() {
               </Text>
             )}
           </>
-        )
-      )}
+        )}
     </Screen>
   );
 }
