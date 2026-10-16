@@ -1,0 +1,10 @@
+{
+  "name": "@pats/realtime",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Socket.IO server for chat, timeline and live attendance (Phase 4). Phase 0: health endpoint only.",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.mjs"
+  }
+}

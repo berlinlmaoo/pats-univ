@@ -1,0 +1,837 @@
+// PATS University data model. Entities follow PRODUCT.md §7; every timestamp is stored in UTC
+// and shown in the city's time zone. Partial unique indexes Prisma can't express are added by
+// hand in the initial migration (see the bottom of migrations/*_init/migration.sql).
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum Role {
+  MEMBER
+  LOCAL_ADMIN
+  SUPER_ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum MemberStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum Locale {
+  id
+  en
+}
+
+enum CardStatus {
+  NOT_PRINTED
+  IN_BATCH
+  SENT_TO_VENDOR
+  RECEIVED_HQ
+  ENCODED
+  DELIVERED
+  REVOKED
+}
+
+enum CardBatchStatus {
+  EXPORTED
+  SENT_TO_VENDOR
+  RECEIVED_HQ
+  ENCODING
+  SHIPPED_TO_CITY
+  DONE
+}
+
+enum EventStatus {
+  DRAFT
+  PUBLISHED
+  OPEN
+  CLOSED
+}
+
+enum CheckInMethod {
+  NFC
+  APP_QR
+  MANUAL
+}
+
+enum XpReason {
+  CHECK_IN
+  REDEEM
+  SPIN
+  REFUND
+  PROMOTER_BONUS
+  ADJUST
+}
+
+enum LeaderboardScope {
+  CITY
+  NATIONAL
+}
+
+enum PromoterReportStatus {
+  SUBMITTED
+  VALIDATED
+  REJECTED
+}
+
+enum BonusKind {
+  XP
+  CASH
+}
+
+enum PayoutStatus {
+  PENDING
+  PAID
+}
+
+enum RewardType {
+  DIRECT
+  SPIN_PRIZE
+}
+
+enum RedemptionKind {
+  DIRECT
+  SPIN
+}
+
+enum RedemptionStatus {
+  ISSUED
+  FULFILLED
+  EXPIRED
+  CANCELLED
+}
+
+enum ChannelKind {
+  TIMELINE
+  CHAT
+}
+
+enum ChannelVisibility {
+  MEMBERS
+  ADMINS_ONLY
+}
+
+enum MediaType {
+  TEXT
+  VOICE
+  VIDEO
+  IMAGE
+}
+
+enum ConversationKind {
+  RESERVATION
+  SUPPORT
+}
+
+enum ReservationStatus {
+  PENDING
+  CONFIRMED
+  REJECTED
+  CANCELLED
+}
+
+enum RoamingType {
+  ATTENDANCE
+  SOCIAL_HUB
+}
+
+enum RoamingStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  EXPIRED
+}
+
+enum DevicePlatform {
+  IOS
+  ANDROID
+}
+
+enum SettingScope {
+  GLOBAL
+  CITY
+  EVENT
+}
+
+enum OtpPurpose {
+  LOGIN
+  REGISTER
+}
+
+enum OtpProvider {
+  EMAIL
+  DEMO
+  WHATSAPP_BRIDGE
+  CLOUD_API
+}
+
+enum SessionClient {
+  APP
+  WEB
+}
+
+// ─── Accounts & auth ──────────────────────────────────────────────────────────
+
+/// A login. Members and admins are both users; the role decides what they can reach.
+model User {
+  id          String     @id @default(cuid())
+  /// Login identity (lower-case). OTP codes are sent here.
+  email       String     @unique
+  /// E.164, required: used to route members into the city WhatsApp group.
+  phone       String
+  /// Display name (members: same as Member.fullName).
+  name        String
+  role        Role       @default(MEMBER)
+  /// Home city for LOCAL_ADMIN; null for SUPER_ADMIN. Members use Member.cityId.
+  cityId      String?
+  status      UserStatus @default(ACTIVE)
+  /// Language for emails and push copy.
+  locale      Locale     @default(id)
+  lastLoginAt DateTime?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  city                 City?                @relation("CityAdmins", fields: [cityId], references: [id])
+  member               Member?
+  sessions             Session[]
+  otpCodes             OtpCode[]
+  devices              Device[]
+  notifications        Notification[]
+  auditLogs            AuditLog[]           @relation("AuditActor")
+  createdEvents        Event[]              @relation("EventCreatedBy")
+  checkInsRecorded     CheckIn[]            @relation("CheckInAdmin")
+  cardsEncoded         Card[]               @relation("CardEncodedBy")
+  cardsDelivered       Card[]               @relation("CardDeliveredBy")
+  batchesCreated       CardBatch[]          @relation("BatchCreatedBy")
+  reportsReviewed      PromoterReport[]     @relation("ReportReviewedBy")
+  payoutsPaid          PromoterPayout[]     @relation("PayoutPaidBy")
+  redemptionsFulfilled Redemption[]         @relation("RedemptionFulfilledBy")
+  posts                Post[]
+  messages             Message[]
+  roamingDecided       RoamingRequest[]     @relation("RoamingDecidedBy")
+  recapsSubmitted      TrafficRecap[]       @relation("RecapSubmittedBy")
+  settingsChanged      Setting[]            @relation("SettingUpdatedBy")
+
+  @@index([role, cityId])
+  @@index([phone])
+}
+
+/// A signed-in device or browser. The app holds a rotating refresh token, the dashboard a
+/// session cookie; both are stored hashed here so HQ can sign anyone out remotely.
+model Session {
+  id           String        @id @default(cuid())
+  userId       String
+  client       SessionClient
+  /// SHA-256 of the refresh token (app) or session cookie (web).
+  tokenHash    String        @unique
+  userAgent    String?
+  ip           String?
+  createdAt    DateTime      @default(now())
+  lastUsedAt   DateTime      @default(now())
+  expiresAt    DateTime
+  revokedAt    DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+/// One-time 6-digit code (PRODUCT.md §10.6). Only a hash is stored.
+model OtpCode {
+  id         String      @id @default(cuid())
+  email      String
+  userId     String?
+  codeHash   String
+  purpose    OtpPurpose
+  provider   OtpProvider
+  expiresAt  DateTime
+  attempts   Int         @default(0)
+  consumedAt DateTime?
+  ip         String?
+  createdAt  DateTime    @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([email, purpose, createdAt])
+  @@index([ip, createdAt])
+}
+
+// ─── Members & cards ──────────────────────────────────────────────────────────
+
+model Member {
+  id            String       @id @default(cuid())
+  userId        String       @unique
+  /// <city code><yy><5-digit sequence>, e.g. JKT2600042. Never changes.
+  nim           String       @unique
+  fullName      String
+  /// Calendar date only; never shown to other members.
+  dateOfBirth   DateTime     @db.Date
+  /// Home city: decides hub access, events and the NIM prefix.
+  cityId        String
+  favoriteSong  String
+  favoriteGenre String
+  quotes        String       @default("")
+  photoUrl      String?
+  isPromoter    Boolean      @default(false)
+  promoterSince DateTime?
+  status        MemberStatus @default(ACTIVE)
+  /// `src` of the QR / link that brought them in.
+  signupSource  String?
+  /// When the member agreed to data storage at registration.
+  consentAt     DateTime
+  joinedAt      DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  city             City              @relation(fields: [cityId], references: [id])
+  cards            Card[]
+  checkIns         CheckIn[]
+  xpLedger         XpLedger[]
+  promoterReports  PromoterReport[]
+  promoterPayouts  PromoterPayout[]
+  redemptions      Redemption[]
+  conversations    Conversation[]
+  reservations     Reservation[]
+  roamingRequests  RoamingRequest[]
+  screenshotEvents ScreenshotEvent[]
+
+  @@index([cityId, joinedAt])
+  @@index([fullName])
+}
+
+/// Per-city, per-year NIM counter. Incremented atomically at registration.
+model NimSequence {
+  cityId    String
+  year      Int
+  lastValue Int    @default(0)
+
+  city City @relation(fields: [cityId], references: [id])
+
+  @@id([cityId, year])
+}
+
+/// A physical NFC card (NTAG213). A member may have several over time; at most one DELIVERED.
+model Card {
+  id                 String     @id @default(cuid())
+  memberId           String
+  /// Chip UID, recorded by the Card Station at encode time.
+  nfcUid             String?    @unique
+  /// Signed token printed as QR and written as NDEF URL. Created when the card joins a batch.
+  ndefToken          String?    @unique
+  status             CardStatus @default(NOT_PRINTED)
+  batchId            String?
+  printFileUrl       String?
+  encodedAt          DateTime?
+  encodedByUserId    String?
+  /// When write protection (PWD/PACK + AUTH0) was set. Not a permanent lock.
+  lockedAt           DateTime?
+  deliveredAt        DateTime?
+  deliveredByAdminId String?
+  revokedAt          DateTime?
+  revokeReason       String?
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+
+  member      Member     @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  batch       CardBatch? @relation(fields: [batchId], references: [id])
+  encodedBy   User?      @relation("CardEncodedBy", fields: [encodedByUserId], references: [id])
+  deliveredBy User?      @relation("CardDeliveredBy", fields: [deliveredByAdminId], references: [id])
+  checkIns    CheckIn[]
+
+  @@index([status])
+  @@index([memberId])
+  @@index([batchId])
+}
+
+/// One vendor print run + encode round for one city.
+model CardBatch {
+  id              String          @id @default(cuid())
+  cityId          String
+  status          CardBatchStatus @default(EXPORTED)
+  cardCount       Int             @default(0)
+  encodedCount    Int             @default(0)
+  exportedAt      DateTime        @default(now())
+  sentToVendorAt  DateTime?
+  receivedHqAt    DateTime?
+  shippedToCityAt DateTime?
+  batchPdfUrl     String?
+  manifestCsvUrl  String?
+  vendorNote      String?
+  createdById     String?
+  createdAt       DateTime        @default(now())
+
+  city      City   @relation(fields: [cityId], references: [id])
+  createdBy User?  @relation("BatchCreatedBy", fields: [createdById], references: [id])
+  cards     Card[]
+
+  @@index([cityId, status])
+}
+
+// ─── Cities, venues, events ───────────────────────────────────────────────────
+
+model City {
+  id               String   @id @default(cuid())
+  /// 3 letters, NIM prefix. Locked once a member exists.
+  code             String   @unique
+  name             String
+  timezone         String   @default("Asia/Jakarta")
+  waGroupUrl       String?
+  /// Push copy overrides per trigger (PRODUCT.md §8), with {name} {event} {venue} {time}.
+  notificationCopy Json?
+  active           Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  admins          User[]            @relation("CityAdmins")
+  members         Member[]
+  nimSequences    NimSequence[]
+  venues          Venue[]
+  events          Event[]
+  batches         CardBatch[]
+  rewards         Reward[]
+  channels        Channel[]
+  conversations   Conversation[]
+  promoterReports PromoterReport[]
+  roamingTargets  RoamingRequest[]
+  recaps          TrafficRecap[]
+  leaderboards    LeaderboardSnapshot[]
+  settings        Setting[]
+}
+
+model Venue {
+  id        String   @id @default(cuid())
+  cityId    String
+  name      String
+  address   String?
+  lat       Float?
+  lng       Float?
+  /// Floor plan: { slots: [{ code, kind: "SOFA" | "TABLE", x, y, w, h, pax }] }.
+  layout    Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  city         City          @relation(fields: [cityId], references: [id])
+  events       Event[]
+  reservations Reservation[]
+
+  @@index([cityId])
+}
+
+model Event {
+  id                String      @id @default(cuid())
+  cityId            String
+  venueId           String?
+  title             String
+  description       String      @default("")
+  flyerUrl          String?
+  startsAt          DateTime
+  endsAt            DateTime
+  checkInOpensAt    DateTime
+  checkInClosesAt   DateTime
+  status            EventStatus @default(DRAFT)
+  /// Optional head-count cap.
+  capacity          Int?
+  /// Overrides the maxSpinsPerEvent setting when set.
+  maxSpinsPerMember Int?
+  createdById       String?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  city            City             @relation(fields: [cityId], references: [id])
+  venue           Venue?           @relation(fields: [venueId], references: [id])
+  createdBy       User?            @relation("EventCreatedBy", fields: [createdById], references: [id])
+  checkIns        CheckIn[]
+  redemptions     Redemption[]
+  promoterReports PromoterReport[]
+  reservations    Reservation[]
+  roamingRequests RoamingRequest[]
+  recap           TrafficRecap?
+  settings        Setting[]
+
+  @@index([cityId, startsAt])
+  @@index([status])
+}
+
+model CheckIn {
+  id               String        @id @default(cuid())
+  eventId          String
+  memberId         String
+  method           CheckInMethod
+  cardId           String?
+  adminId          String
+  roamingRequestId String?
+  /// Required for MANUAL.
+  manualReason     String?
+  checkedInAt      DateTime      @default(now())
+
+  event          Event           @relation(fields: [eventId], references: [id])
+  member         Member          @relation(fields: [memberId], references: [id])
+  card           Card?           @relation(fields: [cardId], references: [id])
+  admin          User            @relation("CheckInAdmin", fields: [adminId], references: [id])
+  roamingRequest RoamingRequest? @relation(fields: [roamingRequestId], references: [id])
+
+  @@unique([eventId, memberId])
+  @@index([memberId, checkedInAt])
+}
+
+/// Single-use nonces of rotating app QR tokens (APP_QR check-in).
+model UsedNonce {
+  nonce     String   @id
+  expiresAt DateTime
+
+  @@index([expiresAt])
+}
+
+// ─── XP, leaderboard, rewards ─────────────────────────────────────────────────
+
+/// Append-only. Balance = SUM(delta); leaderboard = SUM(delta > 0) per period.
+model XpLedger {
+  id        String   @id @default(cuid())
+  memberId  String
+  delta     Int
+  reason    XpReason
+  refType   String?
+  refId     String?
+  createdAt DateTime @default(now())
+
+  member Member @relation(fields: [memberId], references: [id])
+
+  @@index([memberId, createdAt])
+  @@index([createdAt])
+}
+
+model LeaderboardSnapshot {
+  id          String           @id @default(cuid())
+  scope       LeaderboardScope
+  cityId      String?
+  periodStart DateTime
+  periodEnd   DateTime
+  /// [{ rank, memberId, xp }]
+  entries     Json
+  computedAt  DateTime         @default(now())
+
+  city City? @relation(fields: [cityId], references: [id])
+
+  @@index([scope, cityId, periodStart])
+}
+
+model Reward {
+  id          String     @id @default(cuid())
+  type        RewardType
+  name        String
+  description String     @default("")
+  xpCost      Int
+  /// Null = available in every city.
+  cityId      String?
+  /// Null = unlimited.
+  stock       Int?
+  active      Boolean    @default(true)
+  spinWeight  Int        @default(0)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  city        City?        @relation(fields: [cityId], references: [id])
+  redemptions Redemption[]
+}
+
+model Redemption {
+  id                 String           @id @default(cuid())
+  memberId           String
+  rewardId           String
+  eventId            String?
+  kind               RedemptionKind
+  /// 6-character single-use code.
+  code               String           @unique
+  status             RedemptionStatus @default(ISSUED)
+  issuedAt           DateTime         @default(now())
+  expiresAt          DateTime
+  fulfilledAt        DateTime?
+  fulfilledByAdminId String?
+
+  member      Member @relation(fields: [memberId], references: [id])
+  reward      Reward @relation(fields: [rewardId], references: [id])
+  event       Event? @relation(fields: [eventId], references: [id])
+  fulfilledBy User?  @relation("RedemptionFulfilledBy", fields: [fulfilledByAdminId], references: [id])
+
+  @@index([memberId, issuedAt])
+  @@index([status, expiresAt])
+}
+
+// ─── Promoter (PR) ────────────────────────────────────────────────────────────
+
+model PromoterReport {
+  id            String               @id @default(cuid())
+  memberId      String
+  eventId       String
+  cityId        String
+  guestCount    Int
+  /// Optional [{ name, phone }]. Private, like the receipt.
+  guests        Json?
+  /// Private bucket key; served only through short-lived signed URLs.
+  receiptUrl    String
+  receiptAmount Int?
+  status        PromoterReportStatus @default(SUBMITTED)
+  bonusKind     BonusKind?
+  bonusValue    Int?
+  reviewedById  String?
+  reviewedAt    DateTime?
+  rejectReason  String?
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+
+  member     Member           @relation(fields: [memberId], references: [id])
+  event      Event            @relation(fields: [eventId], references: [id])
+  city       City             @relation(fields: [cityId], references: [id])
+  reviewedBy User?            @relation("ReportReviewedBy", fields: [reviewedById], references: [id])
+  payouts    PromoterPayout[]
+
+  @@unique([memberId, eventId])
+  @@index([cityId, status])
+}
+
+model PromoterPayout {
+  id               String       @id @default(cuid())
+  promoterReportId String
+  memberId         String
+  /// Rupiah, no decimals.
+  amount           Int
+  status           PayoutStatus @default(PENDING)
+  paidAt           DateTime?
+  paidById         String?
+  createdAt        DateTime     @default(now())
+
+  report PromoterReport @relation(fields: [promoterReportId], references: [id])
+  member Member         @relation(fields: [memberId], references: [id])
+  paidBy User?          @relation("PayoutPaidBy", fields: [paidById], references: [id])
+}
+
+// ─── Social hub ───────────────────────────────────────────────────────────────
+
+model Channel {
+  id         String            @id @default(cuid())
+  cityId     String
+  name       String
+  kind       ChannelKind
+  visibility ChannelVisibility @default(MEMBERS)
+  archived   Boolean           @default(false)
+  createdAt  DateTime          @default(now())
+
+  city     City      @relation(fields: [cityId], references: [id])
+  posts    Post[]
+  messages Message[]
+  screenshotEvents ScreenshotEvent[]
+
+  @@index([cityId])
+}
+
+model Post {
+  id        String    @id @default(cuid())
+  channelId String
+  authorId  String
+  body      String    @default("")
+  mediaUrls String[]
+  pinned    Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  deletedAt DateTime?
+
+  channel Channel @relation(fields: [channelId], references: [id])
+  author  User    @relation(fields: [authorId], references: [id])
+
+  @@index([channelId, createdAt])
+}
+
+/// Live chat in a channel, or a 1:1 conversation (exactly one of channelId / conversationId).
+model Message {
+  id             String    @id @default(cuid())
+  channelId      String?
+  conversationId String?
+  senderId       String
+  body           String    @default("")
+  mediaUrl       String?
+  mediaType      MediaType @default(TEXT)
+  mentionsAdmin  Boolean   @default(false)
+  createdAt      DateTime  @default(now())
+
+  channel      Channel?      @relation(fields: [channelId], references: [id])
+  conversation Conversation? @relation(fields: [conversationId], references: [id])
+  sender       User          @relation(fields: [senderId], references: [id])
+
+  @@index([channelId, createdAt])
+  @@index([conversationId, createdAt])
+}
+
+model Conversation {
+  id            String           @id @default(cuid())
+  kind          ConversationKind
+  cityId        String
+  memberId      String
+  reservationId String?          @unique
+  createdAt     DateTime         @default(now())
+
+  city        City         @relation(fields: [cityId], references: [id])
+  member      Member       @relation(fields: [memberId], references: [id])
+  reservation Reservation? @relation(fields: [reservationId], references: [id])
+  messages    Message[]
+}
+
+/// Screenshot attempts on hub screens (blocked on Android, detected on iOS).
+model ScreenshotEvent {
+  id        String         @id @default(cuid())
+  memberId  String
+  channelId String?
+  platform  DevicePlatform
+  createdAt DateTime       @default(now())
+
+  member  Member   @relation(fields: [memberId], references: [id])
+  channel Channel? @relation(fields: [channelId], references: [id])
+
+  @@index([memberId])
+}
+
+// ─── Reservations & roaming ───────────────────────────────────────────────────
+
+model Reservation {
+  id        String            @id @default(cuid())
+  eventId   String
+  venueId   String
+  memberId  String
+  /// Slot code from Venue.layout. Unique per event while CONFIRMED (partial index).
+  slotCode  String
+  pax       Int
+  status    ReservationStatus @default(PENDING)
+  note      String?
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  event        Event         @relation(fields: [eventId], references: [id])
+  venue        Venue         @relation(fields: [venueId], references: [id])
+  member       Member        @relation(fields: [memberId], references: [id])
+  conversation Conversation?
+
+  @@index([eventId, status])
+}
+
+model RoamingRequest {
+  id              String        @id @default(cuid())
+  memberId        String
+  eventId         String
+  targetCityId    String
+  type            RoamingType
+  status          RoamingStatus @default(PENDING)
+  decidedById     String?
+  decidedAt       DateTime?
+  /// SOCIAL_HUB: event end + roamingHubExpiryHours.
+  accessExpiresAt DateTime?
+  createdAt       DateTime      @default(now())
+
+  member     Member    @relation(fields: [memberId], references: [id])
+  event      Event     @relation(fields: [eventId], references: [id])
+  targetCity City      @relation(fields: [targetCityId], references: [id])
+  decidedBy  User?     @relation("RoamingDecidedBy", fields: [decidedById], references: [id])
+  checkIns   CheckIn[]
+
+  @@index([targetCityId, status])
+  @@index([memberId])
+}
+
+// ─── Operations ───────────────────────────────────────────────────────────────
+
+model TrafficRecap {
+  id            String    @id @default(cuid())
+  eventId       String    @unique
+  cityId        String
+  sofaCount     Int       @default(0)
+  tableCount    Int       @default(0)
+  fdcCount      Int       @default(0)
+  paxCount      Int       @default(0)
+  /// Rupiah, no decimals.
+  revenueSofa   Int       @default(0)
+  revenueTable  Int       @default(0)
+  revenueFdc    Int       @default(0)
+  /// Computed by the server.
+  total         Int       @default(0)
+  note          String?
+  submittedById String?
+  lockedAt      DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  event       Event @relation(fields: [eventId], references: [id])
+  city        City  @relation(fields: [cityId], references: [id])
+  submittedBy User? @relation("RecapSubmittedBy", fields: [submittedById], references: [id])
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  kind      String
+  title     String
+  body      String
+  data      Json?
+  sentAt    DateTime  @default(now())
+  readAt    DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, sentAt])
+}
+
+model Device {
+  id         String         @id @default(cuid())
+  userId     String
+  platform   DevicePlatform
+  pushToken  String         @unique
+  appVersion String?
+  lastSeenAt DateTime       @default(now())
+  createdAt  DateTime       @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  action     String
+  targetType String
+  targetId   String?
+  meta       Json?
+  createdAt  DateTime @default(now())
+
+  actor User? @relation("AuditActor", fields: [actorId], references: [id])
+
+  @@index([targetType, targetId])
+  @@index([createdAt])
+}
+
+/// Remote config (PRODUCT.md §9). `id` is "<scope>:<scope id>:<key>", e.g. "GLOBAL::minAge",
+/// "CITY:<cityId>:xpPerCheckIn", so each key exists once per scope.
+model Setting {
+  id          String       @id
+  key         String
+  value       Json
+  scope       SettingScope
+  cityId      String?
+  eventId     String?
+  updatedById String?
+  updatedAt   DateTime     @updatedAt
+
+  city      City?  @relation(fields: [cityId], references: [id])
+  event     Event? @relation(fields: [eventId], references: [id])
+  updatedBy User?  @relation("SettingUpdatedBy", fields: [updatedById], references: [id])
+
+  @@index([key])
+}

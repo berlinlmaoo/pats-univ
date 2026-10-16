@@ -1,0 +1,44 @@
+# Local working notes (never committed)
+HANDOFF.md
+START.md
+
+# Dependencies
+node_modules/
+
+# Env
+.env
+.env.*
+!.env.example
+
+# Next.js
+.next/
+out/
+next-env.d.ts
+*.tsbuildinfo
+
+# Prisma
+apps/web/src/generated/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+apps/mobile/ios/
+apps/mobile/android/
+.metro-health-check*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Rust
+target/
+
+# Tooling
+.DS_Store
+*.log
+coverage/
+.vscode/
+.idea/
