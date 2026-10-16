@@ -14,10 +14,11 @@ import { useT } from '@/i18n';
 const LIVE: { icon: LucideIcon; title: MessageKey; body: MessageKey; href: Href }[] = [
   { icon: ScanLine, title: 'app.adminScan', body: 'app.adminScanBody', href: '/scan' },
   { icon: CalendarDays, title: 'app.adminEvents', body: 'app.adminEventsBody', href: '/city-events' },
+  { icon: Gift, title: 'loyalty.validateReward', body: 'app.adminRedeemBody', href: '/reward-validation' },
+  { icon: CalendarDays, title: 'loyalty.operations', body: 'loyalty.operationsBody', href: '/operations' },
 ];
 const SOON: { icon: LucideIcon; title: MessageKey; body: MessageKey }[] = [
   { icon: CreditCard, title: 'app.adminHandover', body: 'app.adminHandoverBody' },
-  { icon: Gift, title: 'app.adminRedeem', body: 'app.adminRedeemBody' },
 ];
 
 export default function AdminToolsScreen() {

@@ -138,3 +138,17 @@
     }
   }
 }
+
+@page { size: A4 landscape; }
+@media print {
+  aside, nav, button, .sticky { display: none !important; }
+  html { color-scheme: light; }
+  body { background: Canvas; color: CanvasText; }
+  body > div { width: 100%; padding-left: 0 !important; }
+  main { width: 100% !important; max-width: none !important; padding: 0 !important; }
+  main .rounded-card { border: 0; border-radius: 0; box-shadow: none; }
+  .overflow-x-auto { overflow: visible !important; }
+  table { width: 100%; table-layout: fixed; font-size: var(--pats-text-caption); }
+  th, td { white-space: normal !important; overflow-wrap: anywhere; color: CanvasText; background: Canvas; padding: calc(var(--spacing) * 2) !important; }
+  tr { break-inside: avoid; }
+}

@@ -39,6 +39,14 @@ export type ApiErrorCode =
   | 'MEMBER_INACTIVE'
   | 'MEMBER_OTHER_CITY'
   | 'ALREADY_CHECKED_IN'
+  | 'INSUFFICIENT_XP'
+  | 'REWARD_UNAVAILABLE'
+  | 'SPIN_LIMIT'
+  | 'REDEEM_USED'
+  | 'REDEEM_EXPIRED'
+  | 'REPORT_REVIEWED'
+  | 'RECAP_LOCKED'
+  | 'CHECK_IN_REQUIRED'
   | 'INTERNAL';
 
 export interface OtpRequestResponse {

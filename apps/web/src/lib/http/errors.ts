@@ -37,5 +37,13 @@ export const ERROR_MESSAGE_KEY: Record<ApiErrorCode, string> = {
   MEMBER_INACTIVE: 'errors.memberInactive',
   MEMBER_OTHER_CITY: 'errors.memberOtherCity',
   ALREADY_CHECKED_IN: 'errors.alreadyCheckedIn',
+  INSUFFICIENT_XP: 'loyalty.insufficientXp',
+  REWARD_UNAVAILABLE: 'loyalty.unavailable',
+  SPIN_LIMIT: 'loyalty.spinLimit',
+  REDEEM_USED: 'loyalty.codeUsed',
+  REDEEM_EXPIRED: 'loyalty.codeExpired',
+  REPORT_REVIEWED: 'loyalty.reportReviewed',
+  RECAP_LOCKED: 'loyalty.recapLocked',
+  CHECK_IN_REQUIRED: 'loyalty.checkInRequired',
   INTERNAL: 'errors.generic',
 };

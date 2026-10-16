@@ -15,6 +15,14 @@ export class ApiFailure extends Error {
 /** i18n key for an API error code. Mirrors the web's ERROR_MESSAGE_KEY. */
 export function errorKey(code: ApiFailure['code']): string {
   switch (code) {
+    case 'INSUFFICIENT_XP': return 'loyalty.insufficientXp';
+    case 'REWARD_UNAVAILABLE': return 'loyalty.unavailable';
+    case 'SPIN_LIMIT': return 'loyalty.spinLimit';
+    case 'REDEEM_USED': return 'loyalty.codeUsed';
+    case 'REDEEM_EXPIRED': return 'loyalty.codeExpired';
+    case 'REPORT_REVIEWED': return 'loyalty.reportReviewed';
+    case 'RECAP_LOCKED': return 'loyalty.recapLocked';
+    case 'CHECK_IN_REQUIRED': return 'loyalty.checkInRequired';
     case 'NETWORK':
       return 'errors.network';
     case 'ACCOUNT_NOT_FOUND':

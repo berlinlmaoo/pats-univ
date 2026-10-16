@@ -19,6 +19,10 @@ const NAV: { href: string; labelKey: MessageKey; icon: LucideIcon }[] = [
   { href: '/events', labelKey: 'nav.events', icon: CalendarDays },
   { href: '/cities', labelKey: 'nav.cities', icon: Building2 },
   { href: '/admins', labelKey: 'nav.admins', icon: ShieldCheck },
+  { href: '/rewards', labelKey: 'loyalty.title', icon: LayoutGrid },
+  { href: '/leaderboard', labelKey: 'loyalty.leaderboard', icon: Users },
+  { href: '/recaps', labelKey: 'loyalty.recap', icon: CalendarDays },
+  { href: '/exports', labelKey: 'loyalty.export', icon: LayoutGrid },
   { href: '/settings', labelKey: 'nav.settings', icon: Settings2 },
 ];
 

@@ -6,3 +6,4 @@ export * from './nim';
 export * from './validation';
 export * from './i18n';
 export * from './settings';
+export * from './loyalty';
