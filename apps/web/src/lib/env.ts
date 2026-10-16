@@ -53,8 +53,8 @@ let cached: Env | null = null;
 /** Validated server environment. Throws once, with every problem listed, when misconfigured. */
 export function env(): Env {
   if (cached) return cached;
-  // Compose passes unset optional keys as "" (`${APPLE_TEAM_ID:-}`); treat those as unset, not as invalid values.
-  const raw = Object.fromEntries(Object.entries(process.env).filter(([, v]) => v !== ));
+  // Compose passes unset optional keys as empty strings (APPLE_TEAM_ID: ${APPLE_TEAM_ID:-}); treat those as unset, not as invalid values.
+  const raw = Object.fromEntries(Object.entries(process.env).filter(([, v]) => v !== ''));
   const parsed = schema.safeParse(raw);
   if (!parsed.success) {
     const problems = parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ');
