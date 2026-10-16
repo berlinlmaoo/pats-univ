@@ -28,7 +28,10 @@ const CARDS: Tool[] = [
   { icon: CreditCard, title: 'app.adminHandover', body: 'app.adminHandoverBody', href: '/handover', needs: 'card.handover' },
   { icon: PenLine, title: 'app.adminCards', body: 'app.adminCardsBody', href: '/member-cards', needs: 'card.reportLost' },
 ];
-const SOON: { icon: LucideIcon; title: MessageKey; body: MessageKey }[] = [{ icon: Gift, title: 'app.adminRedeem', body: 'app.adminRedeemBody' }];
+const CREW: Tool[] = [
+  { icon: Gift, title: 'loyalty.validateReward', body: 'app.adminRedeemBody', href: '/reward-validation', needs: 'reward.validate' },
+  { icon: CalendarDays, title: 'loyalty.operations', body: 'loyalty.operationsBody', href: '/operations', needs: 'city.operations' },
+];
 
 export default function AdminToolsScreen() {
   const t = useT();
@@ -51,16 +54,11 @@ export default function AdminToolsScreen() {
     <Screen title={t('app.adminTitle')} subtitle={hq ? t('app.adminSubtitleHq') : t('app.adminSubtitle', { city })}>
       {offline && <Notice tone="danger" text={t('app.offlineBody')} />}
       {group(section(DOOR))}
+      {group(section(CREW))}
       <SectionLabel>{t('app.adminCardsSection')}</SectionLabel>
       {group(section(CARDS))}
       <Card style={styles.clip}>
         <ListRow first icon={Bell} title={t('app.notificationsTitle')} subtitle={t('app.adminNotificationsBody')} onPress={() => router.push('/notifications')} />
-      </Card>
-      <SectionLabel>{t('common.soon')}</SectionLabel>
-      <Card style={styles.clip}>
-        {SOON.map(({ icon, title, body }, i) => (
-          <ListRow key={title} first={i === 0} icon={icon} title={t(title)} subtitle={t(body)} accessibilityLabel={`${t(title)}. ${t(body)}. ${t('common.soon')}`} />
-        ))}
       </Card>
     </Screen>
   );

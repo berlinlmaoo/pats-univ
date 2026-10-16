@@ -29,7 +29,7 @@ Untuk sesi server utama (NEXUS coordinator). Ditulis di akhir Phase 0, diperbaru
 | `OTP_PROVIDER` | `demo` untuk showcase; `email` setelah SMTP siap |
 | `SMTP_HOST` `SMTP_PORT` `SMTP_SECURE` `SMTP_USER` `SMTP_PASS` `SMTP_FROM` | akun SMTP PATS / relay yang sudah ada. Pengirim `no-reply@patsuniv.znetworks.id` (atau domain lain milik PATS) |
 | `CARD_KEY_SECRET` | `openssl rand -base64 48`. **Tidak boleh diganti selamanya** setelah kartu pertama di-encode: semua token kartu dan password NTAG diturunkan darinya. Simpan di password manager. Server produksi menolak start tanpa ini |
-| `CRON_SECRET` | `openssl rand -hex 24`, dikirim systemd timer ke `/api/cron/notifications` |
+| `CRON_SECRET` | `openssl rand -hex 24`, dikirim systemd timer ke `/api/cron/notifications` (Phase 2) dan `/api/cron/loyalty` (Phase 3) |
 | `STORAGE_DRIVER` | `local` (default). `s3` + `S3_ENDPOINT` `S3_REGION` `S3_BUCKET` `S3_ACCESS_KEY_ID` `S3_SECRET_ACCESS_KEY` bila pakai bucket |
 | `PUSH_PROVIDER` | `expo` (default); `EXPO_ACCESS_TOKEN` opsional |
 | `APPLE_TEAM_ID` / `ANDROID_CERT_SHA256` | untuk `/.well-known` (Team ID akun galangprata19; fingerprint sertifikat APK) |
@@ -68,6 +68,8 @@ WantedBy=timers.target
 ```
 
 Push keluar ke `https://exp.host` (Expo Push) → butuh egress HTTPS dari container `web`.
+
+**Phase 3:** timer kedua tiap menit untuk `/api/cron/loyalty` (refund kode kedaluwarsa + snapshot leaderboard per jam), secret yang sama. Contoh unit: `infra/systemd/pats-loyalty.*` + `infra/run-loyalty-cron.sh`; sesuaikan path/port saat deploy.
 
 ## 8. Nanti (bukan sekarang)
 

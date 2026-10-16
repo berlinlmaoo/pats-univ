@@ -9,7 +9,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import 'dotenv/config';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { cardUrl, toZonedInput } from '@pats/shared';
 import { PrismaClient } from '../../src/generated/prisma';
 import { newCardToken } from '../../src/lib/cards/token';
@@ -122,7 +122,7 @@ async function main() {
   const oneBatch = one.json.batch?.id as string;
   const oneFiles = oneBatch ? await db.cardBatch.findUnique({ where: { id: oneBatch } }) : null;
   check('batch of 1: token issued, files generated', one.status === 201 && one.json.files?.ok === true && Boolean(oneFiles?.batchPdfUrl), `${one.status} files=${JSON.stringify(one.json.files)}`);
-  const pdfPath = oneFiles?.batchPdfUrl ? join(process.cwd(), '.data/storage', oneFiles.batchPdfUrl) : '';
+  const pdfPath = oneFiles?.batchPdfUrl ? join(resolve(process.env.STORAGE_DIR ?? '.data/storage'), oneFiles.batchPdfUrl) : '';
   check('batch PDF stored on local storage', Boolean(pdfPath) && existsSync(pdfPath) && readFileSync(pdfPath).subarray(0, 5).toString() === '%PDF-', pdfPath);
   const again = await api('/api/hq/batches', { token: hq, body: { cityId: jkt.id, cardIds: [solo[0]!.cardId] } });
   check('a batched card cannot be batched again', again.status === 409 && again.code === 'NOT_IN_QUEUE', `${again.status} ${again.code}`);
@@ -263,7 +263,12 @@ async function main() {
   const nfcDo = await api('/api/admin/check-in', { token: admin, body: { eventId, method: 'NFC', ticket: nfcPrev.json.ticket } });
   const row = await db.checkIn.findFirst({ where: { eventId, memberId: c0.memberId } });
   check('NFC check-in recorded with the card', nfcPrev.status === 200 && nfcDo.status === 201 && row?.method === 'NFC' && row.cardId === c0.id, `${nfcDo.status} ${row?.method}`);
-  const pushIn = await db.notification.count({ where: { kind: 'checkIn', userId: c0.member.userId } });
+  // The check-in push is sent after the response (fire-and-forget), so give it a moment.
+  let pushIn = 0;
+  for (let i = 0; i < 20 && pushIn === 0; i++) {
+    pushIn = await db.notification.count({ where: { kind: 'checkIn', userId: c0.member.userId } });
+    if (pushIn === 0) await new Promise((r) => setTimeout(r, 100));
+  }
   check('check-in push stored for the member', pushIn === 1, `${pushIn}`);
   const nfcTwice = await api('/api/admin/check-in/preview', { token: admin, body: { eventId, method: 'NFC', ...hv } });
   check('second tap: already checked in', nfcTwice.json.issue?.code === 'ALREADY_CHECKED_IN' && nfcTwice.json.ticket === null, `${nfcTwice.json.issue?.code}`);

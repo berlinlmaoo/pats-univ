@@ -61,5 +61,13 @@ export const ERROR_MESSAGE_KEY: Record<ApiErrorCode, string> = {
   REQUEST_PENDING: 'errors.requestPending',
   REQUEST_DECIDED: 'errors.requestDecided',
   PUSH_NOT_CONFIGURED: 'errors.pushNotConfigured',
+  INSUFFICIENT_XP: 'loyalty.insufficientXp',
+  REWARD_UNAVAILABLE: 'loyalty.unavailable',
+  SPIN_LIMIT: 'loyalty.spinLimit',
+  REDEEM_USED: 'loyalty.codeUsed',
+  REDEEM_EXPIRED: 'loyalty.codeExpired',
+  REPORT_REVIEWED: 'loyalty.reportReviewed',
+  RECAP_LOCKED: 'loyalty.recapLocked',
+  CHECK_IN_REQUIRED: 'loyalty.checkInRequired',
   INTERNAL: 'errors.generic',
 };

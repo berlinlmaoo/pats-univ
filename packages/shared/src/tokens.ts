@@ -162,6 +162,7 @@ export const size = {
 } as const;
 
 export const motion = {
+  wheel: 1800,
   fast: 150,
   base: 200,
   slow: 300,

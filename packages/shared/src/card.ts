@@ -106,7 +106,7 @@ export const REENCODE_GRANT_HOURS = 24;
 // ─── Capabilities ─────────────────────────────────────────────────────────────
 
 /**
- * What a role may do with cards and check-in. Endpoints and screens check a capability, never
+ * What a role may do with cards, check-in and crew loyalty work. Endpoints and screens check a capability, never
  * a role, so a future role (the "regional manager", open question S1) can be given the same
  * capabilities without touching the flows.
  */
@@ -117,13 +117,15 @@ export const CAPABILITIES = [
   'card.requestReencode',
   'card.encode',
   'card.decideReencode',
+  'reward.validate',
+  'city.operations',
 ] as const;
 export type Capability = (typeof CAPABILITIES)[number];
 
 const ROLE_CAPABILITIES: Record<Role, readonly Capability[]> = {
   MEMBER: [],
-  LOCAL_ADMIN: ['checkin.scan', 'card.handover', 'card.reportLost', 'card.requestReencode'],
-  SUPER_ADMIN: ['checkin.scan', 'card.handover', 'card.reportLost', 'card.encode', 'card.decideReencode'],
+  LOCAL_ADMIN: ['checkin.scan', 'card.handover', 'card.reportLost', 'card.requestReencode', 'reward.validate', 'city.operations'],
+  SUPER_ADMIN: ['checkin.scan', 'card.handover', 'card.reportLost', 'card.encode', 'card.decideReencode', 'reward.validate', 'city.operations'],
 };
 
 export function capabilitiesOf(role: Role): readonly Capability[] {

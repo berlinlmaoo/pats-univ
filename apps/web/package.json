@@ -15,7 +15,9 @@
     "db:seed": "prisma db seed",
     "db:reset": "prisma migrate reset --force",
     "e2e:checkin": "tsx test/e2e/checkin-matrix.ts",
-    "e2e:cards": "tsx test/e2e/cards-matrix.ts"
+    "e2e:cards": "tsx test/e2e/cards-matrix.ts",
+    "db:seed:phase3": "tsx prisma/seed-phase3.ts",
+    "e2e:loyalty": "tsx test/e2e/loyalty-matrix.ts"
   },
   "dependencies": {
     "@pats/shared": "workspace:*",
@@ -34,7 +36,8 @@
     "react-dom": "19.3.0",
     "server-only": "^0.0.1",
     "tailwind-merge": "^3.3.0",
-    "zod": "^4.1.0"
+    "zod": "^4.1.0",
+    "exceljs": "^4.4.0"
   },
   "devDependencies": {
     "@tailwindcss/turbopack": "^4",

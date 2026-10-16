@@ -102,5 +102,7 @@ describe('error keys', () => {
     expect(errorMessageKey('OTP_TOO_MANY_ATTEMPTS')).toBe('errors.otpTooManyAttempts');
     expect(errorMessageKey('VALIDATION')).toBe('validation.invalid');
     expect(errorMessageKey('NETWORK')).toBe('errors.network');
+    expect(errorMessageKey('SPIN_LIMIT')).toBe('loyalty.spinLimit');
+    expect(errorMessageKey('REDEEM_USED')).toBe('loyalty.codeUsed');
   });
 });

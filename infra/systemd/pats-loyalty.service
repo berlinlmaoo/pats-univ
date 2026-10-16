@@ -1,0 +1,8 @@
+[Unit]
+Description=PATS University reward expiry and leaderboard snapshots
+After=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/pats-univ/cron.env
+ExecStart=/opt/pats-univ/infra/run-loyalty-cron.sh

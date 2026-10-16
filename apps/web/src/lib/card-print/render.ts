@@ -36,7 +36,8 @@ export interface CardPrintData {
 
 export function templateDir(): string {
   const dir = env().CARD_TEMPLATE_DIR ?? 'card-templates/placeholder';
-  return path.isAbsolute(dir) ? dir : path.join(process.cwd(), dir);
+  // Runtime config, never an input to the deployment bundle (keeps tracing from pulling in the whole repo).
+  return path.isAbsolute(dir) ? dir : path.join(/* turbopackIgnore: true */ process.cwd(), dir);
 }
 
 const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
@@ -109,12 +110,12 @@ function chromiumPath(): string | undefined {
     // fall through to the cache scan
   }
   for (const root of [path.join(homedir(), 'Library/Caches/ms-playwright'), path.join(homedir(), '.cache/ms-playwright')]) {
-    if (!existsSync(root)) continue;
-    const shells = readdirSync(root).filter((d) => d.startsWith('chromium_headless_shell-')).sort().reverse();
+    if (!existsSync(/* turbopackIgnore: true */ root)) continue;
+    const shells = readdirSync(/* turbopackIgnore: true */ root).filter((d) => d.startsWith('chromium_headless_shell-')).sort().reverse();
     for (const d of shells) {
       for (const bin of ['chrome-headless-shell-mac-arm64/chrome-headless-shell', 'chrome-headless-shell-mac-x64/chrome-headless-shell', 'chrome-headless-shell-linux64/chrome-headless-shell', 'chrome-linux/headless_shell']) {
-        const p = path.join(root, d, bin);
-        if (existsSync(p)) return p;
+        const p = path.join(/* turbopackIgnore: true */ root, d, bin);
+        if (existsSync(/* turbopackIgnore: true */ p)) return p;
       }
     }
   }

@@ -11,6 +11,8 @@ export default function MemberLayout() {
     <Stack screenOptions={stackOptions(c)}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="event/[id]" options={{ title: '' }} />
+      <Stack.Screen name="leaderboard" options={{ title: t('loyalty.leaderboard') }} />
+      <Stack.Screen name="promoter" options={{ title: t('loyalty.promoter') }} />
       <Stack.Screen name="history" options={{ title: t('app.historyTitle') }} />
     </Stack>
   );

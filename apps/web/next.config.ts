@@ -7,6 +7,8 @@ const nextConfig: NextConfig = {
   outputFileTracingRoot: path.join(__dirname, '../..'),
   transpilePackages: ['@pats/shared'],
   serverExternalPackages: ['pg', 'nodemailer', 'playwright-core'],
+  // playwright-core reads browsers.json at runtime, which static tracing can't see.
+  outputFileTracingIncludes: { '/**': ['../../node_modules/playwright-core/browsers.json'] },
   experimental: {
     // Event flyers (up to 5 MB) are uploaded through a server action.
     serverActions: { bodySizeLimit: '6mb' },

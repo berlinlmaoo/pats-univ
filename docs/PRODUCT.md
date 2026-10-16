@@ -565,3 +565,11 @@ Prototype mencakup seluruh visi PRD, tetapi beberapa bagian dibangun pada **demo
 ### Sebelum 16 Oktober 2026
 
 - PRD + Visual Flowchart tim (4 bagian): KTM & registrasi, self check-in & gamification, social hub & roaming, admin & HQ.
+
+### 16 Oktober 2026 — implementasi Phase 3
+
+26. Phase 3 dikerjakan paralel dengan Phase 2 atas persetujuan owner, dalam worktree terpisah.
+27. Redeem langsung maupun spin wajib memilih event yang check-in-nya masih dibuka dan member sudah hadir. Kode terikat ke event itu; crew kota event yang memvalidasi. Spin kedaluwarsa tetap memakai jatah event, sementara XP dan stok dikembalikan.
+28. Refund memakai jumlah debit asli di ledger, bukan harga katalog terbaru. Leaderboard mengikuti definisi ledger positif di §7, termasuk kredit refund; pengurangan saldo tidak mengurangi XP periode.
+29. Laporan PR yang ditolak dapat diperbaiki dan dikirim ulang pada baris laporan yang sama. Pembatalan validasi XP menulis entri pembalik; payout uang yang masih menunggu dihapus saat pembatalan. Payout yang sudah dibayar tidak bisa dibatalkan lewat alur ini.
+30. Export CSV/XLSX memakai nilai tampilan berformat (`3.800`, `Rp 6.000.000`) sebagai teks agar hasil sama di semua locale spreadsheet. PDF tersedia lewat tampilan cetak web (demo depth).

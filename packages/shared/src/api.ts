@@ -64,6 +64,14 @@ export type ApiErrorCode =
   | 'REQUEST_PENDING'
   | 'REQUEST_DECIDED'
   | 'PUSH_NOT_CONFIGURED'
+  | 'INSUFFICIENT_XP'
+  | 'REWARD_UNAVAILABLE'
+  | 'SPIN_LIMIT'
+  | 'REDEEM_USED'
+  | 'REDEEM_EXPIRED'
+  | 'REPORT_REVIEWED'
+  | 'RECAP_LOCKED'
+  | 'CHECK_IN_REQUIRED'
   | 'INTERNAL';
 
 export interface OtpRequestResponse {
@@ -412,10 +420,24 @@ export interface NotificationPrefsResponse {
   prefs: NotificationPrefs;
 }
 
-/** i18n key of an API error code: VALIDATION → validation.invalid, else errors.<camelCase>. */
+/** Loyalty (Phase 3) codes carry their copy in the loyalty.* namespace. */
+const LOYALTY_ERROR_KEYS: Partial<Record<ApiErrorCode, string>> = {
+  INSUFFICIENT_XP: 'loyalty.insufficientXp',
+  REWARD_UNAVAILABLE: 'loyalty.unavailable',
+  SPIN_LIMIT: 'loyalty.spinLimit',
+  REDEEM_USED: 'loyalty.codeUsed',
+  REDEEM_EXPIRED: 'loyalty.codeExpired',
+  REPORT_REVIEWED: 'loyalty.reportReviewed',
+  RECAP_LOCKED: 'loyalty.recapLocked',
+  CHECK_IN_REQUIRED: 'loyalty.checkInRequired',
+};
+
+/** i18n key of an API error code: VALIDATION → validation.invalid, loyalty codes → loyalty.*, else errors.<camelCase>. */
 export function errorMessageKey(code: ApiErrorCode | 'NETWORK'): string {
   if (code === 'VALIDATION') return 'validation.invalid';
   if (code === 'INTERNAL') return 'errors.generic';
+  const loyalty = code === 'NETWORK' ? undefined : LOYALTY_ERROR_KEYS[code];
+  if (loyalty) return loyalty;
   const [first, ...rest] = code.toLowerCase().split('_');
   return `errors.${first}${rest.map((p) => p[0]!.toUpperCase() + p.slice(1)).join('')}`;
 }
