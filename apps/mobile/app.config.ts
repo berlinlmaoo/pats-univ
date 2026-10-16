@@ -5,6 +5,7 @@ import colors from '../../packages/shared/src/colors.json';
 const config: ExpoConfig = {
   name: 'PATS University',
   slug: 'pats-university',
+  owner: "the-z-networks",
   version: '0.1.0',
   orientation: 'portrait',
   scheme: 'patsuniv',
@@ -96,7 +97,8 @@ const config: ExpoConfig = {
   extra: {
     apiUrl: process.env.EXPO_PUBLIC_API_URL,
     // EAS project id (from `eas init`): needed for push tokens. See docs/NFC-DEV-BUILD.md.
-    eas: process.env.EAS_PROJECT_ID ? { projectId: process.env.EAS_PROJECT_ID } : undefined,
+    // EAS project @the-z-networks/pats-university (16 Oct 2026): push tokens and credentials. Override with EAS_PROJECT_ID.
+    eas: { projectId: process.env.EAS_PROJECT_ID ?? "bbeb2b58-a158-4576-ad0e-02bb914e8685" },
   },
 };
 
