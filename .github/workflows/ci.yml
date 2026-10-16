@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [dev, master]
+  pull_request:
+
+jobs:
+  js:
+    name: Lint, typecheck, test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @pats/web exec prisma validate
+        env:
+          DATABASE_URL: postgresql://ci@localhost:5432/ci
+      - run: pnpm typecheck
+        env:
+          DATABASE_URL: postgresql://ci@localhost:5432/ci
+      - run: pnpm lint
+      - run: pnpm test
+
+  card-station:
+    name: Card Station (Rust)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tools/card-station
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y libpcsclite-dev
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - run: cargo test --locked
+      - run: cargo clippy --locked -- -D warnings
