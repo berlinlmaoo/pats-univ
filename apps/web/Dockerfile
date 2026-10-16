@@ -18,9 +18,12 @@ RUN pnpm --filter @pats/web build
 FROM base AS runtime
 WORKDIR /app
 ENV NODE_ENV=production PORT=3000 HOSTNAME=0.0.0.0
+# Headless Chromium renders the card print PDFs (src/lib/card-print).
+RUN apt-get update && apt-get install -y --no-install-recommends chromium fonts-dejavu-core ca-certificates && rm -rf /var/lib/apt/lists/*
 COPY --from=build /repo/apps/web/.next/standalone ./
 COPY --from=build /repo/apps/web/.next/static ./apps/web/.next/static
 COPY --from=build /repo/apps/web/public ./apps/web/public
+COPY --from=build /repo/apps/web/card-templates ./apps/web/card-templates
 # Migrations run on start (prisma migrate deploy) with the CLI from the build stage.
 COPY --from=build /repo/apps/web/prisma ./apps/web/prisma
 COPY --from=build /repo/apps/web/prisma.config.ts ./apps/web/

@@ -12,7 +12,7 @@ import { useI18n } from '@/i18n';
 import { ApiFailure, errorKey } from '@/lib/api';
 import { size, space, useColors } from '@/theme';
 
-export type Subject = { method: 'APP_QR'; token: string } | { method: 'MANUAL'; memberId: string };
+export type Subject = { method: 'NFC'; token: string; nfcUid: string } | { method: 'APP_QR'; token: string } | { method: 'MANUAL'; memberId: string };
 
 export type ScanState =
   | { kind: 'idle' }
@@ -59,9 +59,9 @@ export function useCheckIn(eventId: string, onRecorded?: (r: CheckInResponse) =>
       const { preview: p, subject } = state;
       setState({ kind: 'committing', preview: p, subject });
       const body =
-        subject.method === 'APP_QR'
-          ? { method: 'APP_QR', eventId, ticket: p.ticket }
-          : { method: 'MANUAL', eventId, memberId: subject.memberId, reason };
+        subject.method === 'MANUAL'
+          ? { method: 'MANUAL', eventId, memberId: subject.memberId, reason }
+          : { method: subject.method, eventId, ticket: p.ticket };
       try {
         const res = await call<CheckInResponse>('POST', '/api/admin/check-in', body);
         haptic('success');
@@ -82,7 +82,12 @@ export function useCheckIn(eventId: string, onRecorded?: (r: CheckInResponse) =>
   );
 
   const reset = useCallback(() => setState({ kind: 'idle' }), []);
-  return { state, preview, confirm, reset };
+  /** Show a failure that happened before the server was asked (e.g. a tag that isn't a PATS card). */
+  const fail = useCallback((failure: ApiFailure) => {
+    haptic('error');
+    setState({ kind: 'error', failure });
+  }, []);
+  return { state, preview, confirm, reset, fail };
 }
 
 /** Seconds left on the preview's ticket, ticking. */

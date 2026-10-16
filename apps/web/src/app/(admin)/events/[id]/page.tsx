@@ -1,4 +1,4 @@
-import { CHECK_IN_METHODS, eventPhase, formatCount, formatDate, formatTime, type CheckInMethod } from '@pats/shared';
+import { CHECK_IN_METHODS, cityCopy, eventPhase, fillCopy, formatCount, formatDate, formatTime, type CheckInMethod } from '@pats/shared';
 import { ChevronLeft, ScanLine } from 'lucide-react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
@@ -15,6 +15,7 @@ import { requireHq } from '@/lib/hq/guard';
 import { getT } from '@/lib/i18n';
 import { EventDialogButton } from '../event-form';
 import { EventActions } from './event-actions';
+import { BroadcastButton, FlyerUpload } from './broadcast';
 import { LiveRefresh } from './live-refresh';
 
 type Params = { params: Promise<{ id: string }> };
@@ -40,7 +41,7 @@ export default async function EventPage({ params }: Params) {
   const tz = event.city.timezone;
   const phase = eventPhase(event, now);
 
-  const [checkIns, grouped, form] = await Promise.all([
+  const [checkIns, grouped, form, cityMembers, eventCity] = await Promise.all([
     db.checkIn.findMany({
       where: { eventId: event.id },
       orderBy: { checkedInAt: 'desc' },
@@ -49,6 +50,12 @@ export default async function EventPage({ params }: Params) {
     }),
     db.checkIn.groupBy({ by: ['method'], where: { eventId: event.id }, _count: { _all: true } }),
     eventFormOptions(),
+    db.city.findMany({
+      where: { active: true },
+      orderBy: { name: 'asc' },
+      select: { id: true, name: true, _count: { select: { members: { where: { status: 'ACTIVE', user: { status: 'ACTIVE' } } } } } },
+    }),
+    db.city.findUnique({ where: { id: event.cityId }, select: { notificationCopy: true } }),
   ]);
   const byMethod = Object.fromEntries(CHECK_IN_METHODS.map((m) => [m, 0])) as Record<CheckInMethod, number>;
   for (const g of grouped) byMethod[g.method] = g._count._all;
@@ -62,6 +69,17 @@ export default async function EventPage({ params }: Params) {
       <span className="whitespace-nowrap">{from}</span> – <span className="whitespace-nowrap">{to}</span>
     </>
   );
+  const pushValues = {
+    event: event.title,
+    venue: event.venue?.name ?? event.city.name,
+    time: `${formatDate(event.startsAt, t.locale, { timeZone: tz })}, ${formatTime(event.startsAt, { timeZone: tz })}`,
+    city: event.city.name,
+    name: t('events.broadcastSampleName'),
+  };
+  const pushPreview = {
+    title: fillCopy(t('push.eventBroadcast.title'), pushValues),
+    body: fillCopy(cityCopy(eventCity?.notificationCopy, 'eventBroadcast', t.locale) ?? t('push.eventBroadcast.body'), pushValues),
+  };
   const when = range(dateTime(event.startsAt), sameDay ? formatTime(event.endsAt, { timeZone: tz }) : dateTime(event.endsAt));
 
   return (
@@ -82,7 +100,14 @@ export default async function EventPage({ params }: Params) {
               <span>{[event.venue?.name, event.city.name].filter(Boolean).join(' · ')}</span>
             </div>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <BroadcastButton
+              eventId={event.id}
+              eventCityId={event.cityId}
+              cities={cityMembers.map((c) => ({ id: c.id, name: c.name, members: c._count.members }))}
+              preview={pushPreview}
+              disabled={event.status === 'DRAFT'}
+            />
             <EventDialogButton
               cities={form.cities}
               defaults={form.defaults}
@@ -174,6 +199,19 @@ export default async function EventPage({ params }: Params) {
             {event.description && (
               <p className="whitespace-pre-line border-t border-border px-5 py-4 text-body-sm text-muted">{event.description}</p>
             )}
+          </Card>
+
+          <Card>
+            <CardHeader title={t('events.flyer')} className="pb-3" />
+            <div className="flex flex-col gap-3 border-t border-border px-5 py-4">
+              {event.flyerUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element -- served from our own storage route
+                <img src={`/api/events/${event.id}/flyer?v=${event.updatedAt.getTime()}`} alt={t('events.flyerAlt', { title: event.title })} className="max-h-72 w-full rounded-control border border-border object-contain" />
+              ) : (
+                <p className="text-body-sm text-muted">{t('events.flyerEmpty')}</p>
+              )}
+              <FlyerUpload eventId={event.id} hasFlyer={Boolean(event.flyerUrl)} />
+            </div>
           </Card>
 
           <Card>

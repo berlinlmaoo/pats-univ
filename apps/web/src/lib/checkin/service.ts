@@ -18,6 +18,9 @@ import { db } from '../db';
 import { isUniqueViolation } from '../db-errors';
 import { env } from '../env';
 import { AppError } from '../http/errors';
+import { cardByToken, cardKey } from '../cards/service';
+import { signNfcTicket, verifyNfcTicket } from '../cards/token';
+import { notifyUsers } from '../push/notify';
 import { getSetting } from '../settings';
 import { newNonce, signQr, signTicket, verifyQr, verifyTicket } from './token';
 
@@ -52,7 +55,7 @@ const memberSelect = {
   status: true,
   cityId: true,
   city: { select: { id: true, code: true, name: true } },
-  user: { select: { status: true } },
+  user: { select: { id: true, status: true } },
 } satisfies Prisma.MemberSelect;
 
 type ScannedMember = Prisma.MemberGetPayload<{ select: typeof memberSelect }>;
@@ -94,7 +97,16 @@ export async function previewCheckIn(admin: AuthUser, input: PreviewInput, now =
 
   let memberId: string;
   let nonce: string | null = null;
-  if (input.method === 'APP_QR') {
+  let cardId: string | null = null;
+  if (input.method === 'NFC') {
+    // PRODUCT.md §6.1.3: a genuine token, of a DELIVERED card, read from the chip it was bound to.
+    const card = await cardByToken(input.token);
+    if (card.status === 'REVOKED') throw new AppError('CARD_REVOKED', 409);
+    if (card.status !== 'DELIVERED') throw new AppError('CARD_NOT_DELIVERED', 409);
+    if (card.nfcUid !== input.nfcUid) throw new AppError('CARD_UID_MISMATCH', 409);
+    memberId = card.memberId;
+    cardId = card.id;
+  } else if (input.method === 'APP_QR') {
     const qr = verifyQr(key(), input.token, now);
     if (!qr.ok) throw new AppError(qr.reason === 'expired' ? 'QR_EXPIRED' : 'QR_INVALID', qr.reason === 'expired' ? 410 : 422);
     if (await db.usedNonce.findUnique({ where: { nonce: qr.claims.nonce } })) throw new AppError('QR_USED', 409);
@@ -123,10 +135,13 @@ export async function previewCheckIn(admin: AuthUser, input: PreviewInput, now =
   else if (member.cityId !== event.cityId && !roaming) issue = { code: 'MEMBER_OTHER_CITY' };
 
   const ticketExpiresAt = new Date(now.getTime() + TICKET_TTL_SECONDS * 1000);
-  const ticket =
-    input.method === 'APP_QR' && !issue && nonce
+  const ticket = issue
+    ? null
+    : input.method === 'APP_QR' && nonce
       ? signTicket(key(), { adminId: admin.id, eventId: event.id, memberId, nonce, expiresAt: ticketExpiresAt })
-      : null;
+      : input.method === 'NFC' && cardId
+        ? signNfcTicket(cardKey(), { adminId: admin.id, eventId: event.id, memberId, cardId, expiresAt: ticketExpiresAt })
+        : null;
 
   return {
     member: scanMember,
@@ -147,7 +162,19 @@ export async function previewCheckIn(admin: AuthUser, input: PreviewInput, now =
 export async function commitCheckIn(admin: AuthUser, input: CommitInput, now = new Date()): Promise<CheckInResponse> {
   let memberId: string;
   let nonce: { value: string; expiresAt: Date } | null = null;
-  if (input.method === 'APP_QR') {
+  let cardId: string | null = null;
+  if (input.method === 'NFC') {
+    const ticket = verifyNfcTicket(cardKey(), input.ticket, now);
+    if (!ticket.ok) throw new AppError(ticket.reason === 'expired' ? 'TICKET_EXPIRED' : 'CARD_INVALID', ticket.reason === 'expired' ? 410 : 422);
+    if (ticket.claims.adminId !== admin.id || ticket.claims.eventId !== input.eventId) throw new AppError('FORBIDDEN', 403);
+    // The card may have been revoked between the tap and the confirm.
+    const card = await db.card.findUnique({ where: { id: ticket.claims.cardId }, select: { status: true, memberId: true } });
+    if (!card || card.memberId !== ticket.claims.memberId) throw new AppError('CARD_NOT_FOUND', 404);
+    if (card.status === 'REVOKED') throw new AppError('CARD_REVOKED', 409);
+    if (card.status !== 'DELIVERED') throw new AppError('CARD_NOT_DELIVERED', 409);
+    memberId = ticket.claims.memberId;
+    cardId = ticket.claims.cardId;
+  } else if (input.method === 'APP_QR') {
     const ticket = verifyTicket(key(), input.ticket, now);
     if (!ticket.ok) throw new AppError(ticket.reason === 'expired' ? 'TICKET_EXPIRED' : 'QR_INVALID', ticket.reason === 'expired' ? 410 : 422);
     if (ticket.claims.adminId !== admin.id || ticket.claims.eventId !== input.eventId) throw new AppError('FORBIDDEN', 403);
@@ -181,6 +208,7 @@ export async function commitCheckIn(admin: AuthUser, input: CommitInput, now = n
           eventId: event.id,
           memberId: member.id,
           method: input.method,
+          cardId,
           adminId: admin.id,
           roamingRequestId: roaming?.id,
           manualReason: input.method === 'MANUAL' ? input.reason : null,
@@ -211,6 +239,8 @@ export async function commitCheckIn(admin: AuthUser, input: CommitInput, now = n
   });
 
   const count = await db.checkIn.count({ where: { eventId: event.id } });
+  // "Check-in {event} recorded" (PRODUCT.md §8); XP stays hidden until Phase 3.
+  void notifyUsers([member.user.id], { kind: 'checkIn', cityId: event.cityId, values: { event: event.title }, data: { screen: 'history', eventId: event.id } });
   return { checkIn: toAttendanceEntry(checkIn), count };
 }
 

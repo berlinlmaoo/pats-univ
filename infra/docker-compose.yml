@@ -19,16 +19,6 @@ services:
       timeout: 5s
       retries: 5
 
-  minio:
-    image: minio/minio:latest
-    restart: unless-stopped
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?set MINIO_ROOT_USER}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD}
-    volumes:
-      - miniodata:/data
-
   web:
     build:
       context: ..
@@ -48,6 +38,24 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASS: ${SMTP_PASS:-}
       SMTP_FROM: ${SMTP_FROM:-PATS University <no-reply@patsuniv.znetworks.id>}
+      # Cards: never change CARD_KEY_SECRET once cards are encoded (it derives every chip password).
+      CARD_KEY_SECRET: ${CARD_KEY_SECRET:?set CARD_KEY_SECRET}
+      CHROMIUM_PATH: /usr/bin/chromium
+      # Files (print PDFs, flyers): local disk on the storage volume; S3 is optional (INFRA-NEEDS.md).
+      STORAGE_DRIVER: ${STORAGE_DRIVER:-local}
+      STORAGE_DIR: /data/storage
+      S3_ENDPOINT: ${S3_ENDPOINT:-}
+      S3_REGION: ${S3_REGION:-auto}
+      S3_BUCKET: ${S3_BUCKET:-}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-}
+      PUSH_PROVIDER: ${PUSH_PROVIDER:-expo}
+      EXPO_ACCESS_TOKEN: ${EXPO_ACCESS_TOKEN:-}
+      CRON_SECRET: ${CRON_SECRET:?set CRON_SECRET}
+      APPLE_TEAM_ID: ${APPLE_TEAM_ID:-}
+      ANDROID_CERT_SHA256: ${ANDROID_CERT_SHA256:-}
+    volumes:
+      - storage:/data/storage
     ports:
       - '127.0.0.1:3100:3000'
     healthcheck:
@@ -68,4 +76,5 @@ services:
 
 volumes:
   pgdata:
-  miniodata:
+  # Print files and flyers. Back it up with the database.
+  storage:

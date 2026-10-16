@@ -1,4 +1,4 @@
-import type { CardStatus, CheckInMethod, EventPhase, MemberStatus, Translator, UserStatus } from '@pats/shared';
+import type { CardBatchStatus, CardStatus, CheckInMethod, EventPhase, MemberStatus, Translator, UserStatus } from '@pats/shared';
 import { Badge, type BadgeTone } from '@/components/ui/badge';
 
 const CARD_TONE: Record<CardStatus, BadgeTone> = {
@@ -52,4 +52,21 @@ const METHOD_TONE: Record<CheckInMethod, BadgeTone> = { NFC: 'accent', APP_QR: '
 
 export function MethodBadge({ method, t }: { method: CheckInMethod; t: Translator }) {
   return <Badge tone={METHOD_TONE[method]}>{t(`checkInMethod.${method}`)}</Badge>;
+}
+
+const BATCH_TONE: Record<CardBatchStatus, BadgeTone> = {
+  EXPORTED: 'neutral',
+  SENT_TO_VENDOR: 'accent',
+  RECEIVED_HQ: 'accent',
+  ENCODING: 'warning',
+  SHIPPED_TO_CITY: 'accent',
+  DONE: 'success',
+};
+
+export function BatchStatusBadge({ status, t }: { status: CardBatchStatus; t: Translator }) {
+  return (
+    <Badge tone={BATCH_TONE[status]} dot>
+      {t(`batchStatus.${status}`)}
+    </Badge>
+  );
 }

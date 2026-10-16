@@ -1,10 +1,13 @@
 import { formatPhone } from '@pats/shared';
+import { router } from 'expo-router';
+import { Bell } from 'lucide-react-native';
 import { useState } from 'react';
 import { Alert, StyleSheet, View } from 'react-native';
 import { useAuth } from '@/auth';
 import { Button } from '@/components/button';
 import { Card } from '@/components/card';
 import { DetailList } from '@/components/detail-list';
+import { ListRow } from '@/components/list-row';
 import { Screen } from '@/components/screen';
 import { SectionLabel } from '@/components/section-label';
 import { LanguageToggle } from '@/components/language-toggle';
@@ -88,6 +91,9 @@ export function ProfileScreen() {
         <Text variant="body">{t('common.language')}</Text>
         <LanguageToggle />
       </Card>
+      <Card style={styles.clip}>
+        <ListRow first icon={Bell} title={t('app.notificationSettingsTitle')} subtitle={t('app.notificationSettingsBody')} onPress={() => router.push('/notification-settings')} />
+      </Card>
 
       <Button variant="secondary" label={t('common.signOut')} onPress={confirmSignOut} style={styles.signOut} />
       <Text variant="caption" tone="textMuted" style={styles.version}>
@@ -103,5 +109,6 @@ const styles = StyleSheet.create({
   heroText: { flex: 1, gap: space[0.5] },
   prefRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: space[4], paddingVertical: space[3] },
   signOut: { marginTop: space[4] },
+  clip: { overflow: 'hidden' },
   version: { textAlign: 'center' },
 });

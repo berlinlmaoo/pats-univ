@@ -1,4 +1,4 @@
-import { ageOn, formatCount, formatDate, formatPhone, formatTime } from '@pats/shared';
+import { ageOn, formatCount, formatDate, formatPhone, formatTime, formatUid } from '@pats/shared';
 import { ChevronLeft } from 'lucide-react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
@@ -7,9 +7,11 @@ import { DetailList } from '@/components/dashboard/detail-list';
 import { ActiveBadge, CardStatusBadge, MethodBadge } from '@/components/dashboard/status';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardHeader } from '@/components/ui/card';
+import { batchLabel } from '@/lib/cards/service';
 import { db } from '@/lib/db';
 import { requireHq } from '@/lib/hq/guard';
 import { getT } from '@/lib/i18n';
+import { RevokeCardButton } from '../../cards/revoke-button';
 import { MemberActions } from './member-actions';
 
 type Params = { params: Promise<{ id: string }> };
@@ -20,7 +22,10 @@ async function load(id: string) {
     include: {
       user: { select: { email: true, phone: true } },
       city: { select: { id: true, name: true, code: true, timezone: true } },
-      cards: { orderBy: { createdAt: 'desc' }, take: 1, select: { status: true } },
+      cards: {
+        orderBy: { createdAt: 'desc' },
+        include: { batch: { select: { id: true, number: true, city: { select: { code: true } } } }, deliveredBy: { select: { name: true } } },
+      },
       checkIns: {
         orderBy: { checkedInAt: 'desc' },
         take: 20,
@@ -168,13 +173,44 @@ export default async function MemberPage({ params }: Params) {
             </div>
           </Card>
           <Card>
+            <CardHeader title={t('members.cards')} className="pb-3" />
+            {member.cards.length === 0 ? (
+              <p className="border-t border-border px-5 py-4 text-body-sm text-muted">{t('members.cardsEmpty')}</p>
+            ) : (
+              <ul className="divide-y divide-border border-t border-border">
+                {member.cards.map((c) => (
+                  <li key={c.id} className="flex items-start justify-between gap-3 px-5 py-3">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <CardStatusBadge status={c.status} t={t} />
+                        {c.batch && (
+                          <Link href={`/cards/batches/${c.batch.id}`} className="text-caption tabular-nums text-accent-fg hover:underline">
+                            {batchLabel(c.batch.city.code, c.batch.number)}
+                          </Link>
+                        )}
+                      </div>
+                      <p className="mt-1 text-caption text-muted">
+                        {c.status === 'REVOKED' && c.revokedAt
+                          ? t('members.cardRevoked', { date: formatDate(c.revokedAt, t.locale, { timeZone: tz }), reason: c.revokeReason ?? '—' })
+                          : c.status === 'DELIVERED' && c.deliveredAt
+                            ? t('members.cardDelivered', { date: formatDate(c.deliveredAt, t.locale, { timeZone: tz }), name: c.deliveredBy?.name ?? '—' })
+                            : t('members.cardSince', { date: formatDate(c.createdAt, t.locale, { timeZone: tz }) })}
+                      </p>
+                      {c.nfcUid && <p className="mt-0.5 font-mono text-caption text-muted">{formatUid(c.nfcUid)}</p>}
+                    </div>
+                    {c.status !== 'REVOKED' && c.status !== 'NOT_PRINTED' && <RevokeCardButton cardId={c.id} memberName={member.fullName} />}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+          <Card>
             <CardHeader title={t('members.membership')} className="pb-3" />
             <div className="border-t border-border">
               <DetailList
                 items={[
                   { label: t('members.joined'), value: formatDate(member.joinedAt, t.locale, { timeZone: tz }) },
                   { label: t('members.source'), value: member.signupSource ?? t('members.sourceDirect') },
-                  { label: t('members.card'), value: <CardStatusBadge status={member.cards[0]?.status ?? 'NOT_PRINTED'} t={t} /> },
                   { label: t('members.promoter'), value: member.isPromoter ? t('common.yes') : t('common.no') },
                 ]}
               />

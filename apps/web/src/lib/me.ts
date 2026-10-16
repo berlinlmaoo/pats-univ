@@ -1,9 +1,6 @@
 import 'server-only';
-import type { CardStatus, MeResponse } from '@pats/shared';
+import { capabilitiesOf, CARD_DISPLAY_PRIORITY, type MeResponse } from '@pats/shared';
 import { db } from './db';
-
-/** Statuses ordered from most to least relevant, to pick which card the member sees. */
-const CARD_PRIORITY: CardStatus[] = ['DELIVERED', 'ENCODED', 'RECEIVED_HQ', 'SENT_TO_VENDOR', 'IN_BATCH', 'NOT_PRINTED', 'REVOKED'];
 
 export async function buildMe(userId: string): Promise<MeResponse> {
   const user = await db.user.findUniqueOrThrow({
@@ -20,7 +17,7 @@ export async function buildMe(userId: string): Promise<MeResponse> {
   });
   const m = user.member;
   const cardStatus =
-    CARD_PRIORITY.find((s) => m?.cards.some((c) => c.status === s)) ?? 'NOT_PRINTED';
+    CARD_DISPLAY_PRIORITY.find((s) => m?.cards.some((c) => c.status === s)) ?? 'NOT_PRINTED';
   return {
     user: {
       id: user.id,
@@ -30,6 +27,7 @@ export async function buildMe(userId: string): Promise<MeResponse> {
       role: user.role,
       locale: user.locale,
       city: user.city ?? m?.city ?? null,
+      capabilities: [...capabilitiesOf(user.role)],
     },
     member: m
       ? {

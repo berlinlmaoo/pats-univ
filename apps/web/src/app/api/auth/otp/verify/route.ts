@@ -8,17 +8,17 @@ import { clientIp, ok, readJson, route } from '@/lib/http/respond';
 import { buildMe } from '@/lib/me';
 import { consumeOtp } from '@/lib/otp/service';
 
-const body = otpVerifySchema.extend({ client: z.enum(['app', 'web']).default('app') });
+const body = otpVerifySchema.extend({ client: z.enum(['app', 'web', 'station']).default('app') });
 
 /**
  * Step 2 of login. The app gets an access + refresh token pair; the HQ dashboard gets an
- * httpOnly session cookie.
+ * httpOnly session cookie; the Mac Card Station gets app tokens for an HQ account.
  */
 export const POST = route(async (req: Request) => {
   const input = body.parse(await readJson(req));
   const ip = clientIp(req);
   const meta = { userAgent: req.headers.get('user-agent'), ip };
-  const user = await findLoginUser(input.email, input.client === 'web' ? 'hq' : 'app');
+  const user = await findLoginUser(input.email, input.client === 'app' ? 'app' : 'hq');
   await consumeOtp({ email: user.email, purpose: 'LOGIN', code: input.code, ip });
 
   if (input.client === 'web') {

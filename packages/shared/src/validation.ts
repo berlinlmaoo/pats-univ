@@ -4,6 +4,8 @@
  */
 import { z } from 'zod';
 import { parseIsoDate } from './format';
+import { BATCH_MAX_CARDS, CARD_TOKEN_PATTERN, normalizeUid } from './card';
+import { CHIP_TYPES } from './ntag';
 import { NIM_PATTERN } from './nim';
 
 export const OTP_LENGTH = 6;
@@ -167,7 +169,22 @@ export type EventAction = z.output<typeof eventActionSchema>['action'];
 export const MANUAL_REASON_MIN = 3;
 
 /** What the scanner sends: a scanned app QR, or a member picked by name (manual). */
+const cardTokenField = z.string().trim().regex(CARD_TOKEN_PATTERN, 'validation.cardTokenInvalid');
+export const nfcUidSchema = z
+  .string()
+  .trim()
+  .transform((v, ctx) => {
+    const uid = normalizeUid(v);
+    if (!uid) {
+      ctx.addIssue({ code: 'custom', message: 'validation.uidInvalid' });
+      return z.NEVER;
+    }
+    return uid;
+  });
+
 export const checkInSubjectSchema = z.discriminatedUnion('method', [
+  /** A tapped card: the token from its NDEF URL and the chip UID read in the same session. */
+  z.object({ method: z.literal('NFC'), token: cardTokenField, nfcUid: nfcUidSchema }),
   z.object({ method: z.literal('APP_QR'), token: z.string().trim().min(1).max(512) }),
   z.object({ method: z.literal('MANUAL'), memberId: z.string().trim().min(1).max(64) }),
 ]);
@@ -176,6 +193,7 @@ export const checkInPreviewSchema = z.object({ eventId: z.string().trim().min(1)
 
 /** Confirm after the preview: APP_QR carries the preview's ticket, MANUAL a mandatory reason. */
 export const checkInCommitSchema = z.discriminatedUnion('method', [
+  z.object({ method: z.literal('NFC'), eventId: z.string().trim().min(1), ticket: z.string().trim().min(1).max(1024) }),
   z.object({ method: z.literal('APP_QR'), eventId: z.string().trim().min(1), ticket: z.string().trim().min(1).max(1024) }),
   z.object({
     method: z.literal('MANUAL'),
@@ -188,3 +206,71 @@ export const checkInCommitSchema = z.discriminatedUnion('method', [
       .max(200, 'validation.tooLong'),
   }),
 ]);
+
+// ─── Cards, stations, push (Phase 2) ──────────────────────────────────────────
+
+export const REASON_MIN = 3;
+const reasonField = z.string('validation.reasonRequired').trim().min(REASON_MIN, 'validation.reasonRequired').max(200, 'validation.tooLong');
+
+/** New print batch from the queue: one city, each card once. */
+export const createBatchSchema = z.object({
+  cityId: z.string('validation.cityRequired').trim().min(1, 'validation.cityRequired'),
+  cardIds: z
+    .array(z.string().trim().min(1).max(64))
+    .min(1, 'validation.batchEmpty')
+    .max(BATCH_MAX_CARDS, 'validation.batchTooLarge'),
+});
+
+export const revokeCardSchema = z.object({ reason: reasonField });
+export const reencodeRequestSchema = z.object({ reason: reasonField });
+export const reencodeDecisionSchema = z.object({
+  approve: z.boolean(),
+  note: z.string().trim().max(200, 'validation.tooLong').optional(),
+});
+
+export const handoverSchema = z.object({ token: cardTokenField, nfcUid: nfcUidSchema });
+
+export const stationLabelSchema = z.string().trim().min(1).max(60);
+
+/** A station identifies a printed card (QR or NIM) and holds it while it encodes. */
+export const stationClaimSchema = z.object({
+  lookup: z.string('validation.required').trim().min(1, 'validation.required').max(200),
+  station: stationLabelSchema,
+  mode: z.enum(['encode', 'reencode']).default('encode'),
+  /** Limit lookups to one batch (the station's current batch). */
+  batchId: z.string().trim().min(1).optional(),
+  /** An approved re-encode request: lets its requester encode that one card. */
+  grantId: z.string().trim().min(1).optional(),
+  /** Re-encode only: issue a new token (the old one stops working). */
+  rotateToken: z.boolean().default(false),
+});
+
+export const stationKeySchema = z.object({ leaseId: z.string().trim().min(1), nfcUid: nfcUidSchema });
+export const stationEncodedSchema = z.object({
+  leaseId: z.string().trim().min(1),
+  nfcUid: nfcUidSchema,
+  /** Password protection was switched on in this write (first encode). */
+  protectedNow: z.boolean(),
+  /** Detected with GET_VERSION; stored for audit and re-encode. */
+  chipType: z.enum(CHIP_TYPES),
+});
+export const stationReleaseSchema = z.object({
+  leaseId: z.string().trim().min(1),
+  /** Why the station gave up (a TagFailure code), for the audit log. */
+  failure: z.string().trim().max(40).optional(),
+  detail: z.string().trim().max(300).optional(),
+});
+
+export const deviceSchema = z.object({
+  platform: z.enum(['IOS', 'ANDROID']),
+  pushToken: z.string().trim().min(10).max(300),
+  appVersion: z.string().trim().max(40).optional(),
+});
+
+export const notificationPrefsSchema = z.object({ events: z.boolean(), activity: z.boolean() }).partial();
+
+export const markReadSchema = z.union([z.object({ all: z.literal(true) }), z.object({ ids: z.array(z.string().min(1)).min(1).max(200) })]);
+
+export const broadcastSchema = z.object({
+  cityIds: z.array(z.string().trim().min(1)).min(1, 'validation.citiesRequired').max(50),
+});

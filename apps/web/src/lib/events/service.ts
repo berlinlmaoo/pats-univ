@@ -38,6 +38,8 @@ export function toEventSummary(
     status: e.status,
     phase: eventPhase(e, now),
     capacity: e.capacity,
+    // Served by /api/events/:id/flyer; the version busts caches when HQ replaces it.
+    flyerUrl: e.flyerUrl ? `/api/events/${e.id}/flyer?v=${e.updatedAt.getTime()}` : null,
     ...extra,
   };
 }

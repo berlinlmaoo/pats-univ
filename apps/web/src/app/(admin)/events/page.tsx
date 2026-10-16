@@ -1,4 +1,4 @@
-import { eventPhase, formatCount, formatDate, formatTime } from '@pats/shared';
+import { CHECK_IN_METHODS, eventPhase, formatCount, formatDate, formatTime, type CheckInMethod, type Translator } from '@pats/shared';
 import { CalendarDays, CalendarX2 } from 'lucide-react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
@@ -49,6 +49,9 @@ export default async function EventsPage({ searchParams }: { searchParams: Promi
     eventFormOptions(),
     db.event.count().then((n) => n > 0),
   ]);
+  // Method audit (PLAN.md §4 Phase 2): how often the door fell back from the card to QR or manual.
+  const methods = await db.checkIn.groupBy({ by: ['eventId', 'method'], where: { eventId: { in: events.map((e) => e.id) } }, _count: { _all: true } });
+  const methodsOf = (id: string) => Object.fromEntries(methods.filter((m) => m.eventId === id).map((m) => [m.method, m._count._all])) as Partial<Record<CheckInMethod, number>>;
 
   const newButton = <EventDialogButton cities={form.cities} defaults={form.defaults} />;
 
@@ -81,6 +84,7 @@ export default async function EventsPage({ searchParams }: { searchParams: Promi
                 <Th className="hidden md:table-cell">{t('events.colCity')}</Th>
                 <Th className="hidden sm:table-cell">{t('events.colDate')}</Th>
                 <Th>{t('events.colStatus')}</Th>
+                <Th className="hidden lg:table-cell">{t('events.colMethods')}</Th>
                 <Th className="hidden text-right sm:table-cell">{t('events.colCheckIns')}</Th>
               </tr>
             </thead>
@@ -110,6 +114,9 @@ export default async function EventsPage({ searchParams }: { searchParams: Promi
                     <Td>
                       <EventPhaseBadge phase={eventPhase(e, now)} t={t} />
                     </Td>
+                    <Td className="hidden w-44 lg:table-cell">
+                      <MethodMix counts={methodsOf(e.id)} total={e._count.checkIns} t={t} />
+                    </Td>
                     <Td className="hidden text-right tabular-nums text-fg sm:table-cell">{formatCount(e._count.checkIns)}</Td>
                   </Tr>
                 );
@@ -118,6 +125,23 @@ export default async function EventsPage({ searchParams }: { searchParams: Promi
           </Table>
         )}
       </Card>
+    </div>
+  );
+}
+
+const MIX_COLOR: Record<CheckInMethod, string> = { NFC: 'bg-accent', APP_QR: 'bg-border-strong', MANUAL: 'bg-warning' };
+
+/** Share of NFC / app QR / manual check-ins as one stacked bar, with the numbers spelled out. */
+function MethodMix({ counts, total, t }: { counts: Partial<Record<CheckInMethod, number>>; total: number; t: Translator }) {
+  if (total === 0) return <span className="text-caption text-muted">—</span>;
+  const pct = (m: CheckInMethod) => Math.round(((counts[m] ?? 0) / total) * 100);
+  const label = CHECK_IN_METHODS.map((m) => `${t(`checkInMethod.${m}`)} ${pct(m)}%`).join(' · ');
+  return (
+    <div title={label}>
+      <div className="flex h-1.5 overflow-hidden rounded-full bg-surface-muted" role="img" aria-label={label}>
+        {CHECK_IN_METHODS.map((m) => (counts[m] ? <div key={m} className={MIX_COLOR[m]} style={{ width: `${((counts[m] ?? 0) / total) * 100}%` }} /> : null))}
+      </div>
+      <p className="mt-1 truncate text-caption tabular-nums text-muted">{t('events.nfcShare', { percent: pct('NFC') })}</p>
     </div>
   );
 }

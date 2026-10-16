@@ -9,7 +9,11 @@ import { PageHeader } from '@/components/ui/page-header';
 import { db } from '@/lib/db';
 import { requireHq } from '@/lib/hq/guard';
 import { getT } from '@/lib/i18n';
+import { CityCopyButton } from './copy-dialog';
 import { CityDialogButton } from './city-dialog';
+import { notificationCopySchema, type NotificationCopy } from '@pats/shared';
+
+const parseCopy = (raw: unknown): NotificationCopy => notificationCopySchema.safeParse(raw ?? {}).data ?? {};
 
 export async function generateMetadata(): Promise<Metadata> {
   return { title: (await getT())('cities.title') };
@@ -71,7 +75,8 @@ export default async function CitiesPage() {
                       </Badge>
                     )}
                   </Td>
-                  <Td className="text-right">
+                  <Td className="whitespace-nowrap text-right">
+                    <CityCopyButton city={{ id: c.id, name: c.name }} copy={parseCopy(c.notificationCopy)} />
                     <CityDialogButton
                       city={{ id: c.id, code: c.code, name: c.name, timezone: c.timezone, waGroupUrl: c.waGroupUrl ?? '', locked: c._count.members > 0 }}
                     />
