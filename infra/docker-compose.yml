@@ -76,7 +76,8 @@ services:
       API_URL: http://web:3000
       AUTH_SECRET: ${AUTH_SECRET:?set AUTH_SECRET}
       REALTIME_SECRET: ${REALTIME_SECRET:?set REALTIME_SECRET}
-      CORS_ORIGINS: ${APP_URL:-https://patsuniv.znetworks.id}
+      # Comma-separated; defaults to APP_URL. The internal Tailscale host can be added while the domain is not public.
+      CORS_ORIGINS: ${CORS_ORIGINS:-${APP_URL:-https://patsuniv.znetworks.id}}
     ports:
       - '127.0.0.1:3101:4000'
     healthcheck:
