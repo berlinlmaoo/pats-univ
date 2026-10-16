@@ -1,0 +1,136 @@
+@import 'tailwindcss';
+
+/*
+ * Values live in packages/shared/src/tokens.ts and are injected as --pats-* variables by the
+ * root layout. This file only maps them onto Tailwind's theme, so utilities like bg-surface,
+ * text-muted or rounded-control resolve to the shared tokens. Never put raw values here.
+ */
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+@theme inline {
+  --color-bg: var(--pats-bg);
+  --color-surface: var(--pats-surface);
+  --color-surface-muted: var(--pats-surface-muted);
+  --color-surface-hover: var(--pats-surface-hover);
+  --color-border: var(--pats-border);
+  --color-border-strong: var(--pats-border-strong);
+  --color-fg: var(--pats-text);
+  --color-muted: var(--pats-text-muted);
+  --color-placeholder: var(--pats-placeholder);
+  --color-primary: var(--pats-primary);
+  --color-primary-fg: var(--pats-primary-text);
+  --color-accent: var(--pats-accent);
+  --color-accent-fg: var(--pats-accent-text);
+  --color-accent-subtle: var(--pats-accent-subtle);
+  --color-accent-subtle-fg: var(--pats-accent-subtle-text);
+  --color-success: var(--pats-success);
+  --color-success-subtle: var(--pats-success-subtle);
+  --color-success-fg: var(--pats-success-text);
+  --color-warning: var(--pats-warning);
+  --color-warning-subtle: var(--pats-warning-subtle);
+  --color-warning-fg: var(--pats-warning-text);
+  --color-danger: var(--pats-danger);
+  --color-danger-subtle: var(--pats-danger-subtle);
+  --color-danger-fg: var(--pats-danger-text);
+  --color-danger-solid: var(--pats-danger-solid);
+  --color-on-solid: var(--pats-on-solid);
+  --color-scrim: var(--pats-scrim);
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-jakarta), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+
+  --radius-sm: var(--pats-radius-sm);
+  --radius-control: var(--pats-radius-control);
+  --radius-card: var(--pats-radius-card);
+
+  --shadow-soft: var(--pats-shadow-soft);
+  --shadow-pop: var(--pats-shadow-pop);
+
+  --text-display: var(--pats-text-display);
+  --text-display--line-height: var(--pats-text-display-lh);
+  --text-display--letter-spacing: var(--pats-text-display-tracking);
+  --text-display--font-weight: var(--pats-text-display-weight);
+  --text-title1: var(--pats-text-title1);
+  --text-title1--line-height: var(--pats-text-title1-lh);
+  --text-title1--letter-spacing: var(--pats-text-title1-tracking);
+  --text-title1--font-weight: var(--pats-text-title1-weight);
+  --text-title2: var(--pats-text-title2);
+  --text-title2--line-height: var(--pats-text-title2-lh);
+  --text-title2--letter-spacing: var(--pats-text-title2-tracking);
+  --text-title2--font-weight: var(--pats-text-title2-weight);
+  --text-title3: var(--pats-text-title3);
+  --text-title3--line-height: var(--pats-text-title3-lh);
+  --text-title3--letter-spacing: var(--pats-text-title3-tracking);
+  --text-title3--font-weight: var(--pats-text-title3-weight);
+  --text-body-lg: var(--pats-text-body-lg);
+  --text-body-lg--line-height: var(--pats-text-body-lg-lh);
+  --text-body: var(--pats-text-body);
+  --text-body--line-height: var(--pats-text-body-lh);
+  --text-body-sm: var(--pats-text-body-sm);
+  --text-body-sm--line-height: var(--pats-text-body-sm-lh);
+  --text-caption: var(--pats-text-caption);
+  --text-caption--line-height: var(--pats-text-caption-lh);
+  --text-label: var(--pats-text-label);
+  --text-label--line-height: var(--pats-text-label-lh);
+  --text-label--letter-spacing: var(--pats-text-label-tracking);
+  --text-label--font-weight: var(--pats-text-label-weight);
+
+  --spacing-control-sm: var(--pats-control-sm);
+  --spacing-control-md: var(--pats-control-md);
+  --spacing-control-lg: var(--pats-control-lg);
+  --spacing-sidebar: var(--pats-sidebar);
+  --container-content: var(--pats-content-max);
+  --container-form: var(--pats-form-max);
+
+  --ease-standard: var(--pats-ease);
+  --default-transition-duration: var(--pats-motion-fast);
+  --default-transition-timing-function: var(--pats-ease);
+
+  --animate-fade-up: fade-up var(--pats-motion-slow) var(--pats-ease) both;
+  @keyframes fade-up {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    background: var(--pats-bg);
+    color: var(--pats-text);
+    font-family: var(--font-sans);
+    font-size: var(--pats-text-body);
+    line-height: var(--pats-text-body-lh);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  ::selection {
+    background: var(--pats-accent-subtle);
+    color: var(--pats-accent-subtle-text);
+  }
+  :focus-visible {
+    outline: 2px solid var(--pats-accent);
+    outline-offset: 2px;
+  }
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--pats-placeholder);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
