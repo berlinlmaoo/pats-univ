@@ -23,6 +23,10 @@
   --color-accent-fg: var(--pats-accent-text);
   --color-accent-subtle: var(--pats-accent-subtle);
   --color-accent-subtle-fg: var(--pats-accent-subtle-text);
+  --color-secondary: var(--pats-secondary);
+  --color-secondary-fg: var(--pats-secondary-text);
+  --color-secondary-subtle: var(--pats-secondary-subtle);
+  --color-secondary-subtle-fg: var(--pats-secondary-subtle-text);
   --color-success: var(--pats-success);
   --color-success-subtle: var(--pats-success-subtle);
   --color-success-fg: var(--pats-success-text);

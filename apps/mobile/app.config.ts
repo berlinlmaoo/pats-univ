@@ -19,8 +19,9 @@ const config: ExpoConfig = {
   android: {
     package: 'id.znetworks.patsuniv',
     adaptiveIcon: {
+      // The shield, inside the safe zone; the launcher draws the brand cream behind it.
       foregroundImage: './assets/adaptive-icon.png',
-      backgroundColor: colors.light.primary,
+      backgroundColor: colors.brand.cream,
     },
   },
   web: {
@@ -35,8 +36,9 @@ const config: ExpoConfig = {
     [
       'expo-splash-screen',
       {
+        // The full crest; the same art sits on the light and the dark background.
         image: './assets/splash-icon.png',
-        imageWidth: 88,
+        imageWidth: 200,
         backgroundColor: colors.light.bg,
         dark: { image: './assets/splash-icon.png', backgroundColor: colors.dark.bg },
       },
