@@ -2,6 +2,7 @@ import { formatDate, formatTime, type EventDetailResponse } from '@pats/shared';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { CalendarX2, CircleCheck, QrCode } from 'lucide-react-native';
 import { Image, StyleSheet, View } from 'react-native';
+import { useAuth } from '@/auth';
 import { Button } from '@/components/button';
 import { Card } from '@/components/card';
 import { DetailList } from '@/components/detail-list';
@@ -20,6 +21,7 @@ export default function MemberEventScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { t, locale } = useI18n();
   const c = useColors();
+  const { me } = useAuth();
   const { data, error, loading, refreshing, reload } = useApi<EventDetailResponse>(`/api/events/${id}`);
   const e = data?.event;
 
@@ -81,6 +83,8 @@ export default function MemberEventScreen() {
         />
       ) : null}
 
+      <Button variant="secondary" label={t('social.reserve')} onPress={() => router.push({ pathname: '/reservation', params: { eventId: id } })} />
+      {e.city.id !== me?.member?.city.id && <Button variant="secondary" label={t('social.requestRoaming')} onPress={() => router.push({ pathname: '/roaming', params: { eventId: id } })} />}
       <DetailList
         items={[
           { label: t('app.eventWhen'), value: when },

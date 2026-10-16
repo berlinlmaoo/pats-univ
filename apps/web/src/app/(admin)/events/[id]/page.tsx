@@ -129,7 +129,7 @@ export default async function EventPage({ params }: Params) {
         <Card className="min-w-0 overflow-hidden lg:col-span-3">
           <CardHeader
             title={t('events.attendance')}
-            description={phase === 'open' ? <LiveRefresh /> : undefined}
+            description={phase === 'open' ? <LiveRefresh eventId={event.id} /> : undefined}
             action={<span className="font-display text-title2 tabular-nums text-fg">{formatCount(total)}</span>}
             className="pb-4"
           />

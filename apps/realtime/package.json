@@ -2,9 +2,17 @@
   "name": "@pats/realtime",
   "version": "0.1.0",
   "private": true,
-  "description": "Socket.IO server for chat, timeline and live attendance (Phase 4). Phase 0: health endpoint only.",
+  "description": "Authenticated city channels and live attendance",
   "type": "module",
   "scripts": {
-    "start": "node src/server.mjs"
+    "start": "node src/server.mjs",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "socket.io": "^4.8.1",
+    "jose": "^6.2.0"
+  },
+  "devDependencies": {
+    "socket.io-client": "^4.8.1"
   }
 }

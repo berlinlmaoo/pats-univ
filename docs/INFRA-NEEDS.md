@@ -1,6 +1,6 @@
 # PATS University — kebutuhan infrastruktur
 
-Untuk sesi server utama (NEXUS coordinator). Ditulis di akhir Phase 0, diperbarui di akhir Phase 2 (16 Okt 2026). Belum ada yang dipasang di prod; semua menunggu "go" dari Berlin. **Hosting hanya internal (Tailscale)**: jangan pasang DNS publik atau tunnel publik tanpa keputusan baru dari Berlin.
+Untuk sesi server utama (NEXUS coordinator). Ditulis di akhir Phase 0, diperbarui di akhir Phase 4 (16 Okt 2026). Belum ada yang dipasang di prod; semua menunggu "go" dari Berlin. **Hosting hanya internal (Tailscale)**: jangan pasang DNS publik atau tunnel publik tanpa keputusan baru dari Berlin.
 
 ## 1. Domain & TLS
 
@@ -9,11 +9,11 @@ Untuk sesi server utama (NEXUS coordinator). Ditulis di akhir Phase 0, diperbaru
 - TLS wajib (HTTPS); HSTS boleh.
 - Header yang harus diteruskan proxy: `X-Forwarded-For` (rate limit OTP per IP), `X-Forwarded-Proto`, `Host`.
 - `/.well-known/apple-app-site-association` dan `/.well-known/assetlinks.json` disajikan oleh `web` (404 selama `APPLE_TEAM_ID` / `ANDROID_CERT_SHA256` kosong); proxy tidak boleh mencegatnya. Catatan: Apple memverifikasi universal link lewat CDN publik, jadi selama hosting hanya Tailscale universal link hanya jalan di HP dengan Developer Mode (lihat NFC-DEV-BUILD.md §6).
-- Realtime (Phase 4) di container `realtime` (`127.0.0.1:3101`); untuk sekarang cukup route `/socket.io/` disiapkan, belum dipakai.
+- Realtime (Phase 4) di container `realtime` (`127.0.0.1:3101`); route `/socket.io/` sekarang dipakai dan harus meneruskan HTTP Upgrade/WebSocket serta polling Socket.IO.
 
 ## 2. Container
 
-`infra/docker-compose.yml`: `postgres` (16), `web` (build `apps/web/Dockerfile` dari root repo), `realtime` (placeholder). `web` menjalankan `prisma migrate deploy` saat start. Healthcheck: `GET /api/health` → `{"ok":true}`.
+`infra/docker-compose.yml`: `postgres` (16), `web` (build `apps/web/Dockerfile` dari root repo), `realtime` (build `apps/realtime/Dockerfile`, Node + Socket.IO). `web` menjalankan `prisma migrate deploy` saat start. Healthcheck: `GET /api/health` → `{"ok":true}`.
 
 - **MinIO dihapus** (image `minio/minio` sudah tidak bisa di-pull). File (PDF cetak kartu, flyer event) disimpan lewat antarmuka storage dengan driver **local disk** di volume Docker `storage` (`/data/storage` di container). Driver **S3-compatible** sudah ada di balik config (`STORAGE_DRIVER=s3` + `S3_*`) bila nanti dipindah ke bucket.
 - Image `web` sekarang memasang **Chromium** (paket `chromium` Debian) untuk render PDF kartu; `CHROMIUM_PATH=/usr/bin/chromium`. Ukuran image naik ±300 MB.
@@ -29,7 +29,7 @@ Untuk sesi server utama (NEXUS coordinator). Ditulis di akhir Phase 0, diperbaru
 | `OTP_PROVIDER` | `demo` untuk showcase; `email` setelah SMTP siap |
 | `SMTP_HOST` `SMTP_PORT` `SMTP_SECURE` `SMTP_USER` `SMTP_PASS` `SMTP_FROM` | akun SMTP PATS / relay yang sudah ada. Pengirim `no-reply@patsuniv.znetworks.id` (atau domain lain milik PATS) |
 | `CARD_KEY_SECRET` | `openssl rand -base64 48`. **Tidak boleh diganti selamanya** setelah kartu pertama di-encode: semua token kartu dan password NTAG diturunkan darinya. Simpan di password manager. Server produksi menolak start tanpa ini |
-| `CRON_SECRET` | `openssl rand -hex 24`, dikirim systemd timer ke `/api/cron/notifications` (Phase 2) dan `/api/cron/loyalty` (Phase 3) |
+| `CRON_SECRET` | `openssl rand -hex 24`, dikirim systemd timer ke `/api/cron/notifications` (Phase 2) dan `/api/cron/loyalty` (Phase 3), serta `/api/cron/social` (Phase 4) |
 | `STORAGE_DRIVER` | `local` (default). `s3` + `S3_ENDPOINT` `S3_REGION` `S3_BUCKET` `S3_ACCESS_KEY_ID` `S3_SECRET_ACCESS_KEY` bila pakai bucket |
 | `PUSH_PROVIDER` | `expo` (default); `EXPO_ACCESS_TOKEN` opsional |
 | `APPLE_TEAM_ID` / `ANDROID_CERT_SHA256` | untuk `/.well-known` (Team ID akun galangprata19; fingerprint sertifikat APK) |
@@ -71,6 +71,11 @@ Push keluar ke `https://exp.host` (Expo Push) → butuh egress HTTPS dari contai
 
 **Phase 3:** timer kedua tiap menit untuk `/api/cron/loyalty` (refund kode kedaluwarsa + snapshot leaderboard per jam), secret yang sama. Contoh unit: `infra/systemd/pats-loyalty.*` + `infra/run-loyalty-cron.sh`; sesuaikan path/port saat deploy.
 
-## 8. Nanti (bukan sekarang)
+## 8. Realtime dan cron social (Phase 4)
 
-- Phase 4: WebSocket (`/socket.io/`) lewat proxy.
+- `REALTIME_PUBLIC_URL` di web/Compose adalah origin yang dapat dijangkau browser dan HP melalui Tailscale, misalnya `https://patsuniv.znetworks.id`; proxy `/socket.io/` ke `127.0.0.1:3101`. Nama env “PUBLIC” berarti alamat klien, bukan instruksi membuka hosting ke internet.
+- `REALTIME_INTERNAL_URL=http://realtime:4000` untuk web dalam Compose. `API_URL=http://web:3000` untuk service realtime. Jangan teruskan endpoint internal `/publish` lewat proxy.
+- `AUTH_SECRET` wajib sama di kedua service. `REALTIME_SECRET` acak minimal 32 karakter juga sama; dipakai untuk publish internal. `CORS_ORIGINS` cocok dengan origin dashboard. Health realtime: `/health`.
+- Service realtime memverifikasi JWT, sesi, akses room, dan expiry melalui API web; tidak memerlukan akses langsung database atau storage.
+- Pasang `infra/systemd/pats-social.*` dan `infra/run-social-cron.sh`, sesuaikan path: timer tiap menit memakai `CRON_SECRET` untuk expiry roaming dan purge chat melebihi retensi. Media menggunakan volume storage/bucket Phase 2 yang sama; backup tetap wajib.
+- Docker image, proxy dan timer belum dijalankan pada pengujian lokal Phase 4. Tidak ada perubahan hosting atau DNS dari branch ini.

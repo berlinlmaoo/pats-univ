@@ -8,6 +8,11 @@ import type { NotificationCategory } from './api';
 import type { Locale } from './i18n/types';
 
 export const NOTIFICATION_KINDS = [
+  'hubMention',
+  'roamingRequested',
+  'roamingDecided',
+  'reservationRequested',
+  'reservationDecided',
   'eventBroadcast',
   'reminder3d',
   'reminder1d',
@@ -23,6 +28,11 @@ export const NOTIFICATION_KINDS = [
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
 
 export const NOTIFICATION_CATEGORY: Record<NotificationKind, NotificationCategory | 'account'> = {
+  hubMention: 'account',
+  roamingRequested: 'account',
+  roamingDecided: 'activity',
+  reservationRequested: 'account',
+  reservationDecided: 'activity',
   eventBroadcast: 'events',
   reminder3d: 'events',
   reminder1d: 'events',

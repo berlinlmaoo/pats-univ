@@ -20,6 +20,7 @@ import { env } from '../env';
 import { AppError } from '../http/errors';
 import { cardByToken, cardKey } from '../cards/service';
 import { signNfcTicket, verifyNfcTicket } from '../cards/token';
+import { publish } from '../social/realtime';
 import { notifyUsers } from '../push/notify';
 import { getSetting } from '../settings';
 import { newNonce, signQr, signTicket, verifyQr, verifyTicket } from './token';
@@ -79,7 +80,7 @@ async function openEventFor(admin: AuthUser, eventId: string, now: Date) {
 /** Approved attendance roaming for a member from another city (PRODUCT.md §6.1.5). */
 async function roamingFor(memberId: string, eventId: string) {
   return db.roamingRequest.findFirst({
-    where: { memberId, eventId, type: 'ATTENDANCE', status: 'APPROVED' },
+    where: { memberId, eventId, type: 'ATTENDANCE', status: 'APPROVED', accessExpiresAt: { gt: new Date() } },
     select: { id: true },
   });
 }
@@ -241,6 +242,7 @@ export async function commitCheckIn(admin: AuthUser, input: CommitInput, now = n
   const count = await db.checkIn.count({ where: { eventId: event.id } });
   // "Check-in {event} recorded" (PRODUCT.md §8); XP stays hidden until Phase 3.
   void notifyUsers([member.user.id], { kind: 'checkIn', cityId: event.cityId, values: { event: event.title }, data: { screen: 'history', eventId: event.id } });
+  await publish({ kind: 'attendance', id: event.id });
   return { checkIn: toAttendanceEntry(checkIn), count };
 }
 
@@ -293,7 +295,7 @@ export async function searchMembersForEvent(admin: AuthUser, eventId: string, q:
         {
           OR: [
             { cityId: event.cityId },
-            { roamingRequests: { some: { eventId, type: 'ATTENDANCE', status: 'APPROVED' } } },
+            { roamingRequests: { some: { eventId, type: 'ATTENDANCE', status: 'APPROVED', accessExpiresAt: { gt: new Date() } } } },
           ],
         },
         { OR: [{ fullName: { contains: term, mode: 'insensitive' } }, { nim: { contains: term.toUpperCase() } }] },

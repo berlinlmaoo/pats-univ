@@ -15,9 +15,10 @@ export type SettingGroup =
   | 'promoter'
   | 'roaming'
   | 'notifications'
+  | 'hub'
   | 'app';
 
-type Unit = 'years' | 'xp' | 'minutes' | 'seconds' | 'hours' | 'percent' | 'ranks' | 'spins';
+type Unit = 'requests' | 'days' | 'mb' | 'years' | 'xp' | 'minutes' | 'seconds' | 'hours' | 'percent' | 'ranks' | 'spins';
 
 interface Base<T> {
   group: SettingGroup;
@@ -66,6 +67,13 @@ export const SETTINGS = {
   },
   promoterBonusPerGuestXp: { group: 'promoter', kind: 'int', min: 0, max: 10_000, unit: 'xp', default: 20, scopes: ['GLOBAL', 'CITY'], tbd: true },
   promoterCommissionPercent: { group: 'promoter', kind: 'int', min: 0, max: 100, unit: 'percent', default: 0, scopes: ['GLOBAL', 'CITY'], tbd: true },
+  hubTimelinePosting: { group: 'hub', kind: 'enum', options: [{ value: 'MEMBERS', labelKey: 'social.membersPosting' }, { value: 'ADMINS', labelKey: 'social.adminsPosting' }], default: 'MEMBERS', scopes: ['GLOBAL', 'CITY'], tbd: true },
+  hubHistoryDays: { group: 'hub', kind: 'int', min: 1, max: 30, unit: 'days', default: 30, scopes: ['GLOBAL'] },
+  hubMediaMaxSeconds: { group: 'hub', kind: 'int', min: 1, max: 60, unit: 'seconds', default: 60, scopes: ['GLOBAL'], tbd: true },
+  hubMediaMaxMb: { group: 'hub', kind: 'int', min: 1, max: 25, unit: 'mb', default: 25, scopes: ['GLOBAL'], tbd: true },
+  reservationApprover: { group: 'hub', kind: 'enum', options: [{ value: 'LOCAL_ADMIN', labelKey: 'social.cityApprover' }, { value: 'SUPER_ADMIN', labelKey: 'social.hqApprover' }], default: 'LOCAL_ADMIN', scopes: ['GLOBAL', 'CITY'], tbd: true },
+  reservationMaxPerEvent: { group: 'hub', kind: 'int', min: 1, max: 20, unit: 'requests', default: 1, scopes: ['GLOBAL'], tbd: true },
+  roamingMaxPerMonth: { group: 'roaming', kind: 'int', min: 0, max: 100, unit: 'requests', default: 0, scopes: ['GLOBAL'], tbd: true },
   roamingHubExpiryHours: { group: 'roaming', kind: 'int', min: 1, max: 720, unit: 'hours', default: 48, scopes: ['GLOBAL'] },
   reminderTime: { group: 'notifications', kind: 'time', default: '10:00', scopes: ['GLOBAL', 'CITY'] },
   followUpTime: { group: 'notifications', kind: 'time', default: '12:00', scopes: ['GLOBAL', 'CITY'] },
@@ -85,6 +93,7 @@ export const SETTING_GROUPS: readonly SettingGroup[] = [
   'leaderboard',
   'promoter',
   'roaming',
+  'hub',
   'notifications',
   'app',
 ];

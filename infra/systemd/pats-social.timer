@@ -1,0 +1,7 @@
+[Unit]
+Description=PATS social expiry every minute
+[Timer]
+OnCalendar=*-*-* *:*:00
+Persistent=true
+[Install]
+WantedBy=timers.target

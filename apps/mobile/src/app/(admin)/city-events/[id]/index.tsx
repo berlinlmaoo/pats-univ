@@ -28,11 +28,10 @@ import { Text } from '@/components/text';
 import { PhaseBadge } from '@/features/event-ui';
 import { useI18n } from '@/i18n';
 import { ApiFailure, errorKey } from '@/lib/api';
+import { useSocialRoom } from '@/features/social/realtime';
 import { useApi } from '@/lib/use-api';
 import { size, space, useColors } from '@/theme';
 
-/** Live feed cadence while check-in is open (REST polling until realtime lands in Phase 4). */
-const LIVE_POLL_MS = 5000;
 
 export default function AdminEventScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -40,9 +39,9 @@ export default function AdminEventScreen() {
   const { call } = useAuth();
   const detail = useApi<EventDetailResponse>(`/api/admin/events/${id}`);
   const e = detail.data?.event;
-  const live = e?.phase === 'open';
-  const attendance = useApi<AttendanceResponse>(e ? `/api/admin/events/${id}/attendance` : null, { pollMs: live ? LIVE_POLL_MS : undefined });
+  const attendance = useApi<AttendanceResponse>(e ? `/api/admin/events/${id}/attendance` : null);
   const [busy, setBusy] = useState(false);
+  useSocialRoom(e ? { kind: 'attendance', id } : null, attendance.reload);
 
   if (detail.loading) return <Screen edges={[]}><Loading /></Screen>;
   if (!e) {

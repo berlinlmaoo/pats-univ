@@ -60,6 +60,9 @@ export function hrefFor(data: Record<string, unknown> | null | undefined): Href 
   const screen = data?.screen;
   const eventId = typeof data?.eventId === 'string' ? data.eventId : null;
   if (screen === 'event' && eventId) return { pathname: '/event/[id]', params: { id: eventId } };
+  if (screen === 'hub') return typeof data?.conversationId === 'string' && data.conversationId ? { pathname: '/social-channel', params: { conversationId: data.conversationId } } : typeof data?.channelId === 'string' && data.channelId ? { pathname: '/social-channel', params: { id: data.channelId } } : '/social-hub';
+  if (screen === 'social-operations' || screen === 'reservations') return '/social-operations';
+  if (screen === 'roaming') return '/roaming';
   if (screen === 'history') return '/history';
   if (screen === 'card') return '/card';
   if (screen === 'memberCard' && typeof data?.memberId === 'string') return { pathname: '/member-cards/[id]', params: { id: data.memberId } };

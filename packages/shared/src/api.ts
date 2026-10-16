@@ -72,6 +72,11 @@ export type ApiErrorCode =
   | 'REPORT_REVIEWED'
   | 'RECAP_LOCKED'
   | 'CHECK_IN_REQUIRED'
+  | 'RESERVATION_LIMIT'
+  | 'ROAMING_LIMIT'
+  | 'HUB_MUTED'
+  | 'SLOT_TAKEN'
+  | 'MEDIA_INVALID'
   | 'INTERNAL';
 
 export interface OtpRequestResponse {

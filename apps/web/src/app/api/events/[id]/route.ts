@@ -9,7 +9,7 @@ export const GET = route(async (req: Request, { params }: { params: Promise<{ id
   const { member } = await requireMember(req);
   const { id } = await params;
   const event = await db.event.findFirst({
-    where: { id, cityId: member.cityId, status: { not: 'DRAFT' } },
+    where: { id, status: { not: 'DRAFT' } },
     include: eventInclude,
   });
   if (!event) throw new AppError('NOT_FOUND', 404);

@@ -57,10 +57,10 @@ const config: ExpoConfig = {
     [
       'expo-camera',
       {
-        // Crew scan member QR codes at the door. The member app never opens the camera.
-        cameraPermission: 'PATS University uses the camera to scan member check-in QR codes. / PATS University memakai kamera untuk memindai QR check-in member.',
-        microphonePermission: false,
-        recordAudioAndroid: false,
+        // Camera access covers check-in scanning and community media capture.
+        cameraPermission: 'Scan check-in QR codes and capture community photos and videos. / Pindai QR check-in dan ambil foto serta video komunitas.',
+        microphonePermission: 'Record voice notes and short videos. / Rekam pesan suara dan video pendek.',
+        recordAudioAndroid: true,
       },
     ],
     '@react-native-community/datetimepicker',
@@ -75,6 +75,9 @@ const config: ExpoConfig = {
       },
     ],
     ['expo-notifications', { color: colors.brand.navy, defaultChannel: 'default' }],
+    ['expo-audio', { microphonePermission: 'Record voice notes. / Rekam pesan suara.' }],
+    ['expo-image-picker', { cameraPermission: 'Capture hub photos and videos. / Ambil foto dan video untuk hub.', microphonePermission: 'Record short videos. / Rekam video pendek.', photosPermission: false }],
+    'expo-video',
     'expo-dev-client',
     [
       'expo-splash-screen',

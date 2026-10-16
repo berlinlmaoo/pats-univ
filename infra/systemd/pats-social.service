@@ -1,0 +1,6 @@
+[Unit]
+Description=PATS social history and roaming expiry
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/pats-univ/cron.env
+ExecStart=/bin/sh /opt/pats-univ/infra/run-social-cron.sh
