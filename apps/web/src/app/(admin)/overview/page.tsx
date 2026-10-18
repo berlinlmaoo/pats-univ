@@ -87,7 +87,38 @@ export default async function OverviewPage() {
         <div className="grid gap-6 2xl:grid-cols-5">
           <Card className="min-w-0 2xl:col-span-3">
             <CardHeader title={t('overview.byCity')} className="pb-4" />
-            <Table>
+            {/* Phones: one block per city with the three numbers that matter (audit #20). */}
+            <ul className="divide-y divide-border border-t border-border sm:hidden">
+              {cities.map((c) => (
+                <li key={c.id} className="px-4 py-3.5">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="min-w-0 truncate font-semibold text-fg">
+                      {c.name} <span className="ml-1 text-caption font-normal text-muted">{c.code}</span>
+                    </p>
+                    {c.waGroupUrl ? (
+                      <Badge tone="success" dot>{t('cities.waSet')}</Badge>
+                    ) : (
+                      <Badge tone="warning" dot>{t('cities.waMissing')}</Badge>
+                    )}
+                  </div>
+                  <dl className="mt-2.5 grid grid-cols-3 gap-2">
+                    {(
+                      [
+                        [t('overview.totalMembers'), count(membersByCity, c.id)],
+                        [t('overview.newThisWeek'), count(newByCity, c.id)],
+                        [t('overview.cardsToPrint'), count(toPrintByCity, c.id)],
+                      ] as const
+                    ).map(([label, value]) => (
+                      <div key={label} className="min-w-0">
+                        <dt className="ktm-label line-clamp-2 text-muted">{label}</dt>
+                        <dd className="mt-0.5 text-title3 tabular-nums text-fg">{formatCount(value)}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                </li>
+              ))}
+            </ul>
+            <Table className="hidden sm:table">
               <thead>
                 <tr>
                   <Th>{t('cities.colCity')}</Th>
@@ -145,7 +176,8 @@ export default async function OverviewPage() {
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-body-sm font-medium text-fg">{m.fullName}</p>
                       <p className="truncate text-caption text-muted">
-                        {m.nim} · {m.city.name} · {formatDate(m.joinedAt, t.locale, { timeZone: m.city.timezone })}
+                        <span className="font-semibold text-fg">{formatDate(m.joinedAt, t.locale, { timeZone: m.city.timezone })}</span> · {m.city.name} ·{' '}
+                        <span className="tabular-nums">{m.nim}</span>
                       </p>
                     </div>
                     <CardStatusBadge status={m.cards[0]?.status ?? 'NOT_PRINTED'} t={t} />

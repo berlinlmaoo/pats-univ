@@ -1,7 +1,6 @@
 'use client';
 import { useState, type FormEvent } from 'react';
-import { Gift, Plus } from 'lucide-react';
-import Link from 'next/link';
+import { Gift, Plus, SlidersHorizontal } from 'lucide-react';
 import {
   fieldErrors,
   formatCount,
@@ -9,16 +8,19 @@ import {
   type RewardDto,
 } from '@pats/shared';
 import { useT } from '@/components/i18n/provider';
-import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Button, ButtonLink } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Dialog } from '@/components/ui/dialog';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Field, Input, Select, Textarea } from '@/components/ui/field';
 import { PageHeader } from '@/components/ui/page-header';
+import { Switch } from '@/components/ui/switch';
+import { LoyaltyTabs } from './tabs';
 import { postJson } from '@/lib/client/api';
 import { DataState, useLoyalty } from './state';
 
-export function RewardsPage() {
+export function RewardsPage({ hq = false }: { hq?: boolean }) {
   const t = useT();
   const state = useLoyalty<{
     rewards: RewardDto[];
@@ -32,16 +34,21 @@ export function RewardsPage() {
         title={t('loyalty.title')}
         description={t('loyalty.subtitle')}
         actions={
-          <Button onClick={() => setEditing('new')}>
-            <Plus />
-            {t('loyalty.newReward')}
-          </Button>
+          <>
+            {hq && (
+              <ButtonLink href="/settings" variant="secondary">
+                <SlidersHorizontal aria-hidden="true" />
+                {t('loyalty.settings')}
+              </ButtonLink>
+            )}
+            <Button onClick={() => setEditing('new')}>
+              <Plus aria-hidden="true" />
+              {t('loyalty.newReward')}
+            </Button>
+          </>
         }
       />
-      <div className="flex flex-wrap gap-4 text-body-sm text-accent-fg">
-        <Link href="/settings">{t('loyalty.settings')}</Link>
-        <Link href="/leaderboard">{t('loyalty.leaderboard')}</Link>
-      </div>
+      <LoyaltyTabs active="/rewards" hq={hq} />
       {!state.data ? (
         <DataState error={state.error} reload={state.reload} />
       ) : (
@@ -64,42 +71,43 @@ export function RewardsPage() {
             </Card>
           ) : (
             <div className="grid gap-4 sm:grid-cols-2">
-              {state.data.rewards.map((r) => (
-                <Card key={r.id} className="space-y-3 p-5">
-                  <div className="flex flex-wrap justify-between gap-2">
-                    <h2 className="text-title3 break-words">{r.name}</h2>
-                    <span className="text-caption text-muted">
-                      {t.loose(`loyalty.${r.type}`)}
-                    </span>
-                  </div>
-                  <p className="text-body-sm text-muted break-words">
-                    {r.description}
-                  </p>
-                  <p className="text-title2 tabular-nums">
-                    {formatCount(r.xpCost)} XP
-                  </p>
-                  <p className="text-caption text-muted">
-                    {r.cityId
-                      ? state.data!.cities.find((c) => c.id === r.cityId)?.name
-                      : t('loyalty.global')}{' '}
-                    ·{' '}
-                    {r.stock === null
-                      ? t('loyalty.unlimited')
-                      : t('loyalty.stockLeft', {
-                          count: formatCount(r.stock),
-                        })}{' '}
-                    · {state.data!.venues.find(v => v.id === r.venueId)?.name ?? '—'}
-                  </p>
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-caption text-muted">
-                      {r.active ? t('loyalty.active') : t('common.inactive')}
-                    </span>
-                    <Button variant="secondary" onClick={() => setEditing(r)}>
-                      {t('common.edit')}
-                    </Button>
-                  </div>
-                </Card>
-              ))}
+              {state.data.rewards.map((r) => {
+                const venue = state.data!.venues.find((v) => v.id === r.venueId)?.name;
+                const city = r.cityId ? state.data!.cities.find((c) => c.id === r.cityId)?.name : t('loyalty.global');
+                return (
+                  <Card key={r.id} className="flex flex-col p-5">
+                    <div className="flex items-start justify-between gap-3">
+                      <h2 className="min-w-0 break-words text-title3 text-fg">{r.name}</h2>
+                      <Badge tone={r.active ? 'success' : 'neutral'} dot>
+                        {r.active ? t('loyalty.active') : t('common.inactive')}
+                      </Badge>
+                    </div>
+                    {r.description && <p className="mt-1.5 break-words text-body-sm text-muted">{r.description}</p>}
+                    <p className="ktm-value mt-4 text-title2 tabular-nums text-fg">{formatCount(r.xpCost)} XP</p>
+                    <dl className="mt-3 grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1.5 border-t border-border pt-3 text-body-sm">
+                      <dt className="ktm-label self-center text-muted">{t('phase5.venue')}</dt>
+                      <dd className="min-w-0 break-words text-fg">
+                        {venue ?? <Badge tone="warning">{t('loyalty.noVenue')}</Badge>}
+                      </dd>
+                      <dt className="ktm-label self-center text-muted">{t('loyalty.city')}</dt>
+                      <dd className="min-w-0 break-words text-fg">{city}</dd>
+                      <dt className="ktm-label self-center text-muted">{t('loyalty.stockLabel')}</dt>
+                      <dd className="tabular-nums text-fg">{r.stock === null ? t('loyalty.unlimited') : formatCount(r.stock)}</dd>
+                      {r.type !== 'DIRECT' && (
+                        <>
+                          <dt className="ktm-label self-center text-muted">{t('loyalty.type')}</dt>
+                          <dd className="text-fg">{t.loose(`loyalty.${r.type}`)}</dd>
+                        </>
+                      )}
+                    </dl>
+                    <div className="mt-4 flex justify-end">
+                      <Button variant="secondary" onClick={() => setEditing(r)}>
+                        {t('common.edit')}
+                      </Button>
+                    </div>
+                  </Card>
+                );
+              })}
             </div>
           )}
           {editing && (
@@ -138,6 +146,11 @@ function RewardForm({
     e.preventDefault();
     const form = e.currentTarget;
     const f = new FormData(form);
+    if (!f.get('venueId')) {
+      setFields({ venueId: 'validation.required' });
+      form.querySelector<HTMLElement>('[name="venueId"]')?.focus();
+      return;
+    }
     const input = rewardInput.safeParse({
       id: reward?.id,
       name: f.get('name'),
@@ -203,9 +216,28 @@ function RewardForm({
             defaultValue={reward?.description}
           />
         </Field>
-        <Field htmlFor="reward-venue" label={t('phase5.venue')}>
-          <Select id="reward-venue" name="venueId" defaultValue={reward?.venueId ?? ''} required>
-            <option value="">—</option>{venues.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+        <Field
+          htmlFor="reward-venue"
+          label={`${t('phase5.venue')} *`}
+          hint={t('loyalty.venueHint')}
+          error={fields.venueId ? t('loyalty.venueRequired') : undefined}
+        >
+          <Select
+            id="reward-venue"
+            name="venueId"
+            defaultValue={reward?.venueId ?? ''}
+            required
+            aria-invalid={!!fields.venueId}
+            aria-describedby={fields.venueId ? 'reward-venue-error' : 'reward-venue-hint'}
+          >
+            <option value="" disabled>
+              {t('loyalty.chooseVenue')}
+            </option>
+            {venues.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.name}
+              </option>
+            ))}
           </Select>
         </Field>
         {(['xpCost', 'stock'] as const).map((key) => (
@@ -232,14 +264,15 @@ function RewardForm({
             />
           </Field>
         ))}
-        <label className="flex min-h-11 items-center gap-3 text-body-sm">
-          <input
-            type="checkbox"
-            name="active"
-            defaultChecked={reward?.active ?? true}
-          />
-          {t('loyalty.active')}
-        </label>
+        <Switch
+          id="reward-active"
+          name="active"
+          onValue="on"
+          offValue={null}
+          defaultChecked={reward?.active ?? true}
+          label={t('loyalty.active')}
+          description={t('loyalty.activeHint')}
+        />
         <div className="flex justify-end gap-2">
           <Button variant="secondary" onClick={close} disabled={busy}>
             {t('common.cancel')}

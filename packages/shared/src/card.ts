@@ -142,3 +142,10 @@ export function capabilitiesOf(role: Role): readonly Capability[] {
 export function can(role: Role, capability: Capability): boolean {
   return ROLE_CAPABILITIES[role].includes(capability);
 }
+
+/** Where a signed-in web user lands: HQ on the overview, city admins on their operations page, everyone else (members) nowhere in the dashboard. */
+export function dashboardHome(role: Role): '/overview' | '/regional' | null {
+  if (can(role, 'hq.manage')) return '/overview';
+  if (can(role, 'dashboard.access')) return '/regional';
+  return null;
+}

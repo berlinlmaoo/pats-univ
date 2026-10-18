@@ -1,4 +1,5 @@
 import { isLocale } from '@pats/shared';
+import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { Card } from '@/components/ui/card';
 import { Table, Td, Th, Tr } from '@/components/dashboard/table';
@@ -11,6 +12,25 @@ import {
 } from '@/lib/loyalty/export';
 import { periodFilters } from '@/lib/loyalty/filters';
 import { PrintButton } from './print-button';
+const DATASET_LABEL = {
+  member: 'loyalty.member',
+  checkin: 'loyalty.checkin',
+  ledger: 'loyalty.ledgerExport',
+  leaderboard: 'loyalty.leaderboardExport',
+  redemption: 'loyalty.redemption',
+  report: 'loyalty.reportExport',
+  recap: 'loyalty.recapExport',
+} as const;
+
+function datasetLabel(dataset: string | undefined) {
+  return DATASET_LABEL[(dataset ?? 'recap') as keyof typeof DATASET_LABEL] ?? 'loyalty.export';
+}
+
+export async function generateMetadata({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }): Promise<Metadata> {
+  const t = await getT();
+  return { title: `${t(datasetLabel((await searchParams).dataset))} · ${t('loyalty.export')}` };
+}
+
 export default async function PrintExport({
   searchParams,
 }: {
@@ -35,9 +55,15 @@ export default async function PrintExport({
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-title1">
-          {t('loyalty.export')} · {t('common.appName')}
-        </h1>
+        <div className="min-w-0">
+          <h1 className="text-title1 text-fg">
+            {t(datasetLabel(dataset))}
+            {params.month ? ` · ${params.month}` : ''}
+          </h1>
+          <p className="mt-1 text-body-sm text-muted">
+            {t('loyalty.export')} · {t('common.appName')}
+          </p>
+        </div>
         <PrintButton />
       </div>
       <Card>
