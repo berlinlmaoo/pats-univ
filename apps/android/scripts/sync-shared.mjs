@@ -27,7 +27,9 @@ for (const [source, target] of [
   ['packages/shared/assets/fonts/card-value.ttf', 'font/card_value.ttf'],
   ['apps/web/src/app/fonts/Figtree-var.ttf', 'font/figtree.ttf'],
   ['apps/web/src/app/fonts/Graduate-Regular.ttf', 'font/graduate.ttf'],
-  ['apps/web/public/brand/crest-240.png', 'drawable/official_crest.png'],
+  // 480 px so the 72 dp login crest stays sharp at xxxhdpi; the splash uses the 1024 px master render.
+  ['apps/web/public/brand/crest-480.png', 'drawable/official_crest.png'],
+  ['apps/mobile/assets/splash-icon.png', 'drawable/official_splash.png'],
   ['apps/web/public/brand/lockup-cream-720.png', 'drawable/lockup_cream.png'],
   ['apps/web/public/ktm/front-1600.webp', 'drawable/ktm_front.webp'],
   ['apps/web/public/ktm/back-1600.webp', 'drawable/ktm_back.webp'],
