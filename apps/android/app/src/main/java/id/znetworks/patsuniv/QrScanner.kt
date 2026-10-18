@@ -29,7 +29,11 @@ fun decodeQr(bytes: ByteArray, width: Int, height: Int): String? {
     val reader = MultiFormatReader().apply { setHints(mapOf(DecodeHintType.POSSIBLE_FORMATS to listOf(BarcodeFormat.QR_CODE), DecodeHintType.TRY_HARDER to true)) }
     repeat(4) {
         val source = PlanarYUVLuminanceSource(pixels, w, h, 0, 0, w, h, false)
-        try { return reader.decodeWithState(BinaryBitmap(HybridBinarizer(source))).text } catch (_: ReaderException) { reader.reset() }
+        for(candidate in listOf(source, source.invert())) {
+            for(binarizer in listOf(HybridBinarizer(candidate), com.google.zxing.common.GlobalHistogramBinarizer(candidate))) {
+                try { return reader.decodeWithState(BinaryBitmap(binarizer)).text } catch (_: ReaderException) { reader.reset() }
+            }
+        }
         val rotated = ByteArray(w * h) { i -> pixels[(i % h) * w + (w - 1 - i / h)] }
         pixels = rotated; val previous = w; w = h; h = previous
     }
