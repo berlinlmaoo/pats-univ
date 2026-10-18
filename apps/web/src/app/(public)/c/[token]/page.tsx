@@ -45,7 +45,7 @@ export default async function CardPage({ params }: Params) {
         <header className="gold-rule bg-band text-band-fg">
           <div className="mx-auto flex h-16 w-full max-w-xl items-center justify-between gap-3 px-4">
             <Wordmark px={44} />
-            <LanguageSwitch />
+            <LanguageSwitch onBand />
           </div>
         </header>
 
