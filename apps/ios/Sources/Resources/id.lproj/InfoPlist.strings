@@ -1,0 +1,3 @@
+"NSCameraUsageDescription" = "Pindai QR member dan ambil foto struk atau komunitas.";
+"NSMicrophoneUsageDescription" = "Rekam pesan suara dan video komunitas.";
+"NFCReaderUsageDescription" = "Baca, serahkan, dan encode kartu member PATS.";

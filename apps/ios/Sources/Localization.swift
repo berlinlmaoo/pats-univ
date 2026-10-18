@@ -25,7 +25,7 @@ enum L {
         return f.string(from: date)
     }
     static func status(_ raw: String) -> String {
-        for key in ["phase5.\(raw)", "loyalty.\(raw)", "social.\(raw)", "card.\(raw)", "events.\(raw)"] {
+        for key in ["cardStatus.\(raw)", "eventPhase.\(raw)", "checkInMethod.\(raw)", "role.\(raw)", "phase5.\(raw)", "loyalty.\(raw)", "social.\(raw)", "events.\(raw)"] {
             let result = t(key); if result != key { return result }
         }
         return raw.replacingOccurrences(of: "_", with: " ").localizedCapitalized

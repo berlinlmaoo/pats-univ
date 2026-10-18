@@ -45,9 +45,10 @@ import Combine
                         let text: String
                         switch frame { case .string(let s): text = s; case .data(let d): text = String(data: d, encoding: .utf8) ?? ""; @unknown default: continue }
                         self.lastPacket = Date()
-                        if text.hasPrefix("0") { try await ws.send(.string("40" + JSON.object(["token": credentials["token"]]).wire)) }
-                        else if text == "2" { try await ws.send(.string("3")) }
-                        else if text.hasPrefix("40") {
+                        switch SocketPacket.parse(text) {
+                        case .open: try await ws.send(.string("40" + JSON.object(["token": credentials["token"]]).wire))
+                        case .ping(let payload): try await ws.send(.string("3" + payload))
+                        case .connected:
                             self.connected = true; backoff = 1
                             Task {
                                 do {
@@ -63,15 +64,14 @@ import Combine
                                     await changed()
                                 } catch { if run == self.runID { ws.cancel(with: .goingAway, reason: nil) } }
                             }
-                        } else if text.hasPrefix("43"), let bracket = text.firstIndex(of: "[") {
-                            let number = Int(text[text.index(text.startIndex, offsetBy: 2)..<bracket])
-                            let payload = (try? JSON.parse(Data(text[bracket...].utf8)))?.rows.first ?? .null
-                            if let number { self.ackHandlers.removeValue(forKey: number)?.resume(returning: payload) }
-                        } else if text.hasPrefix("42"), let bracket = text.firstIndex(of: "[") {
-                            let values = (try? JSON.parse(Data(text[bracket...].utf8)))?.rows ?? []
-                            if values.first?.text == "access_lost" { self.accessLost = true; break }
-                            if ["changed", "message"].contains(values.first?.text ?? "") { await changed() }
-                        } else if text.hasPrefix("41") || text.hasPrefix("44") { break }
+                        case .ack(let number, let payload):
+                            self.ackHandlers.removeValue(forKey: number)?.resume(returning: payload)
+                        case .event(let name, _):
+                            if name == "access_lost" { self.accessLost = true; ws.cancel(with: .normalClosure, reason: nil) }
+                            if ["changed", "message"].contains(name) { await changed() }
+                        case .closed: ws.cancel(with: .normalClosure, reason: nil)
+                        case .unsupported: break
+                        }
                     }
                 } catch { /* REST refresh remains available during reconnect. */ }
                 guard run == self.runID else { return }
@@ -87,7 +87,7 @@ import Combine
         return try await withCheckedThrowingContinuation { continuation in
             ackHandlers[id] = continuation
             Task {
-                do { try await socket.send(.string("42\(id)" + JSON.array([.str(name), value]).wire)) }
+                do { try await socket.send(.string(SocketPacket.emit(name, value: value, ack: id))) }
                 catch { ackHandlers.removeValue(forKey: id)?.resume(throwing: error) }
             }
             Task {

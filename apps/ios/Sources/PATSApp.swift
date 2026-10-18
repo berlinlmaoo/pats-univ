@@ -108,7 +108,14 @@ struct MainShell: View {
     @EnvironmentObject private var store: AppStore
     var body: some View {
         TabView {
-            NavigationStack { Page(title: "app.tabHub") { EmptyState() } }.tabItem { Label(L.t("app.tabHub"), systemImage: "square.grid.2x2") }
+            if store.admin {
+                NavigationStack { AdminToolsView() }.tabItem { Label(L.t("app.tabAdmin"), systemImage: "square.grid.2x2") }
+            } else {
+                NavigationStack { MemberCardView() }.tabItem { Label(L.t("app.tabCard"), systemImage: "person.text.rectangle") }
+                NavigationStack { EventsView() }.tabItem { Label(L.t("app.tabEvents"), systemImage: "calendar") }
+                NavigationStack { SocialHubView() }.tabItem { Label(L.t("app.tabHub"), systemImage: "bubble.left.and.bubble.right") }
+                NavigationStack { WalletView() }.tabItem { Label(L.t("app.tabRewards"), systemImage: "gift") }
+            }
             NavigationStack { ProfileView() }.tabItem { Label(L.t("native.profile"), systemImage: "person.crop.circle") }
         }
     }
@@ -117,6 +124,7 @@ struct ProfileView: View {
     @EnvironmentObject private var store: AppStore
     @AppStorage("theme") private var theme = "system"
     @State private var logout = false
+    @State private var leaveError: String?
     var body: some View {
         Page(title: "native.profile") {
             if store.offline { Notice(text: L.t("native.offline")) }
@@ -133,12 +141,40 @@ struct ProfileView: View {
             Picker(L.t("native.theme"), selection: $theme) {
                 Text(L.t("native.system")).tag("system"); Text(L.t("native.light")).tag("light"); Text(L.t("native.dark")).tag("dark")
             }.pickerStyle(.segmented)
-            Button(L.t("auth.logout"), role: .destructive) { logout = true }.frame(minHeight: 44)
+            Panel {
+                NavigationRow(title: "app.notificationsTitle", icon: "bell") { NotificationsView() }
+                if store.member.exists {
+                    NavigationRow(title: "app.historyTitle", icon: "clock") { HistoryView() }
+                    NavigationRow(title: "phase5.claimTitle", icon: "doc.text") { ClaimsView() }
+                    NavigationRow(title: "phase5.regionChange", icon: "globe.asia.australia") { RegionChangeView() }
+                    NavigationRow(title: "social.reservations", icon: "list.bullet") { SocialOperationsView() }
+                    ConfirmAction(label: "phase5.leave", message: L.t("phase5.leaveConfirm"), destructive: true) {
+                        do { _ = try await APIClient.shared.call("POST", "/api/me/leave", .object([:])); await store.signOut() }
+                        catch { leaveError = error.localizedDescription }
+                    }
+                    if let leaveError { Notice(text: leaveError, error: true) }
+                }
+            }
+            Button(L.t("common.signOut"), role: .destructive) { logout = true }.frame(minHeight: 44)
         }
         .refreshable { await store.reload() }
-        .alert(L.t("auth.logout"), isPresented: $logout) {
+        .alert(L.t("common.signOut"), isPresented: $logout) {
             Button(L.t("common.cancel"), role: .cancel) {}
-            Button(L.t("auth.logout"), role: .destructive) { Task { await store.signOut() } }
+            Panel {
+                NavigationRow(title: "app.notificationsTitle", icon: "bell") { NotificationsView() }
+                if store.member.exists {
+                    NavigationRow(title: "app.historyTitle", icon: "clock") { HistoryView() }
+                    NavigationRow(title: "phase5.claimTitle", icon: "doc.text") { ClaimsView() }
+                    NavigationRow(title: "phase5.regionChange", icon: "globe.asia.australia") { RegionChangeView() }
+                    NavigationRow(title: "social.reservations", icon: "list.bullet") { SocialOperationsView() }
+                    ConfirmAction(label: "phase5.leave", message: L.t("phase5.leaveConfirm"), destructive: true) {
+                        do { _ = try await APIClient.shared.call("POST", "/api/me/leave", .object([:])); await store.signOut() }
+                        catch { leaveError = error.localizedDescription }
+                    }
+                    if let leaveError { Notice(text: leaveError, error: true) }
+                }
+            }
+            Button(L.t("common.signOut"), role: .destructive) { Task { await store.signOut() } }
         }
     }
 }
@@ -147,7 +183,10 @@ struct LinkDestination: View {
     var body: some View {
         switch link {
         case .card(let token): PublicCardView(token: token)
-        default: Page(title: "app.tabHub") { EmptyState() }
+        case .event(let id): EventDetailView(eventID: id)
+        case .channel(let id): ChannelView(room: Room(kind: "channel", id: id))
+        case .conversation(let id): ChannelView(room: Room(kind: "conversation", id: id))
+        case .notifications: NotificationsView()
         }
     }
 }

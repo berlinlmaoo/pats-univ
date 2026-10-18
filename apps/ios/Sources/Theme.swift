@@ -93,5 +93,16 @@ struct Field: View {
 }
 struct Badge: View {
     var value: String
-    var body: some View { Text(L.status(value)).font(Theme.body(13)).padding(.horizontal, 10).padding(.vertical, 5).background(Theme.color("accentSubtle"), in: Capsule()).foregroundStyle(Theme.color("accentSubtleText")) }
+    var member = false
+    private var tone: String {
+        if ["REVOKED", "REJECTED", "INACTIVE", "inactive", "revoked"].contains(value) { return "danger" }
+        if ["DELIVERED", "APPROVED", "CONFIRMED", "FULFILLED", "open", "active"].contains(value) { return "success" }
+        if ["ENCODED", "EXPIRED", "CLOSED", "closed"].contains(value) { return "warning" }
+        return "accent"
+    }
+    var body: some View {
+        Text(member ? L.t("cardStatusMember.\(value)") : L.status(value)).font(Theme.body(13))
+            .padding(.horizontal, 10).padding(.vertical, 5)
+            .background(Theme.color("\(tone)Subtle"), in: Capsule()).foregroundStyle(Theme.color("\(tone)SubtleText"))
+    }
 }
