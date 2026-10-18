@@ -81,7 +81,7 @@ struct LoginView: View {
             } else {
                 Field(key: "auth.emailLabel", value: $email, keyboard: .emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled()
                 Button(L.t("auth.sendCode")) { Task { await request() } }.buttonStyle(PATSButtonStyle()).disabled(busy)
-                Link(L.t("auth.joinLink"), destination: Config.production.appendingPathComponent("join"))
+                Link(L.t("auth.joinLink"), destination: Config.url("/join"))
             }
             if busy { ProgressView().frame(maxWidth: .infinity) }
             #if PATS_DEV_SERVER
