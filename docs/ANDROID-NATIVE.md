@@ -10,10 +10,10 @@ endpoint inventory below. Phase 5 business rules supersede the historical wheel 
 |---|---|---|
 | 1 Foundation | Complete | 4 JVM tests and debug APK pass; real demo OTP member/admin login, EN/ID profiles, navigation, logout and card-link error on Pixel_10_Pro |
 | 2 Member screens | Complete | 7 JVM tests and debug APK pass; 19 member routes plus receipt/media and mutation states captured and inspected on Pixel_10_Pro |
-| 3 Admin screens | Implemented; owner review open | 15 JVM tests and debug APK pass; regional and HQ screens, native camera, manual check-in, claims, reward handover, event create/edit/open and reservation confirmation inspected on Pixel_10_Pro; review notes requested after an incomplete message |
-| 4 Parity | Audit and checks green; final review open | 18 JVM tests and debug APK pass; Expo screen/API inventory audited; EN/light and ID/dark captures, compact width and 1.4× text inspected; final closure awaits the missing Phase 3 review notes |
+| 3 Admin screens | Implemented and device validated; physical NFC remains | Regional/HQ workflows validated in the earlier round; the current KTM round reruns the screen matrix in both languages/themes. See the current report for acceptance limits. |
+| 4 Parity | Screen/API audit complete | Review fix 8a2d003 retained; current design round has 21 passing JVM tests, debug APK, and the full language/theme matrix. Physical optical/NFC and original-master overlay checks are explicitly pending. |
 
-Foundation includes the PATS palette, Inter/Jakarta fonts, shared EN/ID dictionaries, member/admin
+Foundation includes the PATS palette, shared Figtree/Graduate fonts, shared EN/ID dictionaries, member/admin
 shell, public card links, loading/error states, OTP demo-code display, cooldown, logout, refreshed
 sessions and a Socket.IO room client. Token storage uses Android Keystore AES-GCM in no-backup storage,
 following NEXUS's pattern. Refresh rotation is serialized and does not clear sessions for transport errors.
@@ -222,6 +222,30 @@ JVM results: foundation 4, member logic 3, admin validation 2, NFC 5, QR 1 and p
 `testDebugUnitTest assembleDebug` passes with the documented debug DNS override. Shared-copy audit
 checks 333 literal keys. APK: `apps/android/app/build/outputs/apk/debug/app-debug.apk`.
 
-Review remains open: the owner sent the Phase 3 review heading twice without a notes body. A request
-for the missing notes is pending. No final completion marker is written until those notes are received
-and addressed. Physical NFC, deployment origin and release/push setup remain the owner tasks above.
+The subsequent review fix `8a2d003` preserves local API configuration, capability/no-access states
+and idempotent chat sends. The 18 October KTM round merged `vm/dev` without conflicts and retains
+that fix. The approved design is implemented in the Kotlin app; see
+[the design-round report](ANDROID-DESIGN-18OCT-REPORT.md) for changes, the full screenshot matrix,
+device interactions and explicit acceptance limits. Physical NFC, deployment origin and release/push
+setup remain the owner tasks above.
+
+## 18 October KTM design round
+
+The Android build now generates resources from shared colour/geometry/type tokens and the original
+approved artwork/font files. Figtree replaces Inter/Jakarta. Graduate uses the shared stroke and
+tracking. The KTM uses the official front/back and the exact shared `card-value.ttf`, with live
+name/drink/genre and a white QR inside the printed maroon tile. Member navigation now starts at Home,
+followed by Events, KTM, Hub and Profile; rewards remain accessible from Home.
+
+Additional API use: `PATCH /api/me` for favoriteDrink, favoriteGenre, favoriteSong and quotes;
+authenticated raw-image `PUT /api/me/photo`; signed `GET /api/photos/file` without bearer credentials.
+The login `/join` URL uses the selected API origin. Join itself remains the web flow, including its
+drink/photo fields. Public digital ID exposes only public card fields, city, member-since and photo.
+
+Validation: 21 JVM tests pass, `assembleDebug` passes, and the copy audit covers 344 literal keys.
+Pixel_10_Pro ran with a visible window and host GPU against dev, at approximately 359 dp, in both
+languages and themes. Screenshots, XML and contact sheets are in
+`C:/Users/Berlin/Documents/Dev/pats-shots/design-18oct/`; open `index.html` for the gallery.
+The report distinguishes emulator/software verification from the remaining original-master overlay,
+physical optical QR and NFC acceptance. No membership level or unavailable photo fields are invented
+where the web API does not supply them.
