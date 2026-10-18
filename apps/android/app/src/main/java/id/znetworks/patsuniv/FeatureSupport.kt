@@ -72,5 +72,5 @@ fun leaderboardPeriod(data: JsonObject, language: String): String = runCatching 
     val start = Instant.parse(data.text("periodStart")).atZone(ZoneId.of("Asia/Jakarta"))
     val end = Instant.parse(data.text("periodEnd")).atZone(ZoneId.of("Asia/Jakarta"))
     val period = if(data.text("mode") == "QUARTERLY") "Q" + ((start.monthValue-1)/3+1) + " " + start.year else start.format(DateTimeFormatter.ofPattern("MMM yyyy",Locale.forLanguageTag(language)))
-    period + " ? reset " + end.format(DateTimeFormatter.ofPattern("d MMM",Locale.forLanguageTag(language)))
+    period + " · reset " + end.format(DateTimeFormatter.ofPattern("d MMM",Locale.forLanguageTag(language)))
 }.getOrDefault("")

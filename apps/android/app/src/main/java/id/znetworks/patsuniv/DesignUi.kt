@@ -57,6 +57,7 @@ fun Modifier.dashedBorder(color: Color) = drawBehind {
     drawRoundRect(color, cornerRadius = androidx.compose.ui.geometry.CornerRadius(6.dp.toPx()), style = Stroke(1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx()))))
 }
 @Composable fun SectionLabel(text: String) { Text(text.uppercase(java.util.Locale.ROOT), style = MaterialTheme.typography.labelSmall, color = tone("textMuted")) }
+@Composable fun CardHeading(text: String) { Column(verticalArrangement = Arrangement.spacedBy(Space.small)) { Box(Modifier.width(24.dp).height(3.dp).background(tone("gold"))); Text(text, style = MaterialTheme.typography.titleMedium) } }
 @Composable fun Detail(label: String, value: String) { Column(verticalArrangement = Arrangement.spacedBy(Space.tiny)) { SectionLabel(label); Text(value.ifBlank { tr("common.notSet") }) } }
 @Composable fun Badge(text: String, status: String = "") {
     val family = when(status.uppercase()) {
@@ -95,5 +96,19 @@ fun Modifier.dashedBorder(color: Color) = drawBehind {
         listOf("id" to "ID", "en" to "EN").forEach { (code, label) ->
             TextButton({ setLanguage(code) }, Modifier.heightIn(min = Space.control), shape = MaterialTheme.shapes.medium, colors = ButtonDefaults.textButtonColors(containerColor = if(code == language) (if(onBand) tone("bandText") else tone("surface")) else Color.Transparent, contentColor = if(onBand) (if(code == language) tone("band") else tone("bandText")) else tone("text"))) { Text(label, style = MaterialTheme.typography.labelSmall) }
         }
+    }
+}
+@Composable fun OtpField(value: String, onChange: (String) -> Unit) {
+    val label = tr("otp.codeLabel")
+    Column(verticalArrangement = Arrangement.spacedBy(Space.small)) {
+        SectionLabel(label)
+        androidx.compose.foundation.text.BasicTextField(value, onChange, Modifier.fillMaxWidth().semantics { contentDescription = label }, singleLine = true, keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.NumberPassword), textStyle = MaterialTheme.typography.bodyLarge.copy(color = Color.Transparent), cursorBrush = SolidColor(Color.Transparent), decorationBox = { inner ->
+            Box {
+                Row(horizontalArrangement = Arrangement.spacedBy(Space.tiny)) {
+                    repeat(6) { index -> Box(Modifier.weight(1f).height(Space.control).border(if(index == value.length) 2.dp else 1.dp, if(index == value.length) tone("accent") else tone("borderStrong"), MaterialTheme.shapes.medium), contentAlignment = Alignment.Center) { Text(value.getOrNull(index)?.toString() ?: "", style = MaterialTheme.typography.titleLarge) } }
+                }
+                Box(Modifier.fillMaxWidth().height(Space.control)) { inner() }
+            }
+        })
     }
 }

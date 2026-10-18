@@ -68,9 +68,10 @@ private val LocalPageRefresh = staticCompositionLocalOf<PageRefresh?> { null }
         OutlinedTextField(value, onChange, Modifier.fillMaxWidth().heightIn(min = Space.control).semantics { contentDescription = label }, keyboardOptions = KeyboardOptions(keyboardType = keyboard), singleLine = !multiline, minLines = if (multiline) 3 else 1, shape = MaterialTheme.shapes.medium, colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = tone("accent"), unfocusedBorderColor = tone("borderStrong")))
     }
 }
-@Composable fun Notice(message: String, error: Boolean = false) {
-    Surface(color = if (error) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.surfaceVariant, shape = MaterialTheme.shapes.medium) {
-        Text(message, Modifier.fillMaxWidth().padding(Space.page), color = if (error) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurfaceVariant)
+@Composable fun Notice(message: String, error: Boolean = false, kind: String = "info") {
+    val family = if(error) "danger" else if(kind == "info") "accent" else kind
+    Surface(color = tone("${family}Subtle"), shape = MaterialTheme.shapes.medium) {
+        Text(message, Modifier.fillMaxWidth().padding(Space.page).semantics { if(error) liveRegion = LiveRegionMode.Assertive }, color = tone("${family}Text"))
     }
 }
 @Composable fun Empty(title: String, description: String = tr("app.eventsEmptyBody", "city" to "")) { Tile {

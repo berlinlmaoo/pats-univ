@@ -868,7 +868,7 @@ export const en = {
     unitAdmins: 'admins',
   },
   app: {
-    tabCard: 'Card',
+    tabCard: 'KTM',
     tabEvents: 'Events',
     tabRewards: 'Rewards',
     tabHub: 'Hub',

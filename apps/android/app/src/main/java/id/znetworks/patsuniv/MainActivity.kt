@@ -111,15 +111,16 @@ class MainActivity : ComponentActivity() {
             finally { busy = false }
         }
     }
+    LaunchedEffect(code) { if(otp != null && validOtp(code) && !busy) submit(true) }
     Page {
         Column(Modifier.fillMaxWidth().background(tone("band")).padding(Space.large), verticalArrangement = Arrangement.spacedBy(Space.page)) { Brand(); LanguageToggle(language, true, setLanguage) }
         Box(Modifier.fillMaxWidth().height(androidx.compose.ui.unit.Dp(3f)).background(tone("gold")))
-        Title(tr(if (otp == null) "app.loginTitle" else "otp.title"), tr(if (otp == null) "app.loginSubtitle" else "otp.subtitle", "email" to email))
+        Title(tr(if (otp == null) "auth.signInHeading" else "otp.title"), tr(if (otp == null) "app.loginSubtitle" else "otp.subtitle", "email" to email))
         if (otp == null) Field(tr("auth.emailLabel"), email, { email = it }, KeyboardType.Email)
         else {
             val demo = otp!!.text("demoCode")
             if (demo.isNotBlank()) Notice(tr("otp.demoCode", "code" to demo))
-            Field(tr("otp.codeLabel"), code, { value -> code = value.filter(Char::isDigit).take(6) }, KeyboardType.NumberPassword)
+            OtpField(code) { value -> code = value.filter(Char::isDigit).take(6) }
         }
         error?.let { Notice(tr(it, *errorParams), true) }
         Action(tr(if (busy) "common.loading" else if (otp == null) "auth.sendCode" else "otp.verify"), !busy && if (otp == null) validEmail(email) else validOtp(code)) { submit(otp != null) }
@@ -136,12 +137,12 @@ class MainActivity : ComponentActivity() {
     val scope = rememberCoroutineScope()
     val mutation = rememberMutation()
     Title(member.text("fullName", user.text("name")), member.text("nim", tr("role." + user.text("role"))))
+    if(member.isNotEmpty()) ProfileEditor(member, api)
     Tile {
         Text(user.text("email")); Text(user.text("phone")); Text(member.obj("city").text("name", user.obj("city").text("name")))
         if (member.isNotEmpty()) { Text(member.text("favoriteSong")); Text(member.text("favoriteGenre")); Text(member.text("quotes")) }
     }
     if (member.isNotEmpty()) {
-        ProfileEditor(member, api)
         KtmCard(member, thumbnail = true, onOpen = { go("card") })
         Remote(api, "/api/loyalty/wallet", refresh = liveVersion(api, "wallet", member.text("id"))) { data, _ -> Text(count(data.number("balance")) + " XP", style = MaterialTheme.typography.titleLarge) }
         if (member.flag("isPromoter")) Notice(tr("phase5.prBadge"))

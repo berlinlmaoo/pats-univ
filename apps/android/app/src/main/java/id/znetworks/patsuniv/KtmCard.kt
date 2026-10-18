@@ -44,12 +44,13 @@ fun qrMatrix(value: String, onTile: Boolean = false) = QRCodeWriter().encode(val
     var flipped by remember { mutableStateOf(false) }
     val reduced = !ValueAnimator.areAnimatorsEnabled()
     val rotation by animateFloatAsState(if(flipped) 180f else 0f, tween(if(reduced) 200 else 500), label = "KTM flip")
+    val sideLabel = tr(if(flipped) "ktm.backAlt" else "ktm.cardLabel", "name" to member.text("fullName"))
     val label = tr("native.cardAccessibility", "name" to member.text("fullName"), "drink" to member.text("favoriteDrink"), "genre" to member.text("favoriteGenre"))
     Column(verticalArrangement = Arrangement.spacedBy(Space.small)) {
         BoxWithConstraints(Modifier.fillMaxWidth()) {
             val width = maxWidth
             val shape = RoundedCornerShape(width * g("radius"))
-            Box(Modifier.fillMaxWidth().aspectRatio(g("ratio")).shadow(6.dp, shape).clip(shape).clickable { if(onOpen != null) onOpen() else if(!thumbnail) flipped = !flipped }.semantics(mergeDescendants = true) { contentDescription = label; stateDescription = if(flipped) "back" else "front" }.graphicsLayer {
+            Box(Modifier.fillMaxWidth().aspectRatio(g("ratio")).shadow(6.dp, shape).clip(shape).clickable { if(onOpen != null) onOpen() else if(!thumbnail) flipped = !flipped }.semantics(mergeDescendants = true) { contentDescription = label; stateDescription = sideLabel }.graphicsLayer {
                 rotationY = if(reduced) 0f else rotation
                 cameraDistance = 16 * density
                 alpha = if(reduced) kotlin.math.abs(rotation - 90f).div(90f).coerceAtLeast(.05f) else 1f
@@ -59,7 +60,7 @@ fun qrMatrix(value: String, onTile: Boolean = false) = QRCodeWriter().encode(val
                     Image(painterResource(if(back) R.drawable.ktm_back else R.drawable.ktm_front), null, Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.FillBounds)
                     if(!back) {
                         Canvas(Modifier.fillMaxSize()) {
-                            val textView = android.widget.TextView(context).apply { typeface = face; setTextColor(android.graphics.Color.BLACK); letterSpacing = tracking; includeFontPadding = false; setSingleLine(true) }
+                            val textView = android.widget.TextView(context).apply { layoutParams = android.view.ViewGroup.LayoutParams(-2,-2); typeface = face; setTextColor(android.graphics.Color.BLACK); letterSpacing = tracking; includeFontPadding = false; setSingleLine(true) }
                             listOf(Triple("fullName", "nameY", "nameMaxW"), Triple("favoriteDrink", "drinkY", "valueMaxW"), Triple("favoriteGenre", "genreY", "valueMaxW")).forEach { (field, y, max) ->
                                 val value = member.text(field).uppercase(java.util.Locale.ROOT)
                                 textView.text = value

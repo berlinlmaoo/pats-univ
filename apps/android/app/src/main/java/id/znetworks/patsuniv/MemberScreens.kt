@@ -20,6 +20,13 @@ import kotlinx.serialization.json.*
 import kotlinx.coroutines.*
 import java.time.Instant
 
+@Composable fun CheckInStrip(checkIn: JsonObject, language: String, zone: String) {
+    Column(Modifier.fillMaxWidth().background(tone("band"), MaterialTheme.shapes.medium).padding(Space.page), verticalArrangement = Arrangement.spacedBy(Space.small)) {
+        Badge(tr("app.resultCheckedIn"), "OPEN")
+        Text(dateTime(checkIn.text("checkedInAt"),language,zone) + " · " + tr("checkInMethod." + checkIn.text("method")), color = tone("bandText"), style = MaterialTheme.typography.bodySmall)
+    }
+}
+
 @Composable fun Qr(value: String) {
     val bitmap = remember(value) {
         val matrix = com.google.zxing.qrcode.QRCodeWriter().encode(value, BarcodeFormat.QR_CODE, 672, 672, mapOf(com.google.zxing.EncodeHintType.ERROR_CORRECTION to com.google.zxing.qrcode.decoder.ErrorCorrectionLevel.M))
@@ -67,7 +74,7 @@ import java.time.Instant
         if (events.isEmpty()) Empty(tr("app.eventsEmptyTitle"), tr("app.eventsEmptyBody", "city" to ""))
         events.forEach { event -> Tile {
             if(event.text("flyerUrl").isNotBlank()) NetworkImage(api, event.text("flyerUrl"))
-            Text(event.text("title"), style = MaterialTheme.typography.titleMedium)
+            CardHeading(event.text("title"))
             Text(dateTime(event.text("startsAt"), language, event.obj("city").text("timezone", "Asia/Jakarta")))
             Text(event.obj("venue").text("name")); Badge(tr("eventPhase." + event.text("phase")), event.text("phase"))
             if (event.obj("myCheckIn").isNotEmpty()) Notice(tr("app.resultCheckedIn"))
@@ -86,7 +93,7 @@ import java.time.Instant
             Text(dateTime(e.text("endsAt"), language, e.obj("city").text("timezone", "Asia/Jakarta")))
             Text(e.obj("venue").text("name")); Text(e.obj("venue").text("address")); Text(e.text("description"))
             Badge(tr("eventPhase." + e.text("phase")), e.text("phase"))
-            if (e.obj("myCheckIn").isNotEmpty()) Notice(tr("app.resultCheckedIn"))
+            if(e.obj("myCheckIn").isNotEmpty()) CheckInStrip(e.obj("myCheckIn"), language, e.obj("city").text("timezone", "Asia/Jakarta"))
         }
         Action(tr("social.reserve"), maroon = true) { go("reservation/$id") }
         Action(tr("social.roaming"), secondary = true) { go("roaming/$id") }

@@ -18,8 +18,8 @@ for (const name of ['ktm', 'varsity', 'type', 'radius', 'space', 'size']) {
   const block = tokens.match(new RegExp(`export const ${name} = (\\{[\\s\\S]*?\\n\\}) as const`))[1];
   design[name] = vm.runInNewContext(`(${block})`, Object.create(null));
 }
-design.cardValueTracking = -0.04;
-design.varsityStroke = 0.045;
+design.cardValueTracking = Number(tokens.match(/tracking: (-[\d.]+),\s*\n  \},\s*\n  mono/)[1]);
+design.varsityStroke = Number(tokens.match(/export const varsityStroke = ([\d.]+)/)[1]);
 fs.writeFileSync(path.join(assets, 'design.json'), JSON.stringify(design, null, 2) + '\n');
 const res = path.join(root, 'apps/android/app/build/generated/patsRes');
 for (const folder of ['font', 'drawable']) fs.mkdirSync(path.join(res, folder), { recursive: true });

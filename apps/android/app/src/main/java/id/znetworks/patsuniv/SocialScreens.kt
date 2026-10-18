@@ -18,14 +18,17 @@ import kotlinx.serialization.json.*
     val admin = hasCapability(session, "city.operations")
     Action(tr(if (admin) "social.operations" else "social.reservations"), secondary = true) { go("social-operations") }
     if (!admin) Action(tr("social.roaming"), secondary = true) { go("roaming") }
+    var kind by remember { mutableStateOf("TIMELINE") }
+    Tabs(listOf("TIMELINE" to tr("social.TIMELINE"), "CHAT" to tr("social.CHAT"), "reservations" to tr("social.reservations")), kind) { if(it == "reservations") go("social-operations") else kind = it }
     var city by remember { mutableStateOf("") }; var create by remember { mutableStateOf(false) }
     Remote(api, "/api/social/hub") { data, reload ->
         val selected = if (data.rows("cities").any { it.text("id") == city }) city else data.text("homeCityId", data.rows("cities").firstOrNull()?.text("id").orEmpty())
         Choices(tr("social.city"), data.rows("cities").map { it.text("id") to it.text("name") }, selected) { city = it }
         if (admin) Action(tr("social.newChannel"), secondary = true) { create = !create }
         if (create && selected.isNotBlank()) ChannelEditor(api, selected) { create = false; reload() }
-        val channels = data.rows("channels").filter { it.text("cityId") == selected }
+        val channels = data.rows("channels").filter { it.text("cityId") == selected && it.text("kind") == kind }
         if (channels.isEmpty()) Empty(tr("social.noChannels"), tr("social.noChannelsBody"))
+        if(channels.isNotEmpty()) Notice(tr("native.selectChannel"))
         channels.forEach { c -> Tile { Text(c.text("name"), style = MaterialTheme.typography.titleMedium); Text(tr("social." + c.text("kind"))); if (c.flag("archived")) Text(tr("social.archived")); Action(tr("common.continue"), secondary = true) { go("channel/" + c.text("id")) } } }
     }
 }

@@ -870,7 +870,7 @@ export const id: DictionaryShape<typeof en> = {
     unitAdmins: 'admin',
   },
   app: {
-    tabCard: 'Kartu',
+    tabCard: 'KTM',
     tabEvents: 'Event',
     tabRewards: 'Reward',
     tabHub: 'Hub',

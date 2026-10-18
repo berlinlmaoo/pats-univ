@@ -8,9 +8,13 @@ import kotlinx.serialization.json.*
 
 @Composable fun ClaimsReview(api: Api) {
     Title(tr("phase5.claimReview"), tr("phase5.claimAdjustHint"))
+    var selected by remember { mutableStateOf("pending") }
     Remote(api, "/api/admin/loyalty/claims", pollMs = 15000) { data, reload ->
-        if (data.rows("claims").isEmpty()) Notice(tr("phase5.claimEmpty"))
-        data.rows("claims").forEach { c -> key(c.text("id"), c.text("status")) { ClaimReview(api, c, reload) } }
+        val pending = data.rows("claims").count { it.text("status") == "PENDING" }
+        Tabs(listOf("pending" to tr("native.pending"), "history" to tr("native.history")), selected, mapOf("pending" to pending)) { selected = it }
+        val claims = data.rows("claims").filter { (it.text("status") == "PENDING") == (selected == "pending") }
+        if(claims.isEmpty()) Empty(tr("phase5.claimEmpty"), tr("phase5.claimAdjustHint"))
+        claims.forEach { c -> key(c.text("id"), c.text("status")) { ClaimReview(api, c, reload) } }
     }
 }
 @Composable fun ClaimReview(api: Api, c: JsonObject, reload: () -> Unit) {

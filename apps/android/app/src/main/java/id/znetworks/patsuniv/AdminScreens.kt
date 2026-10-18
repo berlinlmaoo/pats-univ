@@ -15,7 +15,7 @@ import kotlinx.serialization.json.*
 import java.time.*
 
 @Composable fun AdminTools(session: Session, go: (String) -> Unit) {
-    Brand(); Title(tr("app.adminTitle"), if (hasCapability(session, "hq.manage")) tr("app.adminSubtitleHq") else tr("app.adminSubtitle", "city" to session.me.obj("user").obj("city").text("name")))
+    Title(tr("app.adminTitle"), if (hasCapability(session, "hq.manage")) tr("app.adminSubtitleHq") else tr("app.adminSubtitle", "city" to session.me.obj("user").obj("city").text("name")))
     listOf(
         Triple("scan", "app.adminScan", "checkin.scan"), Triple("city-events", "app.adminEvents", "checkin.scan"),
         Triple("claims-review", "phase5.claimReview", "promoter.manage"), Triple("reward-validation", "loyalty.validateReward", "reward.validate"),
@@ -154,8 +154,8 @@ fun validEventFields(values: Map<String, String>) = runCatching { LocalDate.pars
     var publish by remember { mutableStateOf(initial?.flag("publish") ?: true) }; val mutation = rememberMutation(); MutationStatus(mutation)
     Field(tr("events.eventTitle"), values.getValue("title"), { values["title"] = it.take(120) })
     val date = LocalDate.parse(values.getValue("date"))
-    Action(tr("events.date") + ": " + values.getValue("date"), secondary = true) { DatePickerDialog(context, { _, y, m, d -> values["date"] = "%04d-%02d-%02d".format(y, m + 1, d) }, date.year, date.monthValue - 1, date.dayOfMonth).show() }
-    listOf("startTime", "endTime").forEach { key -> val time = LocalTime.parse(values.getValue(key)); Action(tr("events.$key") + ": " + values.getValue(key), secondary = true) { TimePickerDialog(context, { _, h, m -> values[key] = "%02d:%02d".format(h, m) }, time.hour, time.minute, true).show() } }
+    Action(tr("events.date") + ": " + date.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy")), secondary = true) { DatePickerDialog(context, { _, y, m, d -> values["date"] = "%04d-%02d-%02d".format(y, m + 1, d) }, date.year, date.monthValue - 1, date.dayOfMonth).show() }
+    listOf("startTime", "endTime").forEach { key -> val time = LocalTime.parse(values.getValue(key)); Action(tr("events.$key") + " (" + zoneLabel(meta.obj("city").text("timezone", "Asia/Jakarta")) + "): " + values.getValue(key).replace(':', '.'), secondary = true) { TimePickerDialog(context, { _, h, m -> values[key] = "%02d:%02d".format(h, m) }, time.hour, time.minute, true).show() } }
     Text(tr("events.endHint"), style = MaterialTheme.typography.bodySmall)
     Choices(tr("events.venue"), listOf("" to tr("app.eventFormVenueNone")) + meta.rows("venues").map { it.text("id") to it.text("name") }, values.getValue("venueId")) { values["venueId"] = it }
     Field(tr("events.opensBefore"), values.getValue("opensBeforeMinutes"), { values["opensBeforeMinutes"] = it }, KeyboardType.Number)
