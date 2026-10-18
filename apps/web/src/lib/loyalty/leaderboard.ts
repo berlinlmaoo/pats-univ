@@ -5,6 +5,7 @@ import { db } from '../db';
 import { AppError } from '../http/errors';
 import { getSetting } from '../settings';
 import { atomic } from './transaction';
+import { photoReadUrl } from '../members/photo';
 
 export async function leaderboard(
   options: {
@@ -107,7 +108,7 @@ export async function leaderboard(
         memberId: m.id,
         name: m.fullName,
         nim: m.nim,
-        photoUrl: m.photoUrl,
+        photoUrl: photoReadUrl(m.photoUrl, 3600, true),
         city: m.city.name,
         xp: t._sum.delta ?? 0,
         reachedAt: t._max.createdAt!.toISOString(),
@@ -143,7 +144,7 @@ export async function leaderboard(
       own = {
         memberId: m.id,
         name: m.fullName,
-        photoUrl: m.photoUrl,
+        photoUrl: photoReadUrl(m.photoUrl, 3600, true),
         city: m.city.name,
         xp: 0,
         rank: all.length + 1,

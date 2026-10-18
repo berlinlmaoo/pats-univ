@@ -4,7 +4,9 @@ import { cn } from '@/lib/cn';
 /** Table that scrolls inside its card on narrow screens instead of the page. */
 export function Table({ className, ...props }: ComponentProps<'table'>) {
   return (
-    <div className="overflow-x-auto">
+    // `relative` keeps absolutely positioned children (sr-only labels) inside the scroll box, so a wide
+    // table scrolls within its card and never widens the page.
+    <div className="relative overflow-x-auto">
       <table className={cn('w-full border-collapse text-left text-body-sm', className)} {...props} />
     </div>
   );
@@ -14,7 +16,7 @@ export function Th({ className, ...props }: ComponentProps<'th'>) {
   return (
     <th
       scope="col"
-      className={cn('h-10 whitespace-nowrap border-b border-border bg-surface-muted px-4 text-caption font-medium text-muted first:pl-5 last:pr-5', className)}
+      className={cn('ktm-label h-10 whitespace-nowrap border-b border-border bg-surface-muted px-4 text-muted first:pl-5 last:pr-5', className)}
       {...props}
     />
   );

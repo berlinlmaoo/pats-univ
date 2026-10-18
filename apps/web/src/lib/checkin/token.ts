@@ -15,8 +15,8 @@ import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 
 const QR_PREFIX = 'P1';
 const TICKET_PREFIX = 'T1';
-/** cuid-style ids: letters and digits only, so "." can separate fields. */
-const ID = /^[a-z0-9]{8,40}$/;
+/** Ids: cuid or UUID (letters, digits, "-"), never ".", so "." can separate fields. */
+const ID = /^[a-z0-9-]{8,40}$/; // cuid (before the UUIDv7 conversion, 18 Oct 2026) or UUID
 const NONCE = /^[A-Za-z0-9_-]{16}$/;
 
 export interface QrClaims {

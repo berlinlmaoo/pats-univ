@@ -53,6 +53,16 @@ describe('check-in tokens', () => {
     expect(verifyQr(key, token, new Date(now.getTime() + 46_000))).toEqual({ ok: false, reason: 'expired' });
   });
 
+  it('accepts UUIDv7 ids (every id since the 18 Oct 2026 conversion)', () => {
+    const uuid = '019a1b2c-3d4e-7f00-8a1b-2c3d4e5f6a7b';
+    const token = signQr(key, { memberId: uuid, nonce: newNonce(), expiresAt: in45s });
+    const ok = verifyQr(key, token, now);
+    expect(ok.ok && ok.claims.memberId).toBe(uuid);
+    const ticket = signTicket(key, { adminId: uuid, eventId: uuid, memberId: uuid, nonce: newNonce(), expiresAt: in45s });
+    const t = verifyTicket(key, ticket, now);
+    expect(t.ok && t.claims.eventId).toBe(uuid);
+  });
+
   it('rejects tampering, other keys and foreign codes', () => {
     const token = signQr(key, { memberId, nonce: newNonce(), expiresAt: in45s });
     const parts = token.split('.');

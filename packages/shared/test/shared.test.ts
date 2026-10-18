@@ -92,6 +92,8 @@ describe('registration schema', () => {
     cityId: 'city_1',
     favoriteSong: 'Midnight City — M83',
     favoriteGenre: 'Synthpop',
+    favoriteDrink: ' Tequila ',
+    photoKey: 'photos/pending/0b9b3f6e-2c1d-4f7a-9a51-1f0e8c2d3b4a.jpg',
     email: ' Rara@Example.COM ',
     phone: '0812 3456 7890',
     consent: true as const,
@@ -104,6 +106,13 @@ describe('registration schema', () => {
     expect(out.phone).toBe('+6281234567890');
     expect(out.quotes).toBe('');
     expect(out.locale).toBe('id');
+    expect(out.favoriteDrink).toBe('Tequila');
+  });
+
+  it('requires a pending photo key', () => {
+    const res = registrationSchema.safeParse({ ...valid, photoKey: 'photos/someone-else/x.jpg' });
+    expect(res.success).toBe(false);
+    expect(res.error!.issues.map((i) => i.message)).toContain('validation.photoRequired');
   });
 
   it('reports i18n keys', () => {
@@ -141,7 +150,7 @@ describe('tokens', () => {
     expect(css).toContain('prefers-color-scheme: dark');
   });
 
-  it('uses the crest navy as the light primary and accent', () => {
+  it('uses the crest navy as the light primary and accent (the KTM header)', () => {
     expect(colors.light.primary).toBe(brand.navy);
     expect(colors.light.accent).toBe(brand.navy);
     expect(colors.light.secondary).toBe(brand.maroon);
@@ -182,6 +191,10 @@ describe('tokens', () => {
     ['dangerText', 'surface'],
     ['dangerText', 'bg'],
     ['onSolid', 'dangerSolid'],
+    ['goldText', 'bg'],
+    ['goldText', 'surface'],
+    ['bandText', 'band'],
+    ['bandMuted', 'band'],
   ];
   // Non-text UI that must stay visible (WCAG 1.4.11, 3:1): focus ring, primary button edge.
   const UI_PAIRS: [keyof ColorTokens, keyof ColorTokens][] = [
@@ -189,6 +202,9 @@ describe('tokens', () => {
     ['accent', 'bg'],
     ['primary', 'surface'],
     ['primary', 'bg'],
+    // Input edges (WCAG 1.4.11) and the KTM gold rule on the navy band.
+    ['borderStrong', 'surface'],
+    ['gold', 'band'],
   ];
 
   for (const scheme of ['light', 'dark'] as const) {

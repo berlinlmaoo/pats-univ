@@ -3,14 +3,13 @@
 import { emailSchema, type OtpRequestResponse } from '@pats/shared';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { LanguageSwitch } from '@/components/i18n/language-switch';
 import { useT } from '@/components/i18n/provider';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Field, Input } from '@/components/ui/field';
 import { OtpInput } from '@/components/ui/otp-input';
-import { Wordmark } from '@/components/ui/wordmark';
+import { AuthFrame } from '@/components/ui/auth-frame';
 import { postJson } from '@/lib/client/api';
 
 /** HQ dashboard login: email -> 6-digit code -> session cookie. */
@@ -88,18 +87,14 @@ export function LoginFlow({ next, demo }: { next: string; demo: boolean }) {
   }
 
   return (
-    <div className="flex min-h-dvh flex-col items-center px-4 py-6">
-      <div className="flex w-full max-w-form items-center justify-between">
-        <Wordmark />
-        <LanguageSwitch />
-      </div>
-      <main className="flex w-full max-w-form flex-1 flex-col justify-center py-10">
+    <AuthFrame aside={t('auth.hqTitle')}>
         <Card className="px-6 py-7 sm:px-8 sm:py-9">
           {step === 'email' ? (
             <form noValidate onSubmit={requestCode} className="flex flex-col gap-5">
               <div>
-                <h1 className="font-display text-title2 text-fg">{t('auth.hqTitle')}</h1>
-                <p className="mt-1 text-body-sm text-muted">{t('auth.hqSubtitle')}</p>
+                <h1 className="varsity text-fg">{t('auth.signInHeading')}</h1>
+                <p className="mt-2 text-body-sm font-bold text-fg">{t('auth.hqTitle')}</p>
+                <p className="mt-0.5 text-body-sm text-muted">{t('auth.hqSubtitle')}</p>
               </div>
               {demo && <Alert tone="info">{t('common.demoModeBody')}</Alert>}
               <Field label={t('auth.emailLabel')} htmlFor="email" error={error ?? undefined}>
@@ -134,7 +129,7 @@ export function LoginFlow({ next, demo }: { next: string; demo: boolean }) {
               }}
             >
               <div>
-                <h1 ref={headingRef} tabIndex={-1} className="font-display text-title2 text-fg outline-none">
+                <h1 ref={headingRef} tabIndex={-1} className="text-title2 text-fg outline-none">
                   {t('otp.title')}
                 </h1>
                 <p className="mt-1 break-words text-body-sm text-muted">
@@ -179,7 +174,6 @@ export function LoginFlow({ next, demo }: { next: string; demo: boolean }) {
           )}
         </Card>
         <p className="mt-5 text-center text-caption text-muted">{t('auth.hqOnly')}</p>
-      </main>
-    </div>
+    </AuthFrame>
   );
 }

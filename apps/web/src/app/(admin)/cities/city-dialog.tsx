@@ -51,8 +51,20 @@ function CityForm({ open, onClose, city }: { open: boolean; onClose: () => void;
   const err = (field: string) => (state && !state.ok && state.fields?.[field] ? t.loose(state.fields[field]) : undefined);
 
   return (
-    <Dialog open={open} onClose={onClose} title={city ? t('cities.editTitle', { name: city.name }) : t('cities.addTitle')}>
-      <form action={action} noValidate className="flex flex-col gap-4 pb-2">
+    <Dialog open={open} onClose={onClose} title={city ? t('cities.editTitle', { name: city.name }) : t('cities.addTitle')}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose} disabled={pending}>
+          {t('common.cancel')}
+          </Button>
+          <Button type="submit" form="city-form" loading={pending}>
+          {pending ? t('common.saving') : city ? t('common.saveChanges') : t('cities.add')}
+          </Button>
+          
+        </>
+      }
+    >
+      <form id="city-form" action={action} noValidate className="flex flex-col gap-4 pb-2">
         <div className="grid grid-cols-[7rem_minmax(0,1fr)] gap-3">
           <Field label={t('cities.code')} htmlFor="code" error={err('code')}>
             <Input
@@ -94,14 +106,6 @@ function CityForm({ open, onClose, city }: { open: boolean; onClose: () => void;
           />
         </Field>
         {state && !state.ok && state.message && <Alert tone="danger">{t.loose(state.message)}</Alert>}
-        <div className="flex justify-end gap-2 pt-2">
-          <Button variant="secondary" onClick={onClose} disabled={pending}>
-            {t('common.cancel')}
-          </Button>
-          <Button type="submit" loading={pending}>
-            {pending ? t('common.saving') : city ? t('common.saveChanges') : t('cities.add')}
-          </Button>
-        </div>
       </form>
     </Dialog>
   );

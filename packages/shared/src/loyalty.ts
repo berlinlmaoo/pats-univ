@@ -129,7 +129,7 @@ export const promoterInput = z.object({
   notes: z.string().trim().max(2000).default(''),
   receiptUrl: z
     .string()
-    .regex(/^receipts\/[a-z0-9]+\/[a-f0-9-]+\.(jpg|png|webp)$/).or(z.literal('')).default(''),
+    .regex(/^receipts\/[a-z0-9-]+\/[a-f0-9-]+\.(jpg|png|webp)$/).or(z.literal('')).default(''),
   receiptAmount: money.nullable().default(null),
   guests: z
     .array(
@@ -251,6 +251,8 @@ export interface OperationsDto {
   events: {
     id: string;
     title: string;
+    startsAt: string;
+    endsAt: string;
     city: { name: string };
     recap: RecapDto | null;
   }[];
@@ -316,7 +318,7 @@ export interface DrawDto {
 
 export const claimInput = z.object({
   eventId: id, formType: z.enum(['PR', 'MEMBER']), guestCount: count.default(0), reservationCount: count,
-  receiptUrl: z.string().regex(/^receipts\/[a-z0-9]+\/[a-f0-9-]+\.(jpg|png|webp)$/).or(z.literal('')).default(''),
+  receiptUrl: z.string().regex(/^receipts\/[a-z0-9-]+\/[a-f0-9-]+\.(jpg|png|webp)$/).or(z.literal('')).default(''),
   notes: z.string().trim().max(2000).default(''),
 });
 export const claimReviewInput = z.object({
@@ -327,7 +329,22 @@ export interface ClaimDto {
   id: string; memberId: string; eventId: string; formType: 'PR' | 'MEMBER'; guestCount: number; reservationCount: number;
   receiptUrl: string; notes: string; status: 'PENDING' | 'APPROVED' | 'REJECTED'; bonusValue: number | null;
   rejectReason: string | null; member: { fullName: string }; event: { title: string };
+  createdAt?: string; reviewedAt?: string | null;
 }
+/** The review queue (PENDING, oldest first) apart from decided claims (history, newest decision first). */
+export function splitClaims<T extends { status: ClaimDto['status']; createdAt?: string | Date; reviewedAt?: string | Date | null }>(claims: T[]): { pending: T[]; history: T[] } {
+  const time = (d: string | Date | null | undefined) => (d ? new Date(d).getTime() : 0);
+  return {
+    pending: claims.filter((c) => c.status === 'PENDING').sort((a, b) => time(a.createdAt) - time(b.createdAt)),
+    history: claims.filter((c) => c.status !== 'PENDING').sort((a, b) => time(b.reviewedAt ?? b.createdAt) - time(a.reviewedAt ?? a.createdAt)),
+  };
+}
+
+/** Events whose recap can be filled: only those that have ended. */
+export function recapEvents<T extends { endsAt: string | Date }>(events: T[], now = new Date()): T[] {
+  return events.filter((e) => new Date(e.endsAt).getTime() <= now.getTime());
+}
+
 export interface ClaimsDto {
   claims: ClaimDto[]; events: { id: string; title: string }[]; isPromoter: boolean; allowMemberGl: boolean;
 }

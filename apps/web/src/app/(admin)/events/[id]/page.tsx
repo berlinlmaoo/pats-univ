@@ -129,7 +129,7 @@ export default async function EventPage({ params }: Params) {
         </header>
       </div>
 
-      <DrawPanel eventId={event.id} />
+      <DrawPanel eventId={event.id} ended={event.endsAt <= now} />
       <div className="grid items-start gap-6 lg:grid-cols-5">
         <Card className="min-w-0 overflow-hidden lg:col-span-3">
           <CardHeader

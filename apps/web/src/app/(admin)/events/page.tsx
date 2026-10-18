@@ -96,7 +96,7 @@ export default async function EventsPage({ searchParams }: { searchParams: Promi
                 const time = formatTime(e.startsAt, { timeZone: tz });
                 return (
                   <Tr key={e.id} className="relative">
-                    <Td className="w-full max-w-0 sm:max-w-80 sm:w-auto">
+                    <Td className="w-full max-w-0 py-3 sm:max-w-80 sm:w-auto">
                       <Link href={`/events/${e.id}`} className="block min-w-0 after:absolute after:inset-0 focus-visible:outline-none">
                         <span className="block break-words font-medium text-fg sm:truncate">{e.title}</span>
                         <span className="block break-words text-caption text-muted sm:truncate">
@@ -142,7 +142,10 @@ function MethodMix({ counts, total, t }: { counts: Partial<Record<CheckInMethod,
       <div className="flex h-1.5 overflow-hidden rounded-full bg-surface-muted" role="img" aria-label={label}>
         {CHECK_IN_METHODS.map((m) => (counts[m] ? <div key={m} className={MIX_COLOR[m]} style={{ width: `${((counts[m] ?? 0) / total) * 100}%` }} /> : null))}
       </div>
-      <p className="mt-1 truncate text-caption tabular-nums text-muted">{t('events.nfcShare', { percent: pct('NFC') })}</p>
+      {/* Spell out every method so a bar that is all manual reads as "Manual 100%", not as an alert. */}
+      <p className="mt-1 text-caption tabular-nums text-muted">
+        {CHECK_IN_METHODS.filter((m) => counts[m]).map((m) => `${t(`checkInMethod.${m}`)} ${pct(m)}%`).join(' · ')}
+      </p>
     </div>
   );
 }

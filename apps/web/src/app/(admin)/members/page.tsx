@@ -125,7 +125,15 @@ export default async function MembersPage({ searchParams }: { searchParams: Prom
                       {formatDate(m.joinedAt, t.locale, { timeZone: m.city.timezone })}
                     </Td>
                     <Td>
-                      <CardStatusBadge status={m.cards[0]?.status ?? 'NOT_PRINTED'} t={t} />
+                      <div className="flex flex-col items-start gap-1">
+                        <CardStatusBadge status={m.cards[0]?.status ?? 'NOT_PRINTED'} t={t} />
+                        {/* The status column hides below md; a deactivated member must still stand out. */}
+                        {m.status !== 'ACTIVE' && (
+                          <span className="md:hidden">
+                            <ActiveBadge status={m.status} t={t} />
+                          </span>
+                        )}
+                      </div>
                     </Td>
                     <Td className="hidden md:table-cell">
                       <ActiveBadge status={m.status} t={t} />

@@ -1,3 +1,4 @@
+import { dashboardHome } from '@pats/shared';
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { getWebUser } from '@/lib/auth/current-user';
@@ -10,15 +11,17 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title: t('auth.hqTitle') };
 }
 
-function safeNext(next: string | string[] | undefined): string {
+function safeNext(next: string | string[] | undefined): string | null {
   const value = Array.isArray(next) ? next[0] : next;
   // Only same-site paths; never "//evil.com".
-  return value && value.startsWith('/') && !value.startsWith('//') ? value : '/overview';
+  return value && value.startsWith('/') && !value.startsWith('//') ? value : null;
 }
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string | string[] }> }) {
   const next = safeNext((await searchParams).next);
   const user = await getWebUser();
-  if (user?.role === 'SUPER_ADMIN') redirect(next);
-  return <LoginFlow next={next} demo={isDemoOtp()} />;
+  // Already signed in with dashboard access (HQ or city admin): straight to the right page.
+  const home = user ? dashboardHome(user.role) : null;
+  if (home) redirect(next ?? home);
+  return <LoginFlow next={next ?? '/'} demo={isDemoOtp()} />;
 }

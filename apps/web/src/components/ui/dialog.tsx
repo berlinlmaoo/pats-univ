@@ -50,24 +50,30 @@ export function Dialog({
         if (e.target === ref.current) onClose();
       }}
       className={cn(
-        'm-auto w-[calc(100%-2rem)] rounded-card border border-border bg-surface p-0 text-fg shadow-pop backdrop:bg-scrim',
+        'm-auto w-[calc(100%-2rem)] overflow-hidden rounded-card border border-border bg-surface p-0 text-fg shadow-pop backdrop:bg-scrim',
         'open:animate-fade-up',
         size === 'sm' ? 'max-w-sm' : 'max-w-lg',
       )}
     >
       {open && (
-        <div className="flex max-h-[85dvh] flex-col">
-          <div className="flex items-start justify-between gap-4 px-6 pb-2 pt-5">
+        // Header fixed, body scrolls, footer always visible (never cut off on a 900 px screen).
+        <div className="flex max-h-[min(85dvh,52rem)] flex-col">
+          <div className="flex shrink-0 items-start justify-between gap-4 bg-band px-6 pb-4 pt-5 text-band-fg gold-rule">
             <div className="min-w-0">
-              <h2 className="text-title3 text-fg">{title}</h2>
-              {description && <p className="mt-1 text-body-sm text-muted">{description}</p>}
+              <h2 className="text-title3 font-extrabold">{title}</h2>
+              {description && <p className="mt-1 text-body-sm text-band-muted">{description}</p>}
             </div>
-            <Button variant="ghost" size="sm" className="-mr-2 -mt-1 w-control-sm px-0" onClick={onClose} aria-label={t('common.close')}>
-              <X aria-hidden="true" />
-            </Button>
+            <button
+              type="button"
+              className="-mr-2 -mt-1 inline-flex size-control-sm shrink-0 items-center justify-center rounded-control text-band-muted transition-colors hover:bg-white/10 hover:text-band-fg"
+              onClick={onClose}
+              aria-label={t('common.close')}
+            >
+              <X className="size-4" aria-hidden="true" />
+            </button>
           </div>
-          {children && <div className="overflow-y-auto px-6 py-3">{children}</div>}
-          {footer && <div className="flex justify-end gap-2 px-6 pb-5 pt-3">{footer}</div>}
+          {children && <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">{children}</div>}
+          {footer && <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-border bg-surface px-6 py-4">{footer}</div>}
         </div>
       )}
     </dialog>

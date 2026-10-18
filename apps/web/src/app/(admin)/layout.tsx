@@ -8,10 +8,14 @@ import { getLocale } from '@/lib/i18n';
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const user = await requireDashboard();
-  const pendingRequests = can(user.role, 'hq.manage') ? await db.reencodeRequest.count({ where: { status: 'PENDING' } }) : 0;
+  const hq = can(user.role, 'hq.manage');
+  const [pendingRequests, city] = await Promise.all([
+    hq ? db.reencodeRequest.count({ where: { status: 'PENDING' } }) : 0,
+    !hq && user.cityId ? db.city.findUnique({ where: { id: user.cityId }, select: { name: true } }) : null,
+  ]);
   return (
     <I18nProvider locale={await getLocale()}>
-      <Shell user={{ name: user.name, email: user.email, regional: !can(user.role, 'hq.manage') }} demo={isDemoOtp()} badges={{ '/cards': pendingRequests }}>
+      <Shell user={{ name: user.name, email: user.email, regional: !hq, scope: city?.name }} demo={isDemoOtp()} badges={{ '/cards': pendingRequests }}>
         {children}
       </Shell>
     </I18nProvider>
