@@ -39,9 +39,18 @@
   --color-danger-solid: var(--pats-danger-solid);
   --color-on-solid: var(--pats-on-solid);
   --color-scrim: var(--pats-scrim);
+  --color-gold: var(--pats-gold);
+  --color-gold-fg: var(--pats-gold-text);
+  --color-band: var(--pats-band);
+  --color-band-fg: var(--pats-band-text);
+  --color-band-muted: var(--pats-band-muted);
 
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
-  --font-display: var(--font-jakarta), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  /* Figtree everywhere (close to the card's Avenir); Graduate = the card's varsity slab, display only. */
+  --font-sans: var(--font-figtree), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-figtree), ui-sans-serif, system-ui, sans-serif;
+  --font-varsity: var(--font-graduate), 'Rockwell', serif;
+  /* The one embedded card-value font (never a system Avenir): identical on every device. */
+  --font-ktm: var(--font-card), sans-serif;
 
   --radius-sm: var(--pats-radius-sm);
   --radius-control: var(--pats-radius-control);
@@ -49,6 +58,7 @@
 
   --shadow-soft: var(--pats-shadow-soft);
   --shadow-pop: var(--pats-shadow-pop);
+  --shadow-card: var(--pats-shadow-card);
 
   --text-display: var(--pats-text-display);
   --text-display--line-height: var(--pats-text-display-lh);
@@ -103,6 +113,50 @@
   }
 }
 
+@layer components {
+  /* The card header's collegiate slab: one line per screen, always caps. */
+  .varsity {
+    font-family: var(--font-varsity);
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: var(--pats-varsity-title-tracking);
+    font-size: var(--pats-varsity-title);
+    line-height: var(--pats-varsity-title-lh);
+    /* Graduate ships one light weight; a stroke in the text colour brings it to the card header's
+       heavy block (compared side by side with example-front.png). */
+    -webkit-text-stroke: 0.045em currentColor;
+    paint-order: stroke fill;
+  }
+  .varsity-hero {
+    font-size: var(--pats-varsity-hero);
+    line-height: var(--pats-varsity-hero-lh);
+  }
+  .varsity-small {
+    font-size: var(--pats-varsity-small);
+    line-height: var(--pats-varsity-small-lh);
+    letter-spacing: var(--pats-varsity-small-tracking);
+  }
+  /* The card's "NAME :" label: heavy caps, open tracking. */
+  .ktm-label {
+    font-size: var(--pats-text-label);
+    line-height: var(--pats-text-label-lh);
+    letter-spacing: var(--pats-text-label-tracking);
+    font-weight: 900;
+    text-transform: uppercase;
+  }
+  /* The card's values: black heavy caps, tight. */
+  .ktm-value {
+    font-family: var(--font-ktm);
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: -0.04em;
+  }
+  /* The gold rule under the card's navy header. */
+  .gold-rule {
+    box-shadow: inset 0 -3px 0 var(--pats-gold);
+  }
+}
+
 @layer base {
   html {
     -webkit-text-size-adjust: 100%;
@@ -118,8 +172,26 @@
     -moz-osx-font-smoothing: grayscale;
   }
   ::selection {
-    background: var(--pats-accent-subtle);
-    color: var(--pats-accent-subtle-text);
+    background: var(--pats-gold);
+    color: var(--pats-band);
+  }
+  html {
+    caret-color: var(--pats-accent);
+    accent-color: var(--pats-primary);
+    scrollbar-color: var(--pats-border-strong) transparent;
+  }
+  a {
+    text-underline-offset: 3px;
+  }
+  .tabular-nums,
+  table {
+    font-variant-numeric: tabular-nums;
+  }
+  /* Native date/time pickers follow the scheme; the locale comes from <html lang>. */
+  input[type='date'],
+  input[type='time'],
+  input[type='datetime-local'] {
+    color-scheme: inherit;
   }
   :focus-visible {
     outline: 2px solid var(--pats-accent);

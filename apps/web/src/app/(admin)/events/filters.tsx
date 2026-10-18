@@ -5,7 +5,7 @@ import { useTransition } from 'react';
 import { useT } from '@/components/i18n/provider';
 import { Select } from '@/components/ui/field';
 import { Spinner } from '@/components/ui/spinner';
-import { cn } from '@/lib/cn';
+import { Tabs } from '@/components/ui/tabs';
 
 export type When = 'upcoming' | 'past' | 'all';
 
@@ -32,24 +32,9 @@ export function EventFilters({ cities, when, cityId }: { cities: { id: string; n
   ];
 
   return (
-    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex items-center gap-3">
-        <div role="group" aria-label={t('events.colDate')} className="inline-flex rounded-control bg-surface-muted p-1">
-          {tabs.map((tab) => (
-            <button
-              key={tab.value}
-              type="button"
-              aria-pressed={when === tab.value}
-              onClick={() => go({ when: tab.value })}
-              className={cn(
-                'h-8 whitespace-nowrap rounded-sm px-3 text-body-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-                when === tab.value ? 'bg-surface text-fg shadow-soft' : 'text-muted hover:text-fg',
-              )}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <div className="flex min-w-0 items-center gap-3">
+        <Tabs label={t('events.colDate')} active={when} onChange={(v) => go({ when: v as When })} items={tabs} />
         {pending && <Spinner />}
       </div>
       <Select aria-label={t('events.colCity')} value={cityId} onChange={(e) => go({ city: e.target.value })} className="h-control-md text-body-sm sm:w-44">

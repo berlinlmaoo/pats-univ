@@ -1,22 +1,55 @@
-import Link from 'next/link';
+import type { Metadata } from 'next';
 import { can } from '@pats/shared';
 import { requireDashboard } from '@/lib/hq/guard';
 import { cityScope } from '@/lib/loyalty/operations';
 import { db } from '@/lib/db';
 import { getT } from '@/lib/i18n';
+import { Alert } from '@/components/ui/alert';
 import { PageHeader } from '@/components/ui/page-header';
+import { Tabs } from '@/components/ui/tabs';
 import { PaymentRecords, RegionRequests, FreeCredits } from '@/components/phase5/operations';
 import { ClaimQueue } from '@/components/phase5/claims';
-export default async function RegionalPage() {
+
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: (await getT())('phase5.operations') };
+}
+
+type Tab = 'claims' | 'payments' | 'region' | 'credits';
+
+export default async function RegionalPage({ searchParams }: { searchParams: Promise<{ tab?: string; notice?: string }> }) {
   const admin = await requireDashboard();
   const t = await getT();
-  const events = await db.event.findMany({ where: { cityId: cityScope(admin) }, select: { id: true, title: true, cityId: true }, orderBy: { startsAt: 'desc' } });
+  const params = await searchParams;
   const hq = can(admin.role, 'hq.manage');
-  const credits = hq ? await db.freeDrawCredit.findMany({ include: { member: { select: { fullName: true } } }, orderBy: { createdAt: 'desc' } }) : [];
-  return <div className="space-y-6">
-    <PageHeader title={t('phase5.operations')} description={t('phase5.paymentHint')} />
-    <nav className="flex flex-wrap gap-4"><Link className="text-accent-fg underline" href="/events">{t('nav.events')}</Link><Link className="text-accent-fg underline" href="/recaps">{t('loyalty.recap')}</Link><Link className="text-accent-fg underline" href="/hub">{t('social.title')}</Link></nav>
-    <ClaimQueue /><PaymentRecords />
-    {hq && <><RegionRequests /><FreeCredits credits={credits.map(c => ({ ...c, expiresAt: c.expiresAt.toISOString(), usedAt: c.usedAt?.toISOString() ?? null }))} events={events} /></>}
-  </div>;
+  const tabs: Tab[] = hq ? ['claims', 'payments', 'region', 'credits'] : ['claims', 'payments'];
+  const tab: Tab = tabs.includes(params.tab as Tab) ? (params.tab as Tab) : 'claims';
+  const cityId = cityScope(admin);
+  const [pending, events, credits] = await Promise.all([
+    db.xpClaim.count({ where: { status: 'PENDING', event: { cityId } } }),
+    tab === 'credits' ? db.event.findMany({ where: { cityId }, select: { id: true, title: true, cityId: true }, orderBy: { startsAt: 'desc' } }) : [],
+    tab === 'credits' && hq ? db.freeDrawCredit.findMany({ include: { member: { select: { fullName: true } } }, orderBy: { createdAt: 'desc' } }) : [],
+  ]);
+  const labels: Record<Tab, string> = {
+    claims: t('ops.tabClaims'),
+    payments: t('phase5.payments'),
+    region: t('phase5.regionChange'),
+    credits: t('phase5.freeCredits'),
+  };
+  return (
+    <div className="space-y-6">
+      {params.notice === 'hq-only' && <Alert tone="info">{t('ops.hqOnly')}</Alert>}
+      <PageHeader title={t('phase5.operations')} description={t(hq ? 'ops.regionalBodyHq' : 'ops.regionalBody')} />
+      <Tabs
+        label={t('phase5.operations')}
+        active={tab}
+        items={tabs.map((value) => ({ value, label: labels[value], href: `/regional?tab=${value}`, count: value === 'claims' ? pending : undefined }))}
+      />
+      {tab === 'claims' && <ClaimQueue />}
+      {tab === 'payments' && <PaymentRecords />}
+      {tab === 'region' && hq && <RegionRequests />}
+      {tab === 'credits' && hq && (
+        <FreeCredits credits={credits.map((c) => ({ ...c, expiresAt: c.expiresAt.toISOString(), usedAt: c.usedAt?.toISOString() ?? null }))} events={events} />
+      )}
+    </div>
+  );
 }

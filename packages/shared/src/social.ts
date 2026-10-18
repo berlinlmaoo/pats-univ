@@ -201,6 +201,7 @@ export interface SocialOperations {
     id: string;
     name: string;
     cityId: string;
+    cityName?: string;
     minimumCharge: number;
     layout: { slots: VenueSlot[] };
   }[];

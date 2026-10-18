@@ -24,7 +24,7 @@ export default async function AdminsPage() {
       orderBy: [{ city: { name: 'asc' } }, { name: 'asc' }],
       include: { city: { select: { name: true, timezone: true } } },
     }),
-    db.city.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true } }),
+    db.city.findMany({ where: { active: true }, orderBy: { name: 'asc' }, select: { id: true, name: true } }),
   ]);
 
   return (
@@ -34,13 +34,33 @@ export default async function AdminsPage() {
         {admins.length === 0 ? (
           <EmptyState icon={ShieldCheck} title={t('admins.emptyTitle')} body={t('admins.emptyBody')} action={<AddAdminButton cities={cities} />} />
         ) : (
-          <Table>
+          <>
+          {/* Phones: one stacked row per admin, so the row action is never cut off (audit #19). */}
+          <ul className="divide-y divide-border sm:hidden">
+            {admins.map((a) => (
+              <li key={a.id} className="flex items-start justify-between gap-3 px-4 py-3.5">
+                <div className="min-w-0">
+                  <p className="break-words font-semibold text-fg">{a.name}</p>
+                  <p className="break-all text-caption text-muted">{a.email}</p>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <ActiveBadge status={a.status} t={t} />
+                    <span className="text-caption text-muted">{a.city?.name ?? t('common.notSet')}</span>
+                  </div>
+                  <p className="mt-1 text-caption text-muted">
+                    {t('admins.colLastLogin')}: {a.lastLoginAt ? formatDate(a.lastLoginAt, t.locale, { timeZone: a.city?.timezone }) : t('admins.never')}
+                  </p>
+                </div>
+                <AdminRowActions admin={{ id: a.id, name: a.name, active: a.status === 'ACTIVE' }} />
+              </li>
+            ))}
+          </ul>
+          <Table className="hidden sm:table">
             <thead>
               <tr>
                 <Th>{t('admins.colName')}</Th>
                 <Th>{t('admins.colCity')}</Th>
                 <Th className="hidden md:table-cell">{t('admins.colLastLogin')}</Th>
-                <Th className="hidden sm:table-cell">{t('admins.colStatus')}</Th>
+                <Th>{t('admins.colStatus')}</Th>
                 <Th className="w-0">
                   <span className="sr-only">{t('common.status')}</span>
                 </Th>
@@ -57,7 +77,7 @@ export default async function AdminsPage() {
                   <Td className="hidden whitespace-nowrap text-muted md:table-cell">
                     {a.lastLoginAt ? formatDate(a.lastLoginAt, t.locale, { timeZone: a.city?.timezone }) : t('admins.never')}
                   </Td>
-                  <Td className="hidden sm:table-cell">
+                  <Td>
                     <ActiveBadge status={a.status} t={t} />
                   </Td>
                   <Td className="text-right">
@@ -67,6 +87,7 @@ export default async function AdminsPage() {
               ))}
             </tbody>
           </Table>
+          </>
         )}
       </Card>
     </div>

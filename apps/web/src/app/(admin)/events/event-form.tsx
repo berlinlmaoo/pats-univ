@@ -6,6 +6,7 @@ import { useT } from '@/components/i18n/provider';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
+import { DateInput, TimeInput } from '@/components/ui/date-time';
 import { Field, Input, Select, Textarea } from '@/components/ui/field';
 import type { ActionResult } from '@/lib/hq/action-result';
 import { saveEventAction } from '@/lib/hq/events';
@@ -76,7 +77,7 @@ function EventForm({
   const t = useT();
   const [state, action, pending] = useActionState<ActionResult | null, FormData>(saveEventAction.bind(null, event?.id ?? null), null);
   const v = event?.values;
-  const [cityId, setCityId] = useState(v?.cityId ?? cities[0]?.id ?? '');
+  const [cityId, setCityId] = useState(v?.cityId ?? (cities.length === 1 ? cities[0]!.id : ''));
   const city = cities.find((c) => c.id === cityId);
   const formRef = useRef<HTMLFormElement>(null);
   useEffect(() => {
@@ -88,8 +89,20 @@ function EventForm({
   const err = (field: string) => (state && !state.ok && state.fields?.[field] ? t.loose(state.fields[field], range[field]) : undefined);
 
   return (
-    <Dialog open={open} onClose={onClose} title={event ? t('events.editTitle') : t('events.addTitle')}>
-      <form ref={formRef} action={action} noValidate className="flex flex-col gap-4 pb-2">
+    <Dialog open={open} onClose={onClose} title={event ? t('events.editTitle') : t('events.addTitle')}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose} disabled={pending}>
+          {t('common.cancel')}
+          </Button>
+          <Button type="submit" form="event-form" loading={pending}>
+          {pending ? t('common.saving') : event ? t('common.saveChanges') : t('events.create')}
+          </Button>
+          
+        </>
+      }
+    >
+      <form id="event-form" ref={formRef} action={action} noValidate className="flex flex-col gap-4 pb-2">
         <Field label={t('events.eventTitle')} htmlFor="title" error={err('title')}>
           <Input id="title" name="title" defaultValue={v?.title} placeholder={t('events.eventTitlePlaceholder')} aria-invalid={Boolean(err('title'))} autoFocus />
         </Field>
@@ -102,6 +115,11 @@ function EventForm({
               </>
             ) : (
               <Select id="cityId" name="cityId" value={cityId} onChange={(e) => setCityId(e.target.value)} aria-invalid={Boolean(err('cityId'))}>
+                {cities.length !== 1 && (
+                  <option value="" disabled>
+                    {t('ops.chooseCity')}
+                  </option>
+                )}
                 {cities.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name}
@@ -123,13 +141,13 @@ function EventForm({
         </div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)]">
           <Field label={t('events.date')} htmlFor="date" error={err('date')} className="col-span-2 sm:col-span-1">
-            <Input id="date" name="date" type="date" defaultValue={v?.date ?? defaults.date} aria-invalid={Boolean(err('date'))} />
+            <DateInput id="date" name="date" defaultValue={v?.date ?? defaults.date} aria-invalid={Boolean(err('date'))} />
           </Field>
-          <Field label={`${t('events.startTime')} (${city?.zoneLabel ?? ''})`} htmlFor="startTime" error={err('startTime')}>
-            <Input id="startTime" name="startTime" type="time" defaultValue={v?.startTime ?? '20:00'} aria-invalid={Boolean(err('startTime'))} />
+          <Field label={`${t('events.startTime')} (${city?.zoneLabel ?? 'WIB'})`} htmlFor="startTime" error={err('startTime')}>
+            <TimeInput id="startTime" name="startTime" defaultValue={v?.startTime ?? '20:00'} aria-invalid={Boolean(err('startTime'))} />
           </Field>
           <Field label={t('events.endTime')} htmlFor="endTime" error={err('endTime')}>
-            <Input id="endTime" name="endTime" type="time" defaultValue={v?.endTime ?? '02:00'} aria-invalid={Boolean(err('endTime'))} />
+            <TimeInput id="endTime" name="endTime" defaultValue={v?.endTime ?? '02:00'} aria-invalid={Boolean(err('endTime'))} />
           </Field>
         </div>
         {!err('date') && !err('startTime') && !err('endTime') && <p className="-mt-2 text-caption text-muted">{t('events.endHint')}</p>}
@@ -174,14 +192,6 @@ function EventForm({
           </span>
         </label>
         {state && !state.ok && state.message && <Alert tone="danger">{t.loose(state.message)}</Alert>}
-        <div className="flex justify-end gap-2 pt-2">
-          <Button variant="secondary" onClick={onClose} disabled={pending}>
-            {t('common.cancel')}
-          </Button>
-          <Button type="submit" loading={pending}>
-            {pending ? t('common.saving') : event ? t('common.saveChanges') : t('events.create')}
-          </Button>
-        </div>
       </form>
     </Dialog>
   );

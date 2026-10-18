@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addMonths, can, claimInput, leaderboardWindow, prBonusXp, remainingXpLots } from '../src';
+import { addMonths, can, claimInput, leaderboardWindow, prBonusXp, recapEvents, remainingXpLots, splitClaims } from '../src';
 describe('team decisions', () => {
   it('uses WIB calendar quarters', () => {
     const q = leaderboardWindow('QUARTERLY', new Date('2026-09-30T17:00:00Z'))!;
@@ -37,5 +37,32 @@ describe('team decisions', () => {
     expect(can('REGIONAL_ADMIN', 'timeline.post')).toBe(false);
     expect(can('MEMBER', 'timeline.post')).toBe(false);
     expect(can('SUPER_ADMIN', 'timeline.post')).toBe(true);
+  });
+});
+
+describe('claims queue', () => {
+  it('keeps decided claims out of the review queue', () => {
+    const { pending, history } = splitClaims([
+      { id: 'a', status: 'APPROVED' as const, createdAt: '2026-10-01T10:00:00Z', reviewedAt: '2026-10-02T10:00:00Z' },
+      { id: 'b', status: 'PENDING' as const, createdAt: '2026-10-03T10:00:00Z' },
+      { id: 'c', status: 'PENDING' as const, createdAt: '2026-10-01T09:00:00Z' },
+      { id: 'd', status: 'REJECTED' as const, createdAt: '2026-10-01T08:00:00Z', reviewedAt: '2026-10-04T10:00:00Z' },
+    ]);
+    expect(pending.map((c) => c.id)).toEqual(['c', 'b']);
+    expect(history.map((c) => c.id)).toEqual(['d', 'a']);
+  });
+  it('only offers recaps for events that have ended', () => {
+    const now = new Date('2026-10-18T12:00:00Z');
+    expect(recapEvents([{ id: 'past', endsAt: '2026-10-17T20:00:00Z' }, { id: 'future', endsAt: '2026-10-20T20:00:00Z' }], now).map((e) => e.id)).toEqual(['past']);
+  });
+});
+
+describe('dashboard home', () => {
+  it('sends each role to its own home', async () => {
+    const { dashboardHome } = await import('../src');
+    expect(dashboardHome('SUPER_ADMIN')).toBe('/overview');
+    expect(dashboardHome('REGIONAL_ADMIN')).toBe('/regional');
+    expect(dashboardHome('LOCAL_ADMIN')).toBe('/regional');
+    expect(dashboardHome('MEMBER')).toBeNull();
   });
 });

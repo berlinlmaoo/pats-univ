@@ -11,9 +11,11 @@ import {
   type RegistrationResponse,
 } from '@pats/shared';
 import { Check, Copy, CreditCard, MessageCircle, Smartphone } from 'lucide-react';
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { LanguageSwitch } from '@/components/i18n/language-switch';
 import { useT } from '@/components/i18n/provider';
+import { KtmCard } from '@/components/ktm/ktm-card';
+import { PhotoPicker } from '@/components/ktm/photo-picker';
 import { Alert } from '@/components/ui/alert';
 import { Button, buttonClass } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -31,7 +33,9 @@ interface FormValues {
   cityId: string;
   favoriteSong: string;
   favoriteGenre: string;
+  favoriteDrink: string;
   quotes: string;
+  photoKey: string;
   email: string;
   phone: string;
   consent: boolean;
@@ -42,20 +46,18 @@ type Errors = Partial<Record<keyof FormValues | 'code', string>>;
 
 const FIELD_ORDER: (keyof FormValues)[] = [
   'fullName',
+  'photoKey',
   'dateOfBirth',
   'cityId',
-  'favoriteSong',
+  'favoriteDrink',
   'favoriteGenre',
+  'favoriteSong',
   'quotes',
   'email',
   'phone',
   'consent',
 ];
 
-function todayIso() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
 
 export function JoinFlow({
   cities,
@@ -78,7 +80,9 @@ export function JoinFlow({
     cityId: defaultCityId,
     favoriteSong: '',
     favoriteGenre: '',
+    favoriteDrink: '',
     quotes: '',
+    photoKey: '',
     email: '',
     phone: '',
     consent: false,
@@ -91,6 +95,7 @@ export function JoinFlow({
   const [code, setCode] = useState('');
   const [notice, setNotice] = useState<string | null>(null);
   const [result, setResult] = useState<RegistrationResponse | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
@@ -120,7 +125,7 @@ export function JoinFlow({
     }
     setErrors(next);
     const first = FIELD_ORDER.find((f) => next[f]);
-    if (first) document.getElementById(first)?.focus();
+    if (first) document.getElementById(first === 'dateOfBirth' ? 'dateOfBirth' : first)?.focus();
   };
 
   async function sendCode(event?: FormEvent) {
@@ -183,13 +188,15 @@ export function JoinFlow({
   }
 
   return (
-    <div className="mx-auto flex min-h-dvh w-full max-w-form flex-col px-4 pb-10 pt-4 sm:pt-8">
-      <div className="flex h-control-md items-center justify-between">
-        <Wordmark />
-        <LanguageSwitch />
-      </div>
+    <div className="flex min-h-dvh flex-col">
+      <header className="gold-rule bg-band text-band-fg">
+        <div className="mx-auto flex h-16 w-full max-w-5xl items-center justify-between gap-3 px-4 sm:px-6">
+          <Wordmark px={44} />
+          <LanguageSwitch onBand />
+        </div>
+      </header>
 
-      <main className="mt-8 flex-1 sm:mt-12">
+      <main className="mx-auto w-full max-w-5xl flex-1 px-4 pb-12 pt-8 sm:px-6 sm:pt-10">
         {step === 'form' && (
           <JoinForm
             cities={cities}
@@ -201,9 +208,15 @@ export function JoinFlow({
             demo={demo}
             set={set}
             onSubmit={sendCode}
+            photoPreview={photoPreview}
+            onPhoto={(key, preview) => {
+              set('photoKey', key);
+              setPhotoPreview(preview);
+            }}
           />
         )}
 
+        <div className="mx-auto w-full max-w-form">
         {step === 'verify' && otp && (
           <section className="animate-fade-up">
             <h1 ref={headingRef} tabIndex={-1} className="font-display text-title1 text-fg outline-none">
@@ -259,6 +272,7 @@ export function JoinFlow({
         {step === 'done' && result && (
           <Success result={result} email={values.email.trim().toLowerCase()} headingRef={headingRef} />
         )}
+        </div>
       </main>
     </div>
   );
@@ -274,6 +288,8 @@ function JoinForm({
   demo,
   set,
   onSubmit,
+  photoPreview,
+  onPhoto,
 }: {
   cities: CitySummary[];
   minAge: number;
@@ -284,190 +300,293 @@ function JoinForm({
   demo: boolean;
   set: <K extends keyof FormValues>(key: K, value: FormValues[K]) => void;
   onSubmit: (e: FormEvent) => void;
+  photoPreview: string | null;
+  onPhoto: (key: string, preview: string | null) => void;
 }) {
   const t = useT();
   const describedBy = (field: keyof FormValues, hasHint = false) =>
     errors[field] ? `${field}-error` : hasHint ? `${field}-hint` : undefined;
 
   return (
-    <section>
-      <p className="text-label uppercase text-accent-fg">{t('join.eyebrow')}</p>
-      <h1 className="mt-2 font-display text-title1 text-fg">{t('join.title')}</h1>
-      <p className="mt-2 text-body text-muted">{t('join.subtitle')}</p>
+    <section className="grid items-start gap-8 lg:grid-cols-[minmax(0,28rem)_minmax(0,1fr)] lg:gap-14">
+      {/* The card leads: hero + live KTM first (left on desktop, top on phones), the form follows. */}
+      <div className="min-w-0 lg:sticky lg:top-8">
+        <h1 className="varsity varsity-hero text-fg">{t('join.heroLine')}</h1>
+        <p className="mt-3 max-w-md text-body text-muted">{t('join.subtitle')}</p>
+        <div className="mt-6 max-w-md">
+          <KtmCard name={values.fullName} drink={values.favoriteDrink} genre={values.favoriteGenre} qrValue={null} priority flippable />
+          <p className="mt-1 text-center text-caption text-muted">{t('join.previewHint')}</p>
+        </div>
+      </div>
 
-      {demo && (
-        <Alert tone="info" className="mt-6">
-          <span className="font-semibold">{t('common.demoMode')}.</span> {t('common.demoModeBody')}
-        </Alert>
-      )}
+      <div className="min-w-0">
+        {demo && (
+          <Alert tone="info" className="mb-6">
+            <span className="font-semibold">{t('common.demoMode')}.</span> {t('common.demoModeBody')}
+          </Alert>
+        )}
 
-      {cities.length === 0 ? (
-        <Card className="mt-6 px-5 py-8 text-center text-body-sm text-muted">{t('join.noCities')}</Card>
-      ) : (
-        <form noValidate onSubmit={onSubmit} className="mt-6 flex flex-col gap-6">
-          <Card className="divide-y divide-border">
-            <FormSection title={t('join.sectionAbout')}>
-              <Field label={t('join.fullName')} htmlFor="fullName" error={errors.fullName}>
-                <Input
-                  id="fullName"
-                  name="name"
-                  autoComplete="name"
-                  autoCapitalize="words"
-                  placeholder={t('join.fullNamePlaceholder')}
-                  value={values.fullName}
-                  aria-invalid={Boolean(errors.fullName)}
-                  aria-describedby={describedBy('fullName')}
-                  onChange={(e) => set('fullName', e.target.value)}
-                />
-              </Field>
-              <Field
-                label={t('join.dateOfBirth')}
-                htmlFor="dateOfBirth"
-                hint={t('join.dateOfBirthHint', { age: minAge })}
-                error={errors.dateOfBirth}
-              >
-                <Input
-                  id="dateOfBirth"
-                  type="date"
-                  autoComplete="bday"
-                  max={todayIso()}
-                  min="1900-01-01"
-                  value={values.dateOfBirth}
-                  aria-invalid={Boolean(errors.dateOfBirth)}
-                  aria-describedby={describedBy('dateOfBirth', true)}
-                  onChange={(e) => set('dateOfBirth', e.target.value)}
-                  className={cn(
-                    'block min-w-0 appearance-none [&::-webkit-date-and-time-value]:text-left',
-                    !values.dateOfBirth && 'text-placeholder',
-                  )}
-                />
-              </Field>
-              <Field label={t('join.city')} htmlFor="cityId" error={errors.cityId}>
-                <Select
-                  id="cityId"
-                  value={values.cityId}
-                  aria-invalid={Boolean(errors.cityId)}
-                  aria-describedby={describedBy('cityId')}
-                  onChange={(e) => set('cityId', e.target.value)}
-                  className={cn(!values.cityId && 'text-placeholder')}
+        {cities.length === 0 ? (
+          <Card className="px-5 py-8 text-center text-body-sm text-muted">{t('join.noCities')}</Card>
+        ) : (
+          <form noValidate onSubmit={onSubmit} className="flex flex-col gap-6">
+            <Card className="divide-y divide-border">
+              <FormSection title={t('join.sectionAbout')}>
+                <Field label={t('join.fullName')} htmlFor="fullName" error={errors.fullName}>
+                  <Input
+                    id="fullName"
+                    name="name"
+                    autoComplete="name"
+                    autoCapitalize="words"
+                    maxLength={80}
+                    placeholder={t('join.fullNamePlaceholder')}
+                    value={values.fullName}
+                    aria-invalid={Boolean(errors.fullName)}
+                    aria-describedby={describedBy('fullName')}
+                    onChange={(e) => set('fullName', e.target.value)}
+                  />
+                </Field>
+                <Field label={t('join.photo')} htmlFor="photoKey" hint={t('join.photoHint')} error={errors.photoKey}>
+                  <PhotoPicker
+                    id="photoKey"
+                    uploadUrl="/api/join/photo"
+                    previewUrl={photoPreview}
+                    invalid={Boolean(errors.photoKey)}
+                    describedBy={describedBy('photoKey', true)}
+                    onUploaded={({ key, previewUrl }) => key && onPhoto(key, previewUrl)}
+                  />
+                </Field>
+                <Field
+                  label={t('join.dateOfBirth')}
+                  htmlFor="dateOfBirth"
+                  hint={t('join.dateOfBirthHint', { age: minAge })}
+                  error={errors.dateOfBirth}
                 >
-                  <option value="" disabled>
-                    {t('join.cityPlaceholder')}
-                  </option>
-                  {cities.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
+                  <DateOfBirthInput
+                    value={values.dateOfBirth}
+                    invalid={Boolean(errors.dateOfBirth)}
+                    describedBy={describedBy('dateOfBirth', true)}
+                    onChange={(v) => set('dateOfBirth', v)}
+                  />
+                </Field>
+                <Field label={t('join.city')} htmlFor="cityId" error={errors.cityId}>
+                  <Select
+                    id="cityId"
+                    value={values.cityId}
+                    aria-invalid={Boolean(errors.cityId)}
+                    aria-describedby={describedBy('cityId')}
+                    onChange={(e) => set('cityId', e.target.value)}
+                    className={cn(!values.cityId && 'text-placeholder')}
+                  >
+                    <option value="" disabled>
+                      {t('join.cityPlaceholder')}
                     </option>
-                  ))}
-                </Select>
-              </Field>
-            </FormSection>
+                    {cities.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+              </FormSection>
 
-            <FormSection title={t('join.sectionTaste')}>
-              <Field label={t('join.favoriteSong')} htmlFor="favoriteSong" error={errors.favoriteSong}>
-                <Input
-                  id="favoriteSong"
-                  placeholder={t('join.favoriteSongPlaceholder')}
-                  value={values.favoriteSong}
-                  maxLength={100}
-                  aria-invalid={Boolean(errors.favoriteSong)}
-                  aria-describedby={describedBy('favoriteSong')}
-                  onChange={(e) => set('favoriteSong', e.target.value)}
-                />
-              </Field>
-              <Field label={t('join.favoriteGenre')} htmlFor="favoriteGenre" error={errors.favoriteGenre}>
-                <Input
-                  id="favoriteGenre"
-                  placeholder={t('join.favoriteGenrePlaceholder')}
-                  value={values.favoriteGenre}
-                  maxLength={50}
-                  aria-invalid={Boolean(errors.favoriteGenre)}
-                  aria-describedby={describedBy('favoriteGenre')}
-                  onChange={(e) => set('favoriteGenre', e.target.value)}
-                />
-              </Field>
-              <Field label={t('join.quotes')} htmlFor="quotes" optionalLabel={t('common.optional')} error={errors.quotes}>
-                <Textarea
-                  id="quotes"
-                  rows={2}
-                  maxLength={140}
-                  placeholder={t('join.quotesPlaceholder')}
-                  value={values.quotes}
-                  aria-invalid={Boolean(errors.quotes)}
-                  aria-describedby={describedBy('quotes')}
-                  onChange={(e) => set('quotes', e.target.value)}
-                  className="min-h-20"
-                />
-              </Field>
-            </FormSection>
+              <FormSection title={t('join.sectionCard')}>
+                <Field label={t('join.favoriteDrink')} htmlFor="favoriteDrink" error={errors.favoriteDrink}>
+                  <Input
+                    id="favoriteDrink"
+                    placeholder={t('join.favoriteDrinkPlaceholder')}
+                    value={values.favoriteDrink}
+                    maxLength={40}
+                    aria-invalid={Boolean(errors.favoriteDrink)}
+                    aria-describedby={describedBy('favoriteDrink')}
+                    onChange={(e) => set('favoriteDrink', e.target.value)}
+                  />
+                </Field>
+                <Field label={t('join.favoriteGenre')} htmlFor="favoriteGenre" error={errors.favoriteGenre}>
+                  <Input
+                    id="favoriteGenre"
+                    placeholder={t('join.favoriteGenrePlaceholder')}
+                    value={values.favoriteGenre}
+                    maxLength={50}
+                    aria-invalid={Boolean(errors.favoriteGenre)}
+                    aria-describedby={describedBy('favoriteGenre')}
+                    onChange={(e) => set('favoriteGenre', e.target.value)}
+                  />
+                </Field>
+              </FormSection>
 
-            <FormSection title={t('join.sectionContact')}>
-              <Field label={t('join.email')} htmlFor="email" hint={t('join.emailHint')} error={errors.email}>
-                <Input
-                  id="email"
-                  type="email"
-                  inputMode="email"
-                  autoComplete="email"
-                  autoCapitalize="none"
-                  spellCheck={false}
-                  placeholder={t('join.emailPlaceholder')}
-                  value={values.email}
-                  aria-invalid={Boolean(errors.email)}
-                  aria-describedby={describedBy('email', true)}
-                  onChange={(e) => set('email', e.target.value)}
+              <FormSection title={t('join.sectionTaste')}>
+                <Field label={t('join.favoriteSong')} htmlFor="favoriteSong" error={errors.favoriteSong}>
+                  <Input
+                    id="favoriteSong"
+                    placeholder={t('join.favoriteSongPlaceholder')}
+                    value={values.favoriteSong}
+                    maxLength={100}
+                    aria-invalid={Boolean(errors.favoriteSong)}
+                    aria-describedby={describedBy('favoriteSong')}
+                    onChange={(e) => set('favoriteSong', e.target.value)}
+                  />
+                </Field>
+                <Field label={t('join.quotes')} htmlFor="quotes" optionalLabel={t('common.optional')} error={errors.quotes}>
+                  <Textarea
+                    id="quotes"
+                    rows={2}
+                    maxLength={140}
+                    placeholder={t('join.quotesPlaceholder')}
+                    value={values.quotes}
+                    aria-invalid={Boolean(errors.quotes)}
+                    aria-describedby={describedBy('quotes')}
+                    onChange={(e) => set('quotes', e.target.value)}
+                    className="min-h-20"
+                  />
+                </Field>
+              </FormSection>
+
+              <FormSection title={t('join.sectionContact')}>
+                <Field label={t('join.email')} htmlFor="email" hint={t('join.emailHint')} error={errors.email}>
+                  <Input
+                    id="email"
+                    type="email"
+                    inputMode="email"
+                    autoComplete="email"
+                    autoCapitalize="none"
+                    spellCheck={false}
+                    placeholder={t('join.emailPlaceholder')}
+                    value={values.email}
+                    aria-invalid={Boolean(errors.email)}
+                    aria-describedby={describedBy('email', true)}
+                    onChange={(e) => set('email', e.target.value)}
+                  />
+                </Field>
+                <Field label={t('join.phone')} htmlFor="phone" hint={t('join.phoneHint')} error={errors.phone}>
+                  <Input
+                    id="phone"
+                    type="tel"
+                    inputMode="tel"
+                    autoComplete="tel"
+                    placeholder={t('join.phonePlaceholder')}
+                    value={values.phone}
+                    aria-invalid={Boolean(errors.phone)}
+                    aria-describedby={describedBy('phone', true)}
+                    onChange={(e) => set('phone', e.target.value)}
+                  />
+                </Field>
+              </FormSection>
+            </Card>
+
+            <div className="flex flex-col gap-1.5">
+              <label
+                htmlFor="consent"
+                className="flex min-h-12 cursor-pointer items-start gap-3 rounded-control px-1 py-1.5 text-body-sm text-fg transition-colors hover:bg-surface-hover"
+              >
+                <input
+                  id="consent"
+                  type="checkbox"
+                  checked={values.consent}
+                  aria-invalid={Boolean(errors.consent)}
+                  aria-describedby={describedBy('consent')}
+                  onChange={(e) => set('consent', e.target.checked)}
+                  className="mt-px size-6 shrink-0 cursor-pointer accent-primary"
                 />
-              </Field>
-              <Field label={t('join.phone')} htmlFor="phone" hint={t('join.phoneHint')} error={errors.phone}>
-                <Input
-                  id="phone"
-                  type="tel"
-                  inputMode="tel"
-                  autoComplete="tel"
-                  placeholder={t('join.phonePlaceholder')}
-                  value={values.phone}
-                  aria-invalid={Boolean(errors.phone)}
-                  aria-describedby={describedBy('phone', true)}
-                  onChange={(e) => set('phone', e.target.value)}
-                />
-              </Field>
-            </FormSection>
-          </Card>
+                <span className="pt-0.5">{t('join.consent')}</span>
+              </label>
+              {errors.consent && (
+                <p id="consent-error" role="alert" className="pl-10 text-caption text-danger-fg">
+                  {errors.consent}
+                </p>
+              )}
+            </div>
 
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="consent" className="flex cursor-pointer items-start gap-3 text-body-sm text-muted">
-              <input
-                id="consent"
-                type="checkbox"
-                checked={values.consent}
-                aria-invalid={Boolean(errors.consent)}
-                aria-describedby={describedBy('consent')}
-                onChange={(e) => set('consent', e.target.checked)}
-                className="mt-0.5 size-4.5 shrink-0 cursor-pointer accent-accent"
-              />
-              <span>{t('join.consent')}</span>
-            </label>
-            {errors.consent && (
-              <p id="consent-error" role="alert" className="pl-7.5 text-caption text-danger-fg">
-                {errors.consent}
-              </p>
-            )}
-          </div>
+            {banner && <Alert tone="danger">{banner}</Alert>}
 
-          {banner && <Alert tone="danger">{banner}</Alert>}
-
-          <Button type="submit" size="lg" loading={busy} className="w-full">
-            {busy ? t('join.sending') : t('join.submit')}
-          </Button>
-        </form>
-      )}
+            <Button type="submit" size="lg" loading={busy} className="w-full">
+              {busy ? t('join.sending') : t('join.submit')}
+            </Button>
+          </form>
+        )}
+      </div>
     </section>
+  );
+}
+
+/**
+ * Day / month / year selects instead of <input type="date">, whose format follows the browser's
+ * locale (mm/dd/yyyy on an English phone) rather than the page's. Value is ISO yyyy-mm-dd or ''.
+ */
+function DateOfBirthInput({
+  value,
+  invalid,
+  describedBy,
+  onChange,
+}: {
+  value: string;
+  invalid: boolean;
+  describedBy?: string;
+  onChange: (iso: string) => void;
+}) {
+  const t = useT();
+  const [parts, setParts] = useState(() => {
+    const [y = '', m = '', d = ''] = value ? value.split('-') : [];
+    return { y, m, d };
+  });
+  const months = useMemo(
+    () => Array.from({ length: 12 }, (_, i) => new Intl.DateTimeFormat(t.locale === 'id' ? 'id-ID' : 'en-GB', { month: 'long', timeZone: 'UTC' }).format(new Date(Date.UTC(2000, i, 1)))),
+    [t.locale],
+  );
+  const thisYear = new Date().getFullYear();
+  const years = useMemo(() => Array.from({ length: thisYear - 1900 + 1 }, (_, i) => String(thisYear - i)), [thisYear]);
+
+  const update = (next: Partial<typeof parts>) => {
+    const p = { ...parts, ...next };
+    setParts(p);
+    if (p.y && p.m && p.d) {
+      const max = new Date(Date.UTC(Number(p.y), Number(p.m), 0)).getUTCDate();
+      const day = String(Math.min(Number(p.d), max)).padStart(2, '0');
+      onChange(`${p.y}-${p.m}-${day}`);
+    } else onChange('');
+  };
+  const common = { 'aria-invalid': invalid, 'aria-describedby': describedBy };
+
+  return (
+    <div className="grid grid-cols-[minmax(5.5rem,1fr)_minmax(0,1.7fr)_minmax(6rem,1.2fr)] gap-2">
+      <Select id="dateOfBirth" aria-label={t('join.dobDay')} value={parts.d} onChange={(e) => update({ d: e.target.value })} className={cn(!parts.d && 'text-placeholder')} {...common}>
+        <option value="" disabled>
+          {t('join.dobDay')}
+        </option>
+        {Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, '0')).map((d) => (
+          <option key={d} value={d}>
+            {Number(d)}
+          </option>
+        ))}
+      </Select>
+      <Select aria-label={t('join.dobMonth')} value={parts.m} onChange={(e) => update({ m: e.target.value })} className={cn(!parts.m && 'text-placeholder')} {...common}>
+        <option value="" disabled>
+          {t('join.dobMonth')}
+        </option>
+        {months.map((name, i) => (
+          <option key={name} value={String(i + 1).padStart(2, '0')}>
+            {name}
+          </option>
+        ))}
+      </Select>
+      <Select aria-label={t('join.dobYear')} autoComplete="bday-year" value={parts.y} onChange={(e) => update({ y: e.target.value })} className={cn(!parts.y && 'text-placeholder')} {...common}>
+        <option value="" disabled>
+          {t('join.dobYear')}
+        </option>
+        {years.map((y) => (
+          <option key={y} value={y}>
+            {y}
+          </option>
+        ))}
+      </Select>
+    </div>
   );
 }
 
 function FormSection({ title, children }: { title: string; children: ReactNode }) {
   return (
     <fieldset className="flex flex-col gap-4 px-5 py-5">
-      <legend className="float-left mb-0.5 w-full text-label uppercase text-muted">{title}</legend>
+      <legend className="ktm-label float-left mb-0.5 w-full text-gold-fg">{title}</legend>
       {children}
     </fieldset>
   );
@@ -517,11 +636,14 @@ function Success({
       <div className="flex size-12 items-center justify-center rounded-full bg-success-subtle text-success-fg">
         <Check className="size-6" strokeWidth={2.25} aria-hidden="true" />
       </div>
-      <p className="mt-5 text-label uppercase text-success-fg">{t('join.successEyebrow')}</p>
-      <h1 ref={headingRef} tabIndex={-1} className="mt-2 font-display text-title1 text-fg outline-none">
+      <h1 ref={headingRef} tabIndex={-1} className="mt-5 font-display text-title1 text-fg outline-none">
         {t('join.successTitle', { name: firstName })}
       </h1>
       <p className="mt-2 text-body text-muted">{t('join.successSubtitle')}</p>
+
+      <div className="mt-6">
+        <KtmCard name={result.fullName} drink={result.favoriteDrink} genre={result.favoriteGenre} qrValue={null} priority />
+      </div>
 
       <Card className="mt-6 flex items-center justify-between gap-4 px-5 py-4">
         <div className="min-w-0">

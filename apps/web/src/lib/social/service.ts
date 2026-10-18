@@ -697,8 +697,10 @@ export async function operations(user: AuthUser) {
     member
       ? []
       : db.venue.findMany({
-          where: { cityId: city },
-          select: { id: true, name: true, cityId: true, layout: true, minimumCharge: true },
+          // Venues of deactivated cities stay out of the floor-plan editor.
+          where: { cityId: city, city: { active: true } },
+          select: { id: true, name: true, cityId: true, layout: true, minimumCharge: true, city: { select: { name: true } } },
+          orderBy: [{ city: { name: "asc" } }, { name: "asc" }],
         }),
     member
       ? []
@@ -759,8 +761,9 @@ export async function operations(user: AuthUser) {
           ? "EXPIRED"
           : r.status,
     })),
-    venues: venues.map((v) => ({
+    venues: venues.map(({ city: venueCity, ...v }) => ({
       ...v,
+      cityName: venueCity.name,
       layout: layoutSchema.safeParse(v.layout).success
         ? v.layout
         : { slots: [] },

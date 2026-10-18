@@ -10,6 +10,6 @@ export async function requireDashboard(): Promise<AuthUser> {
 }
 export async function requireHq(): Promise<AuthUser> {
   const user = await requireDashboard();
-  if (!can(user.role, 'hq.manage')) redirect('/regional');
+  if (!can(user.role, 'hq.manage')) redirect('/regional?notice=hq-only');
   return user;
 }

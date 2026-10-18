@@ -303,7 +303,10 @@ model Member {
   cityId        String
   favoriteSong  String
   favoriteGenre String
+  /// Printed on the KTM under FAVORITE DRINK. Empty for members who joined before 18 Oct 2026.
+  favoriteDrink String       @default("")
   quotes        String       @default("")
+  /// Storage key of the member photo (photos/…), served through short-lived signed URLs; never public.
   photoUrl      String?
   isPromoter    Boolean      @default(false)
   promoterSince DateTime?

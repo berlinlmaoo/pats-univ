@@ -25,6 +25,7 @@ import { publish } from '../social/realtime';
 import { notifyUsers } from '../push/notify';
 import { getSetting } from '../settings';
 import { newNonce, signQr, signTicket, verifyQr, verifyTicket } from './token';
+import { photoReadUrl } from '../members/photo';
 
 /** How long the crew has to confirm after a scan. */
 export const TICKET_TTL_SECONDS = 120;
@@ -64,7 +65,7 @@ type ScannedMember = Prisma.MemberGetPayload<{ select: typeof memberSelect }>;
 
 function toScanMember(m: ScannedMember): ScanMember {
   const inactive = m.status !== 'ACTIVE' || m.user.status !== 'ACTIVE';
-  return { id: m.id, nim: m.nim, fullName: m.fullName, photoUrl: m.photoUrl, city: m.city, status: inactive ? 'INACTIVE' : 'ACTIVE' };
+  return { id: m.id, nim: m.nim, fullName: m.fullName, photoUrl: photoReadUrl(m.photoUrl, 3600, true), city: m.city, status: inactive ? 'INACTIVE' : 'ACTIVE' };
 }
 
 /** The event, if this admin may scan for it and check-in is open right now. */
@@ -263,7 +264,7 @@ export function toAttendanceEntry(c: Prisma.CheckInGetPayload<{ include: typeof 
     checkedInAt: c.checkedInAt.toISOString(),
     method: c.method,
     manualReason: c.manualReason,
-    member: { id: c.member.id, nim: c.member.nim, fullName: c.member.fullName, photoUrl: c.member.photoUrl, cityName: c.member.city.name },
+    member: { id: c.member.id, nim: c.member.nim, fullName: c.member.fullName, photoUrl: photoReadUrl(c.member.photoUrl, 3600, true), cityName: c.member.city.name },
     admin: c.admin,
   };
 }

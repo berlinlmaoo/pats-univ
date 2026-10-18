@@ -1,3 +1,4 @@
+import { Segmented } from '@/components/ui/segmented';
 import { formatCount, formatDate, formatTime, formatUid, type CardStatus } from '@pats/shared';
 import { Boxes, CreditCard, Inbox, PackageCheck } from 'lucide-react';
 import type { Metadata } from 'next';
@@ -89,27 +90,11 @@ export default async function CardsPage({ searchParams }: { searchParams: Promis
     });
     return (
       <div className="flex flex-col gap-3">
-        <nav aria-label={t('cards.queueCities')} className="flex flex-wrap gap-2">
-          {cities.map((c) => {
-            const n = counts.get(c.id) ?? 0;
-            const active = c.id === city.id;
-            return (
-              <Link
-                key={c.id}
-                href={`/cards?tab=queue&city=${c.id}`}
-                aria-current={active ? 'page' : undefined}
-                className={
-                  active
-                    ? 'inline-flex h-8 items-center gap-2 rounded-full bg-primary px-3.5 text-body-sm font-medium text-primary-fg'
-                    : 'inline-flex h-8 items-center gap-2 rounded-full border border-border bg-surface px-3.5 text-body-sm font-medium text-muted transition-colors hover:text-fg'
-                }
-              >
-                {c.name}
-                <span className="tabular-nums">{formatCount(n)}</span>
-              </Link>
-            );
-          })}
-        </nav>
+        <Segmented
+          label={t('cards.queueCities')}
+          active={city.id}
+          items={cities.map((c) => ({ value: c.id, label: `${c.name} · ${formatCount(counts.get(c.id) ?? 0)}`, href: `/cards?tab=queue&city=${c.id}` }))}
+        />
         <QueueTable
           city={{ id: city.id, name: city.name }}
           rows={cards.map((c) => ({

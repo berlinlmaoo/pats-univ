@@ -1,17 +1,23 @@
 'use client';
-import { ClaimQueue } from '@/components/phase5/claims';
+import { ClaimQueueLink } from '@/components/phase5/claims';
 import { useState, type FormEvent } from 'react';
-import { ClipboardList, Users } from 'lucide-react';
+import { ChevronDown, ClipboardList, Users } from 'lucide-react';
 import {
   formatCount,
+  formatDate,
   formatRupiah,
+  recapEvents,
   recapInput,
   type OperationsDto,
   type RecapDto,
   type ReportDto,
 } from '@pats/shared';
 import { useT } from '@/components/i18n/provider';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { DateInput } from '@/components/ui/date-time';
+import { RupiahInput } from '@/components/ui/rupiah-input';
+import { Tabs } from '@/components/ui/tabs';
 import { Card } from '@/components/ui/card';
 import { ConfirmDialog } from '@/components/ui/dialog';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -24,34 +30,22 @@ export function OperationsPage() {
   const t = useT();
   const [query, setQuery] = useState('');
   const [message, setMessage] = useState('');
-  const state = useLoyalty<OperationsDto>(
-    `/api/admin/loyalty/operations?${query}`,
-  );
-  const cities = useLoyalty<{ cities: { id: string; name: string }[] }>(
-    '/api/admin/loyalty/rewards',
-  );
+  const [tab, setTab] = useState<'recap' | 'reports' | 'promoters'>('recap');
+  const state = useLoyalty<OperationsDto>(`/api/admin/loyalty/operations?${query}`);
+  const cities = useLoyalty<{ cities: { id: string; name: string }[] }>('/api/admin/loyalty/rewards');
   const done = () => {
     setMessage(t('loyalty.saved'));
     void state.reload();
   };
+  const ended = state.data ? recapEvents(state.data.events) : [];
   return (
     <div className="space-y-6">
-      <PageHeader
-        title={t('loyalty.recap')}
-        description={t('loyalty.operationsBody')}
-      />
+      <PageHeader title={t('loyalty.recap')} description={t('loyalty.operationsBody')} />
       <form
         className="grid items-end gap-4 sm:grid-cols-2 lg:grid-cols-4"
         onSubmit={(e) => {
           e.preventDefault();
-          setQuery(
-            new URLSearchParams(
-              new FormData(e.currentTarget) as unknown as Record<
-                string,
-                string
-              >,
-            ).toString(),
-          );
+          setQuery(new URLSearchParams(new FormData(e.currentTarget) as unknown as Record<string, string>).toString());
         }}
       >
         <Field label={t('loyalty.city')} htmlFor="ops-city">
@@ -65,12 +59,12 @@ export function OperationsPage() {
           </Select>
         </Field>
         <Field label={t('loyalty.from')} htmlFor="ops-from">
-          <Input type="date" name="from" id="ops-from" />
+          <DateInput name="from" id="ops-from" />
         </Field>
         <Field label={t('loyalty.to')} htmlFor="ops-to">
-          <Input type="date" name="to" id="ops-to" />
+          <DateInput name="to" id="ops-to" />
         </Field>
-        <Button type="submit" variant="secondary">
+        <Button type="submit" variant="secondary" size="lg">
           {t('loyalty.apply')}
         </Button>
       </form>
@@ -83,73 +77,72 @@ export function OperationsPage() {
         <DataState error={state.error} reload={state.reload} />
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            {(['members', 'checkIns', 'fulfilled', 'revenue'] as const).map(
-              (key) => (
-                <Card key={key} className="p-5">
-                  <p className="text-caption text-muted">
-                    {t.loose(
-                      `loyalty.${key === 'fulfilled' ? 'fulfilledCount' : key}`,
-                    )}
-                  </p>
-                  <p className="mt-2 break-words text-title2 tabular-nums">
-                    {key === 'revenue'
-                      ? formatRupiah(state.data!.stats[key])
-                      : formatCount(state.data!.stats[key])}
-                  </p>
-                </Card>
-              ),
-            )}
-          </div>
-          <ClaimQueue />
-          <h2 className="text-title2">{t('loyalty.promoter')}</h2>
-          {!state.data.reports.length ? (
-            <Card>
-              <EmptyState
-                icon={Users}
-                title={t('loyalty.emptyReports')}
-                body={t('loyalty.emptyReportsBody')}
-              />
-            </Card>
-          ) : (
-            state.data.reports.map((r) => (
-              <ReportReview
-                key={`${r.id}-${r.status}`}
-                report={r}
-              />
-            ))
-          )}
-          <h2 className="text-title2">{t('loyalty.recap')}</h2>
-          {!state.data.events.length ? (
-            <Card>
-              <EmptyState
-                icon={ClipboardList}
-                title={t('loyalty.emptyOperations')}
-                body={t('loyalty.emptyOperationsBody')}
-              />
-            </Card>
-          ) : (
-            state.data.events.map((e) => (
-              <RecapForm
-                key={`${e.id}-${e.recap?.lockedAt ?? ''}`}
-                eventId={e.id}
-                title={`${e.title} · ${e.city.name}`}
-                recap={e.recap}
-                canLock={state.data!.canLockRecap}
-                done={done}
-              />
-            ))
-          )}
-          <h2 className="text-title2">{t('loyalty.promoterFlag')}</h2>
-          <Card className="divide-y divide-border">
-            {state.data.members.map((m) => (
-              <PromoterRow
-                key={`${m.id}-${m.isPromoter}`}
-                member={m}
-                done={done}
-              />
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            {(['members', 'checkIns', 'fulfilled', 'revenue'] as const).map((key) => (
+              <Card key={key} className="px-5 py-4">
+                <p className="ktm-label text-muted">{t.loose(`loyalty.${key === 'fulfilled' ? 'fulfilledCount' : key}`)}</p>
+                <p className="mt-1.5 break-words text-title2 tabular-nums">
+                  {key === 'revenue' ? formatRupiah(state.data!.stats[key]) : formatCount(state.data!.stats[key])}
+                </p>
+              </Card>
             ))}
-          </Card>
+          </div>
+          <ClaimQueueLink />
+          <Tabs
+            label={t('loyalty.recap')}
+            active={tab}
+            onChange={(v) => setTab(v as typeof tab)}
+            items={[
+              { value: 'recap', label: t('ops.tabRecap'), count: ended.filter((e) => !e.recap).length },
+              { value: 'reports', label: t('loyalty.promoter') },
+              { value: 'promoters', label: t('loyalty.promoterFlag') },
+            ]}
+          />
+          {tab === 'recap' &&
+            (!ended.length ? (
+              <Card>
+                <EmptyState icon={ClipboardList} title={t('loyalty.emptyOperations')} body={t('ops.recapEmptyBody')} />
+              </Card>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-body-sm text-muted">{t('ops.recapHint')}</p>
+                {ended.map((e) => (
+                  <RecapForm
+                    key={`${e.id}-${e.recap?.lockedAt ?? ''}`}
+                    eventId={e.id}
+                    title={e.title}
+                    meta={`${e.city.name} · ${formatDate(new Date(e.startsAt), t.locale)}`}
+                    recap={e.recap}
+                    canLock={state.data!.canLockRecap}
+                    done={done}
+                  />
+                ))}
+              </div>
+            ))}
+          {tab === 'reports' &&
+            (!state.data.reports.length ? (
+              <Card>
+                <EmptyState icon={Users} title={t('loyalty.emptyReports')} body={t('loyalty.emptyReportsBody')} />
+              </Card>
+            ) : (
+              <div className="space-y-3">
+                {state.data.reports.map((r) => (
+                  <ReportReview key={`${r.id}-${r.status}`} report={r} />
+                ))}
+              </div>
+            ))}
+          {tab === 'promoters' &&
+            (!state.data.members.length ? (
+              <Card>
+                <EmptyState icon={Users} title={t('ops.promotersEmpty')} body={t('ops.promotersEmptyBody')} />
+              </Card>
+            ) : (
+              <Card className="divide-y divide-border">
+                {state.data.members.map((m) => (
+                  <PromoterRow key={`${m.id}-${m.isPromoter}`} member={m} done={done} />
+                ))}
+              </Card>
+            ))}
         </>
       )}
     </div>
@@ -223,9 +216,9 @@ export function ReportReview({
         <h3 className="text-title3">
           {r.member.fullName} · {r.event.title}
         </h3>
-        <p className="text-caption text-muted">
+        <Badge tone={r.status === 'VALIDATED' ? 'success' : r.status === 'REJECTED' ? 'danger' : 'warning'} dot>
           {t.loose(`loyalty.${r.status}`)}
-        </p>
+        </Badge>
       </div>
       <p className="text-body-sm">
         {t('loyalty.guestCount')}: {formatCount(r.guestCount)} ·{' '}
@@ -274,11 +267,13 @@ export function RecapForm({
   canLock,
   eventId,
   title,
+  meta,
   recap,
   done,
 }: {
   eventId: string;
   title: string;
+  meta?: string;
   recap: RecapDto | null;
   canLock: boolean;
   done: () => void;
@@ -293,15 +288,7 @@ export function RecapForm({
     const input = recapInput.safeParse({
       eventId,
       ...Object.fromEntries(
-        [
-          'sofaCount',
-          'tableCount',
-          'fdcCount',
-          'paxCount',
-          'revenueSofa',
-          'revenueTable',
-          'revenueFdc',
-        ].map((k) => [k, Number(f.get(k))]),
+        ['sofaCount', 'tableCount', 'fdcCount', 'paxCount', 'revenueSofa', 'revenueTable', 'revenueFdc'].map((k) => [k, Number(f.get(k) || 0)]),
       ),
       personInCharge: f.get('personInCharge'),
       accountablePerson: f.get('accountablePerson'),
@@ -309,11 +296,7 @@ export function RecapForm({
     });
     if (!input.success) {
       setError('validation.numberInvalid');
-      e.currentTarget
-        .querySelector<HTMLElement>(
-          `[name="${String(input.error.issues[0]?.path[0])}"]`,
-        )
-        ?.focus();
+      e.currentTarget.querySelector<HTMLElement>(`[name="${String(input.error.issues[0]?.path[0])}"]`)?.focus();
       return;
     }
     setBusy(true);
@@ -323,78 +306,64 @@ export function RecapForm({
     if (result.ok) done();
     else setError(result.error.messageKey);
   }
+  const counts = ['sofaCount', 'tableCount', 'fdcCount', 'paxCount'] as const;
+  const revenues = ['revenueSofa', 'revenueTable', 'revenueFdc'] as const;
   return (
-    <Card className="space-y-4 p-5">
-      <div className="flex flex-wrap justify-between gap-2">
-        <h3 className="text-title3">{title}</h3>
-        <p className="text-caption text-muted">
-          {t(recap?.lockedAt ? 'loyalty.locked' : 'loyalty.unlocked')}
-        </p>
-      </div>
-      {recap && (
-        <p className="text-title2 tabular-nums">
-          {t('loyalty.total')}: {formatRupiah(recap.total)}
-        </p>
-      )}
-      <form className="space-y-4" onSubmit={save}>
-        <fieldset
-          disabled={!!recap?.lockedAt || busy}
-          className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
-        >
-          {(
-            [
-              'sofaCount',
-              'tableCount',
-              'fdcCount',
-              'paxCount',
-              'revenueSofa',
-              'revenueTable',
-              'revenueFdc',
-            ] as const
-          ).map((k) => (
-            <Field
-              key={k}
-              htmlFor={`${eventId}-${k}`}
-              label={t(`loyalty.${k}`)}
-            >
-              <Input
-                id={`${eventId}-${k}`}
-                name={k}
-                type="number"
-                min={0}
-                max={2_000_000_000}
-                defaultValue={recap?.[k] ?? 0}
-                required
-              />
-            </Field>
-          ))}
-          {(['personInCharge', 'accountablePerson'] as const).map(k => <Field key={k} htmlFor={`${eventId}-${k}`} label={t(`phase5.${k}`)}><Input id={`${eventId}-${k}`} name={k} required maxLength={120} defaultValue={recap?.[k] ?? ''} /></Field>)}
-          <Field htmlFor={`${eventId}-note`} label={t('loyalty.note')}>
-            <Textarea
-              id={`${eventId}-note`}
-              name="note"
-              defaultValue={recap?.note ?? ''}
-            />
-          </Field>
-        </fieldset>
-        {error && (
-          <p role="alert" className="text-danger-fg">
-            {t.loose(error)}
-          </p>
-        )}
-        {!recap?.lockedAt && (
-          <div className="flex flex-wrap gap-2">
-            <Button type="submit" loading={busy}>
-              {t('common.save')}
-            </Button>
-            {recap && canLock && (
-              <Button variant="secondary" onClick={() => setLock(true)}>
-                {t('loyalty.lock')}
-              </Button>
-            )}
+    <Card className="overflow-hidden">
+      <details className="group">
+        <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3 px-5 py-4 transition-colors hover:bg-surface-hover [&::-webkit-details-marker]:hidden">
+          <div className="min-w-0">
+            <h3 className="break-words text-title3 text-fg">{title}</h3>
+            {meta && <p className="mt-0.5 text-body-sm text-muted">{meta}</p>}
           </div>
-        )}
-      </form>
+          <div className="flex items-center gap-3">
+            {recap && <span className="text-body-sm font-semibold tabular-nums text-fg">{formatRupiah(recap.total)}</span>}
+            <Badge tone={recap?.lockedAt ? 'success' : recap ? 'accent' : 'warning'} dot>
+              {t(recap?.lockedAt ? 'loyalty.locked' : recap ? 'ops.recapDraft' : 'ops.recapMissing')}
+            </Badge>
+            <ChevronDown className="size-4 text-muted transition-transform group-open:rotate-180" aria-hidden="true" />
+          </div>
+        </summary>
+        <form className="space-y-4 border-t border-border p-5" onSubmit={save}>
+          <fieldset disabled={!!recap?.lockedAt || busy} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {counts.map((k) => (
+              <Field key={k} htmlFor={`${eventId}-${k}`} label={t(`loyalty.${k}`)}>
+                <Input id={`${eventId}-${k}`} name={k} type="number" inputMode="numeric" min={0} max={2_000_000_000} defaultValue={recap?.[k] ?? 0} required />
+              </Field>
+            ))}
+            {revenues.map((k) => (
+              <Field key={k} htmlFor={`${eventId}-${k}`} label={t(`loyalty.${k}`)}>
+                <RupiahInput id={`${eventId}-${k}`} name={k} defaultValue={recap?.[k] ?? null} />
+              </Field>
+            ))}
+            {(['personInCharge', 'accountablePerson'] as const).map((k) => (
+              <Field key={k} htmlFor={`${eventId}-${k}`} label={t(`phase5.${k}`)}>
+                <Input id={`${eventId}-${k}`} name={k} required maxLength={120} defaultValue={recap?.[k] ?? ''} />
+              </Field>
+            ))}
+            <Field className="sm:col-span-2 lg:col-span-4" htmlFor={`${eventId}-note`} label={t('loyalty.note')} optionalLabel={t('common.optional')}>
+              <Textarea id={`${eventId}-note`} name="note" defaultValue={recap?.note ?? ''} />
+            </Field>
+          </fieldset>
+          {error && (
+            <p role="alert" className="text-body-sm text-danger-fg">
+              {t.loose(error)}
+            </p>
+          )}
+          {!recap?.lockedAt && (
+            <div className="flex flex-wrap gap-2">
+              <Button type="submit" loading={busy}>
+                {t('common.save')}
+              </Button>
+              {recap && canLock && (
+                <Button variant="secondary" onClick={() => setLock(true)}>
+                  {t('loyalty.lock')}
+                </Button>
+              )}
+            </div>
+          )}
+        </form>
+      </details>
       <ConfirmDialog
         open={lock}
         onClose={() => setLock(false)}

@@ -1,12 +1,26 @@
 'use client';
 import { useState } from 'react';
+import { Download, FileSpreadsheet, Printer } from 'lucide-react';
+import { formatMonth, zonedParts } from '@pats/shared';
 import { useT } from '@/components/i18n/provider';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Field, Input, Select } from '@/components/ui/field';
+import { DateInput } from '@/components/ui/date-time';
+import { Field, Select } from '@/components/ui/field';
 import { PageHeader } from '@/components/ui/page-header';
 import { DataState, useLoyalty } from './state';
 import { ERROR_MESSAGE_KEY } from '@/lib/http/errors';
+/** The last 18 calendar months (WIB), newest first, as the API's "YYYY-MM". */
+function recentMonths() {
+  const now = zonedParts(new Date());
+  return Array.from({ length: 18 }, (_, i) => {
+    const d = new Date(Date.UTC(now.year, now.month - 1 - i, 1));
+    const year = d.getUTCFullYear();
+    const month = d.getUTCMonth() + 1;
+    return { value: `${year}-${String(month).padStart(2, '0')}`, year, month };
+  });
+}
+
 export function ExportsPage() {
   const t = useT();
   const [busy, setBusy] = useState(false);
@@ -15,7 +29,7 @@ export function ExportsPage() {
     '/api/admin/loyalty/rewards',
   );
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-6">
       <PageHeader
         title={t('loyalty.export')}
         description={t('loyalty.exportBody')}
@@ -23,9 +37,9 @@ export function ExportsPage() {
       {cities.error && (
         <DataState error={cities.error} reload={cities.reload} />
       )}
-      <Card className="p-5">
+      <Card className="p-5 sm:p-6">
         <form
-          className="grid gap-4 sm:grid-cols-2"
+          className="grid gap-5 sm:grid-cols-2"
           onSubmit={async (e) => {
             e.preventDefault();
             const f = new FormData(e.currentTarget);
@@ -96,23 +110,39 @@ export function ExportsPage() {
               ))}
             </Select>
           </Field>
+          <h2 className="ktm-label border-t border-border pt-5 text-muted sm:col-span-2">{t('loyalty.period')}</h2>
+          <Field label={t('loyalty.monthPick')} htmlFor="export-month" hint={t('loyalty.monthHint')}>
+            <Select id="export-month" name="month" defaultValue="" aria-describedby="export-month-hint">
+              <option value="">{t('loyalty.anyMonth')}</option>
+              {recentMonths().map((m) => (
+                <option key={m.value} value={m.value}>
+                  {formatMonth(m.year, m.month, t.locale)}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <div className="hidden sm:block" aria-hidden="true" />
           <Field label={t('loyalty.from')} htmlFor="export-from">
-            <Input id="export-from" name="from" type="date" />
+            <DateInput id="export-from" name="from" />
           </Field>
           <Field label={t('loyalty.to')} htmlFor="export-to">
-            <Input id="export-to" name="to" type="date" />
-          </Field>
-          <Field label={t('loyalty.month')} htmlFor="export-month">
-            <Input id="export-month" name="month" type="month" />
+            <DateInput id="export-to" name="to" />
           </Field>
           {error && (
             <p role="alert" className="text-danger-fg sm:col-span-2">
               {t.loose(error)}
             </p>
           )}
-          <div className="flex flex-wrap gap-2 sm:col-span-2">
-            <Button type="submit" name="format" value="csv" loading={busy}>
-              {t('loyalty.csv')}
+          <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-5 sm:col-span-2">
+            <Button
+              type="submit"
+              variant="secondary"
+              name="format"
+              value="print"
+              disabled={busy}
+            >
+              <Printer aria-hidden="true" />
+              {t('loyalty.print')}
             </Button>
             <Button
               type="submit"
@@ -121,16 +151,12 @@ export function ExportsPage() {
               value="xlsx"
               disabled={busy}
             >
+              <FileSpreadsheet aria-hidden="true" />
               {t('loyalty.xlsx')}
             </Button>
-            <Button
-              type="submit"
-              variant="secondary"
-              name="format"
-              value="print"
-              disabled={busy}
-            >
-              {t('loyalty.print')}
+            <Button type="submit" name="format" value="csv" loading={busy}>
+              {!busy && <Download aria-hidden="true" />}
+              {t('loyalty.csv')}
             </Button>
           </div>
         </form>

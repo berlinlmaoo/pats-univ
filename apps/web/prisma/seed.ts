@@ -19,6 +19,9 @@ const CITIES = [
   { code: 'SBY', name: 'Surabaya', waGroupUrl: null },
 ];
 
+/** Demo favorite drinks, as printed on the KTM. */
+const DRINKS = ['Tequila', 'Whisky sour', 'Gin tonic', 'Negroni', 'Ice lemon tea', 'Bintang', 'Mojito', 'Old fashioned', 'Soju', 'Iced americano'];
+
 const MEMBERS: [string, string, string, string, string][] = [
   // name, city, song, genre, quote
   ['Rara Anindya', 'JKT', 'Midnight City — M83', 'Synthpop', 'Dance like nobody’s filming.'],
@@ -88,6 +91,10 @@ async function main() {
   }
 
   const now = Date.now();
+  // Demo members who joined before the KTM carried a favorite drink get one.
+  for (const [i, [name]] of MEMBERS.entries()) {
+    await db.member.updateMany({ where: { user: { email: `${slug(name)}@patsuniv.test` }, favoriteDrink: '' }, data: { favoriteDrink: DRINKS[i % DRINKS.length]! } });
+  }
   for (const [i, [name, code, song, genre, quote]] of MEMBERS.entries()) {
     const email = `${slug(name)}@patsuniv.test`;
     if (await db.user.findUnique({ where: { email } })) continue;
@@ -111,6 +118,7 @@ async function main() {
               cityId: city.id,
               favoriteSong: song,
               favoriteGenre: genre,
+              favoriteDrink: DRINKS[i % DRINKS.length]!,
               quotes: quote,
               signupSource: i % 3 === 0 ? `${code.toLowerCase()}-venue` : null,
               consentAt: joinedAt,

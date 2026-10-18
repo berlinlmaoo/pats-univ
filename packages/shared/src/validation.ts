@@ -8,6 +8,13 @@ import { BATCH_MAX_CARDS, CARD_TOKEN_PATTERN, normalizeUid } from './card';
 import { CHIP_TYPES } from './ntag';
 import { NIM_PATTERN } from './nim';
 
+/** Storage key of a photo uploaded during /join, before the member exists. */
+export const MEMBER_PHOTO_PENDING_KEY = /^photos\/pending\/[a-f0-9-]{36}\.(jpg|png|webp)$/;
+/** Accepted photo uploads: types, at most 5 MB, at least 256 px on the short side. */
+export const MEMBER_PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const;
+export const MEMBER_PHOTO_MAX_BYTES = 5 * 1024 * 1024;
+export const MEMBER_PHOTO_MIN_PX = 256;
+
 export const OTP_LENGTH = 6;
 
 export const emailSchema = z
@@ -88,7 +95,11 @@ export const registrationSchema = z.object({
   cityId: z.string('validation.cityRequired').trim().min(1, 'validation.cityRequired'),
   favoriteSong: requiredText(100),
   favoriteGenre: requiredText(50),
+  /** Printed on the KTM under FAVORITE DRINK. */
+  favoriteDrink: requiredText(40),
   quotes: z.string().trim().max(140, 'validation.tooLong').optional().default(''),
+  /** Key returned by POST /api/join/photo (so venue crew can match the face). */
+  photoKey: z.string('validation.photoRequired').trim().regex(MEMBER_PHOTO_PENDING_KEY, 'validation.photoRequired'),
   email: emailSchema,
   phone: phoneSchema,
   consent: z.literal(true, 'validation.consentRequired'),
@@ -98,6 +109,18 @@ export const registrationSchema = z.object({
 });
 
 export type RegistrationInput = z.input<typeof registrationSchema>;
+
+/** What a member may change on their own profile (PATCH /api/me). Name, birth date and city go through crew/HQ. */
+export const profileUpdateSchema = z
+  .object({
+    locale: localeSchema,
+    favoriteSong: requiredText(100),
+    favoriteGenre: requiredText(50),
+    favoriteDrink: requiredText(40),
+    quotes: z.string().trim().max(140, 'validation.tooLong'),
+  })
+  .partial();
+export type ProfileUpdate = z.output<typeof profileUpdateSchema>;
 export type Registration = z.output<typeof registrationSchema>;
 
 export const otpRequestSchema = z.object({

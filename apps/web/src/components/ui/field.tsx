@@ -3,7 +3,7 @@ import { cn } from '@/lib/cn';
 
 const control =
   'w-full rounded-control border bg-surface text-fg transition-[border-color,box-shadow] ' +
-  'border-border-strong hover:border-muted/60 focus:border-accent focus:outline-none focus:ring-4 focus:ring-accent/15 ' +
+  'border-border-strong/70 hover:border-border-strong focus:border-accent focus:outline-none focus:ring-4 focus:ring-accent/20 ' +
   'disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-muted ' +
   'aria-[invalid=true]:border-danger aria-[invalid=true]:focus:ring-danger/15';
 
@@ -60,9 +60,10 @@ export function Field({
 }) {
   return (
     <div className={cn('flex flex-col gap-1.5', className)}>
-      <label htmlFor={htmlFor} className="flex items-baseline justify-between gap-3 text-body-sm font-medium text-fg">
+      {/* Labels read like the card's "NAME :" labels: heavy caps. */}
+      <label htmlFor={htmlFor} className="ktm-label flex items-baseline justify-between gap-3 text-fg">
         <span>{label}</span>
-        {optionalLabel && <span className="text-caption font-normal text-muted">{optionalLabel}</span>}
+        {optionalLabel && <span className="text-caption font-medium normal-case tracking-normal text-muted">{optionalLabel}</span>}
       </label>
       {children}
       {error ? (
