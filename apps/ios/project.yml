@@ -45,6 +45,10 @@ targets:
           set -eu
           mkdir -p "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH"
           cp "$SRCROOT/../../packages/shared/assets/fonts/card-value.ttf" "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/card-value.ttf"
+          # The bundled font must be byte-identical to the shared licensed file.
+          SRC_SHA=$(shasum -a 256 "$SRCROOT/../../packages/shared/assets/fonts/card-value.ttf" | cut -d " " -f 1)
+          OUT_SHA=$(shasum -a 256 "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/card-value.ttf" | cut -d " " -f 1)
+          [ "$SRC_SHA" = "$OUT_SHA" ] || { echo "error: bundled card-value.ttf differs from packages/shared"; exit 1; }
       - name: Check Localization keys
         basedOnDependencyAnalysis: false
         script: '"$SRCROOT/scripts/check-localization.sh"'

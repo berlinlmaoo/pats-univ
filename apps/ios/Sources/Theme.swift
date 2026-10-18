@@ -22,11 +22,8 @@ enum Theme {
     static func title(_ size: CGFloat = 26) -> Font { .custom("Figtree-Regular", size: size, relativeTo: .title2).weight(.heavy) }
     static func body(_ size: CGFloat = 15) -> Font { .custom("Figtree-Regular", size: size, relativeTo: .body) }
     static var label: Font { body(11).weight(.heavy) }
-    static let cardTypeface: CardTypeface = {
-        guard let url = Bundle.main.url(forResource: "card-value", withExtension: "ttf"),
-              let typeface = try? CardTypeface(url: url) else { preconditionFailure("Missing shared card-value.ttf") }
-        return typeface
-    }()
+    /// Never fatal: CardTypeface logs and falls back (file data, then a system heavy face).
+    static let cardTypeface = CardTypeface(url: Bundle.main.url(forResource: "card-value", withExtension: "ttf"))
 
 }
 extension UIColor {
