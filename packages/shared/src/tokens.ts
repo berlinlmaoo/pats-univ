@@ -116,8 +116,6 @@ export const fonts = {
     family: 'PATS Card Value',
     /** Repo path of the single font file. */
     file: 'packages/shared/assets/fonts/card-value.ttf',
-    /** Letter spacing in em (fitted to example-front.png); values are always upper case, colour brand.ink. */
-    tracking: -0.065,
     /** The face's cap height in em (OS/2 sCapHeight 708 / 1000): ktm.valueCap / capHeight = font size. */
     capHeight: 0.708,
     /**
@@ -128,6 +126,9 @@ export const fonts = {
     /** hhea ascent/descent in em (natives: a box without lineHeight puts the cap top at capTop + (ascent + descent − 1) / 2). */
     ascent: 1.084,
     descent: 0.491,
+    /** Letter spacing in em (fitted to example-front.png); values are always upper case, colour brand.ink.
+     * Keep it the last key of cardValue: apps/android/scripts/sync-shared.mjs reads it by position. */
+    tracking: -0.065,
   },
   mono: 'ui-monospace, SFMono-Regular, Menlo, monospace',
 } as const;
