@@ -4,6 +4,7 @@ import android.app.Activity
 import android.view.WindowManager
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -65,10 +66,12 @@ import java.time.Instant
         Action(tr("app.notificationsTitle"), secondary = true) { go("notifications") }
     }
 }
-@Composable fun Events(api: Api, go: (String) -> Unit, language: String, admin: Boolean = false, scan: Boolean = false) {
+@Composable fun Events(api: Api, go: (String) -> Unit, language: String, admin: Boolean = false, scan: Boolean = false, onCreate: (() -> Unit)? = null) {
     Title(tr(if (admin) "app.adminEvents" else "app.tabEvents"))
+    onCreate?.let { Action(tr("events.create"), onClick = it) }
     var all by remember { mutableStateOf(false) }
-    if (!admin) Row(verticalAlignment = Alignment.CenterVertically) { Switch(all, { all = it }); Text(tr("loyalty.national")) }
+    // One toggleable row so TalkBack reads the switch with its label and the whole row is the target.
+    if (!admin) Row(Modifier.fillMaxWidth().heightIn(min = Space.control).toggleable(all, role = androidx.compose.ui.semantics.Role.Switch) { all = it }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.gap)) { Switch(all, null); Text(tr("loyalty.national")) }
     Remote(api, if (admin) "/api/admin/events" else "/api/events" + if (all) "?scope=all" else "") { data, reload ->
         val events = (data.rows("upcoming") + data.rows("past")).filter { !scan || it.text("phase") == "open" }
         if (events.isEmpty()) Empty(tr("app.eventsEmptyTitle"), tr("app.eventsEmptyBody", "city" to ""))
