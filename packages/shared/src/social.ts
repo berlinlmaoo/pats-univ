@@ -23,6 +23,8 @@ export const messageSchema = z
     body: body.default(""),
     mediaKey: z.string().max(250).optional(),
     mediaType: z.enum(["TEXT", "VOICE", "VIDEO", "IMAGE"]).default("TEXT"),
+    /** Client-generated key; a retried send with the same key returns the first message. */
+    clientId: z.string().regex(/^[A-Za-z0-9_-]{8,64}$/).optional(),
   })
   .refine((v) => Boolean(v.channelId) !== Boolean(v.conversationId), {
     message: "validation.invalid",

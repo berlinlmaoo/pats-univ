@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 const dir = path.resolve(import.meta.dirname, '../.qa');
 fs.mkdirSync(dir, { recursive: true });
-export const base = 'https://pats-univ.tail765d02.ts.net';
+export const base = process.env.PATS_API_URL ?? (() => { throw Error('Set PATS_API_URL to the dev server origin.'); })();
 export async function request(method, endpoint, payload, token) {
   const response = await fetch(base + endpoint, { method, headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, ...(payload === undefined ? {} : { body: JSON.stringify(payload) }) });
   const result = await response.json();

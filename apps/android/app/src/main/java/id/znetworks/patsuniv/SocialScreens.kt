@@ -52,6 +52,8 @@ import kotlinx.serialization.json.*
     if (kind == "channel") Notice(tr("social.secureHint"))
     if (lost) { Notice(tr("social.accessLost"), true); return }
     var message by remember { mutableStateOf("") }; var attachment by remember { mutableStateOf<JsonObject?>(null) }; var edit by remember { mutableStateOf(false) }
+    // One key per draft: a retry after a lost ack is deduplicated by the server instead of posting twice.
+    var sendKey by remember(kind, id) { mutableStateOf(newSendKey()) }
     val mutation = rememberMutation(); MutationStatus(mutation)
     val admin = hasCapability(session, "city.operations")
     val timeline = channel?.text("kind") == "TIMELINE"
@@ -78,22 +80,25 @@ import kotlinx.serialization.json.*
     }
     val mayPost = !timeline || channel.flag("canPostTimeline")
     if (mayPost && channel?.flag("archived") != true) {
-        Field(tr("social.message"), message, { message = it.take(4000) }, multiline = true)
+        Field(tr("social.message"), message, { val next = it.take(4000); if (next != message) sendKey = newSendKey(); message = next }, multiline = true)
         Text(tr("social.mediaHint", "seconds" to rules.number("mediaMaxSeconds").toString(), "mb" to rules.number("mediaMaxMb").toString()), style = MaterialTheme.typography.bodySmall)
         if (!mutation.busy) MediaCapture(timeline, rules.number("mediaMaxSeconds").coerceAtLeast(1)) { bytes, contentType, mediaType -> mutation.run {
             val signed = api.request("POST", "/api/social/upload", body("room" to body("kind" to kind, "id" to id), "contentType" to contentType))
             if (bytes.size > signed.number("maxBytes")) throw ApiFailure("MEDIA_INVALID")
-            api.media(signed.text("url"), bytes, contentType); attachment = body("mediaKey" to signed.text("key"), "mediaType" to mediaType)
+            api.media(signed.text("url"), bytes, contentType); attachment = body("mediaKey" to signed.text("key"), "mediaType" to mediaType); sendKey = newSendKey()
         } }
-        if (attachment != null) { Notice(tr("social.attachment")); Action(tr("social.removeAttachment"), secondary = true) { attachment = null } }
+        if (attachment != null) { Notice(tr("social.attachment")); Action(tr("social.removeAttachment"), secondary = true) { attachment = null; sendKey = newSendKey() } }
         Action(tr(if (timeline) "social.post" else "social.send"), !mutation.busy && (message.isNotBlank() || attachment != null)) {
             mutation.run {
                 val payload = JsonObject(body("body" to message.trim(), (if (kind == "channel") "channelId" else "conversationId") to id) + attachment.orEmpty())
                 if (timeline) api.request("POST", "/api/social/posts", payload)
-                else if (connected) {
-                    try { live.sendAwait(payload) } catch (_: TimeoutCancellationException) { throw ApiFailure("NETWORK") }
-                } else api.request("POST", "/api/social/messages", payload)
-                message = ""; attachment = null; extra = emptyList(); moreCursor = null; version++
+                else {
+                    val keyed = JsonObject(payload + ("clientId" to JsonPrimitive(sendKey)))
+                    if (connected) {
+                        try { live.sendAwait(keyed) } catch (_: TimeoutCancellationException) { throw ApiFailure("NETWORK") }
+                    } else api.request("POST", "/api/social/messages", keyed)
+                }
+                message = ""; attachment = null; sendKey = newSendKey(); extra = emptyList(); moreCursor = null; version++
             }
         }
     }
@@ -177,3 +182,4 @@ import kotlinx.serialization.json.*
         }
     }
 }
+fun newSendKey(): String = java.util.UUID.randomUUID().toString()

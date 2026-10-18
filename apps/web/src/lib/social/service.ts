@@ -225,18 +225,34 @@ export async function sendMessage(user: AuthUser, raw: unknown) {
   const row = await atomic(async (tx) => {
     if (input.channelId) await channelAccess(user, input.channelId, true, tx);
     else await conversationAccess(user, input.conversationId!, tx);
-    return tx.message.create({
+    if (input.clientId) {
+      const existing = await tx.message.findUnique({
+        where: { senderId_clientId: { senderId: user.id, clientId: input.clientId } },
+      });
+      if (existing) {
+        const sameRoom = input.channelId
+          ? existing.channelId === input.channelId
+          : existing.conversationId === input.conversationId;
+        if (!sameRoom) throw new AppError("VALIDATION", 422);
+        return { ...existing, duplicate: true };
+      }
+    }
+    const created = await tx.message.create({
       data: {
         channelId: input.channelId,
         conversationId: input.conversationId,
         senderId: user.id,
+        clientId: input.clientId,
         body: input.body,
         mediaUrl: input.mediaKey,
         mediaType: input.mediaType,
         mentionsAdmin: mentionsAdmin(input.body),
       },
     });
+    return { ...created, duplicate: false };
   });
+  // A retried send that was already stored must not notify or publish twice.
+  if (row.duplicate) return { id: row.id };
   if (row.mentionsAdmin)
     await notifyUsers(await admins(cityId), {
       kind: "hubMention",

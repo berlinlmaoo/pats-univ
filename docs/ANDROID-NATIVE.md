@@ -27,21 +27,25 @@ $env:ANDROID_HOME = [Environment]::GetEnvironmentVariable('ANDROID_HOME', 'User'
 .\gradlew.bat testDebugUnitTest assembleDebug
 ```
 
-Gradle heap is limited to 3 GB, workers to two. Default API is the requested Tailscale dev server;
-override with `-PpatsApiUrl=https://...`. `node scripts/sync-shared.mjs` imports the shared dictionaries
-and palette. Existing crest assets are reused. No backend/database changes, accounts or pushes.
+Gradle heap is limited to 3 GB, workers to two. No server address is committed: set the dev API with
+`pats.apiUrl=https://...` in the git-ignored `apps/android/local.properties`, `-PpatsApiUrl=...` or
+`PATS_API_URL`. Without one the build targets the public production origin.
+`node scripts/sync-shared.mjs` imports the shared dictionaries and palette. Existing crest assets are
+reused. One backend change: chat sends carry an optional `clientId` (migration
+`20261018120000_message_client_id`, unique per sender), so a retried send returns the first message
+instead of posting twice.
 
 Use only `Pixel_10_Pro` and explicitly pass its serial to every ADB command. Owner changed the setup
 during Phase 2: use a visible window and host GPU, with
 `emulator -avd Pixel_10_Pro -gpu host -no-audio -no-snapshot-save -no-boot-anim`.
 The restarted emulator log confirms NVIDIA GeForce RTX 5070. It was identified as
-`emulator-5554`; `emulator-5556` belongs to Pixel_7 and is not touched. Windows resolves the dev host
-but the emulator did not, even with `-dns-server 100.100.100.100`. Its direct Tailscale IP route works.
-For this emulator build, `'-PpatsDevIp=100.125.230.1'` supplies a **debug-only DNS override** for the
-configured API hostname; HTTPS hostname and certificate checks stay enabled. Release ignores this
+`emulator-5554`; `emulator-5556` belongs to Pixel_7 and is not touched. If the emulator cannot resolve
+the dev hostname, `pats.devIp=<address>` in `local.properties` (or `-PpatsDevIp` / `PATS_DEV_IP`)
+supplies a **debug-only DNS override** for the configured API hostname; HTTPS hostname and
+certificate checks stay enabled. Release ignores this
 property. No Windows settings changed. Capture PNG bytes with the provided Node helper
 because Windows PowerShell text redirection can corrupt `adb exec-out screencap` binary output.
-Phase 1 screenshots were captured and visually inspected in `C:/Users/Berlin/Documents/Dev/pats-shots/1-*.png`.
+Phase 1 screenshots were captured and visually inspected outside the repository.
 
 ## Screen/API inventory (iOS reference)
 

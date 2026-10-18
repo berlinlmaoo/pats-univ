@@ -28,18 +28,21 @@ import android.app.Activity
                 if (offline) Notice(tr("errors.network"))
                 val kind = route.substringBefore('/'); val id = route.substringAfter('/', "")
                 val needs = when(kind) { "scan", "manual", "city-events", "city-event", "event-new", "event-edit" -> "checkin.scan"; "handover" -> "card.handover"; "member-cards", "member-card" -> "card.reportLost"; "encode", "encode-run" -> "card.encode"; "reencode" -> "card.requestReencode"; "reward-validation" -> "reward.validate"; "claims-review" -> "promoter.manage"; "operations", "crew" -> "city.operations"; else -> null }
-                if (needs != null && !hasCapability(session, needs)) Notice(tr("errors.forbidden"), true) else when(kind) {
-                    "card" -> if (!admin) MemberCard(session, model.api, ::go)
+                // Member-only screens need a member profile; admin-only screens need the capability.
+                val memberOnly = kind in setOf("card", "wallet", "claims", "promoter", "region-change", "roaming", "reservation")
+                val denied = (needs != null && !hasCapability(session, needs)) || (memberOnly && (admin || session.me.obj("member").isEmpty())) || (kind == "tools" && !admin)
+                if (denied) Notice(tr("errors.forbidden"), true) else when(kind) {
+                    "card" -> MemberCard(session, model.api, ::go)
                     "events" -> Events(model.api, ::go, language)
                     "event" -> EventDetail(model.api, id, language, ::go)
                     "history" -> History(model.api, language)
-                    "wallet" -> if (!admin) Wallet(session, model.api, language, ::go)
+                    "wallet" -> Wallet(session, model.api, language, ::go)
                     "leaderboard" -> Leaderboard(model.api, language)
-                    "claims", "promoter" -> if (!admin) Claims(session, model.api)
+                    "claims", "promoter" -> Claims(session, model.api)
                     "draw" -> Draw(session, model.api, id, language)
-                    "region-change" -> if (!admin) RegionChange(model.api)
-                    "roaming" -> if (!admin) Roaming(session, model.api, id, ::go)
-                    "reservation" -> if (!admin) Reservation(model.api, id, ::go)
+                    "region-change" -> RegionChange(model.api)
+                    "roaming" -> Roaming(session, model.api, id, ::go)
+                    "reservation" -> Reservation(model.api, id, ::go)
                     "hub", "social-hub" -> Hub(session, model.api, ::go)
                     "channel", "conversation" -> Channel(session, model.api, id, kind == "conversation", language, BuildConfig.DEBUG && model.qaCapture)
                     "social-operations" -> SocialOperations(session, model.api, language, ::go)

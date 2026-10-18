@@ -755,6 +755,7 @@ model Message {
   channelId      String?
   conversationId String?
   senderId       String
+  clientId       String?
   body           String    @default("")
   mediaUrl       String?
   mediaType      MediaType @default(TEXT)
@@ -765,6 +766,7 @@ model Message {
   conversation Conversation? @relation(fields: [conversationId], references: [id])
   sender       User          @relation(fields: [senderId], references: [id])
 
+  @@unique([senderId, clientId])
   @@index([channelId, createdAt])
   @@index([conversationId, createdAt])
 }

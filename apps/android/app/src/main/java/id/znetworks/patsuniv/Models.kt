@@ -27,7 +27,7 @@ fun cardToken(input: String): String? = Regex("/c/([A-Za-z0-9_-]{32})(?:[/?#]|$)
 fun validEmail(input: String) = Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$").matches(input.trim())
 fun validOtp(input: String) = Regex("^[0-9]{6}$").matches(input)
 fun errorKey(code: String): String {
-    val special = mapOf("VALIDATION" to "validation.invalid", "INTERNAL" to "errors.generic", "INSUFFICIENT_XP" to "loyalty.insufficientXp", "REWARD_UNAVAILABLE" to "loyalty.unavailable", "SPIN_LIMIT" to "loyalty.spinLimit", "REDEEM_USED" to "loyalty.codeUsed", "REDEEM_EXPIRED" to "loyalty.codeExpired", "REPORT_REVIEWED" to "loyalty.reportReviewed", "RECAP_LOCKED" to "loyalty.recapLocked", "CHECK_IN_REQUIRED" to "loyalty.checkInRequired")
+    val special = mapOf("VALIDATION" to "validation.invalid", "INTERNAL" to "errors.generic", "INSUFFICIENT_XP" to "loyalty.insufficientXp", "REWARD_UNAVAILABLE" to "loyalty.unavailable", "SPIN_LIMIT" to "loyalty.spinLimit", "REDEEM_USED" to "loyalty.codeUsed", "REDEEM_EXPIRED" to "loyalty.codeExpired", "REPORT_REVIEWED" to "loyalty.reportReviewed", "RECAP_LOCKED" to "loyalty.recapLocked", "CHECK_IN_REQUIRED" to "loyalty.checkInRequired", "DRAW_FULL" to "phase5.drawFull", "DRAW_COMPLETED" to "phase5.drawCompleted", "DRAW_NOT_READY" to "phase5.drawNotReady", "ADMIN_LIMIT" to "phase5.adminLimit", "CLAIM_EXISTS" to "phase5.claimExists", "CLAIM_NOT_OPEN" to "phase5.claimNotOpen")
     return special[code] ?: "errors." + code.lowercase().split('_').mapIndexed { i, word -> if (i == 0) word else word.replaceFirstChar { it.uppercase() } }.joinToString("")
 }
 fun errorArgs(failure: Exception): Array<Pair<String, String>> {
