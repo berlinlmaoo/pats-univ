@@ -29,8 +29,11 @@ fun qrMatrix(value: String, onTile: Boolean = false) = QRCodeWriter().encode(val
 @Composable fun TileQr(value: String, modifier: Modifier = Modifier) {
     val modules = remember(value) { qrMatrix(value, true) }; val label = tr("ktm.qrLabel")
     Canvas(modifier.semantics { contentDescription = label }) {
+        // One filled path, like the web SVG: separate anti-aliased rects left maroon hairlines between modules.
         val step = size.minDimension / modules.width
-        for(y in 0 until modules.height) for(x in 0 until modules.width) if(modules[x,y]) drawRect(Color.White, androidx.compose.ui.geometry.Offset(x * step, y * step), androidx.compose.ui.geometry.Size(step + .1f, step + .1f))
+        val path = Path()
+        for(y in 0 until modules.height) for(x in 0 until modules.width) if(modules[x,y]) path.addRect(androidx.compose.ui.geometry.Rect(x * step, y * step, (x + 1) * step, (y + 1) * step))
+        drawPath(path, Color.White)
     }
 }
 
