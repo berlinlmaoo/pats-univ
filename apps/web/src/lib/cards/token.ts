@@ -45,7 +45,7 @@ export function tagPassword(cardKey: string, uid: string): { pwd: string; pack: 
   }
 }
 
-const ID = /^[a-z0-9]{8,40}$/;
+const ID = /^[a-z0-9-]{8,40}$/; // cuid (before the UUIDv7 conversion, 18 Oct 2026) or UUID
 const toExp = (d: Date) => Math.floor(d.getTime() / 1000).toString(36);
 const fromExp = (s: string) => (/^[0-9a-z]{1,10}$/.test(s) ? new Date(parseInt(s, 36) * 1000) : null);
 

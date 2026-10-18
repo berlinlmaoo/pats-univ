@@ -129,7 +129,7 @@ export const promoterInput = z.object({
   notes: z.string().trim().max(2000).default(''),
   receiptUrl: z
     .string()
-    .regex(/^receipts\/[a-z0-9]+\/[a-f0-9-]+\.(jpg|png|webp)$/).or(z.literal('')).default(''),
+    .regex(/^receipts\/[a-z0-9-]+\/[a-f0-9-]+\.(jpg|png|webp)$/).or(z.literal('')).default(''),
   receiptAmount: money.nullable().default(null),
   guests: z
     .array(
@@ -318,7 +318,7 @@ export interface DrawDto {
 
 export const claimInput = z.object({
   eventId: id, formType: z.enum(['PR', 'MEMBER']), guestCount: count.default(0), reservationCount: count,
-  receiptUrl: z.string().regex(/^receipts\/[a-z0-9]+\/[a-f0-9-]+\.(jpg|png|webp)$/).or(z.literal('')).default(''),
+  receiptUrl: z.string().regex(/^receipts\/[a-z0-9-]+\/[a-f0-9-]+\.(jpg|png|webp)$/).or(z.literal('')).default(''),
   notes: z.string().trim().max(2000).default(''),
 });
 export const claimReviewInput = z.object({

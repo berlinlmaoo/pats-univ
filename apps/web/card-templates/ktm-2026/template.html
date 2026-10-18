@@ -23,15 +23,17 @@
   /* The artwork itself sits exactly on the trim box. */
   .art { position: absolute; left: 3mm; top: 3mm; width: 85.6mm; height: 54mm; }
   .card { position: absolute; left: 3mm; top: 3mm; width: 85.6mm; height: 54mm; }
-  /* Cap height 0.0317 × 85.6 mm = 2.71 mm → 3.88 mm (11 pt) for a 0.70 cap-ratio face; cap top sits 0.15 em into a line-height-1 box. */
+  /* = tokens.ts ktm + fonts.cardValue. Cap height 0.0312 × 85.6 mm = 2.67 mm → 3.77 mm (10.69 pt) for
+     Avenir Black's 0.708 cap ratio; the cap top sits 0.065 em into a line-height-1 box; the box
+     starts at valueX 0.0492 × 85.6 = 4.21 mm (glyph origin, inside the 4 mm safe area). */
   .value {
-    position: absolute; left: 4.48mm; width: 51.36mm;
-    font-family: 'PATS Card Value', sans-serif; font-weight: 900; font-size: 11pt; line-height: 1;
-    letter-spacing: -0.04em; text-transform: uppercase; color: #000; overflow-wrap: anywhere;
+    position: absolute; left: 4.21mm; width: 51.36mm;
+    font-family: 'PATS Card Value', sans-serif; font-weight: 900; font-size: 10.69pt; line-height: 1;
+    letter-spacing: -0.065em; text-transform: uppercase; color: #000; overflow-wrap: anywhere;
   }
-  .name { top: calc(21.49mm - 0.15em); width: 55.64mm; }
-  .drink { top: calc(33.21mm - 0.15em); }
-  .genre { top: calc(44.87mm - 0.15em); }
+  .name { top: calc(21.49mm - 0.065em); width: 55.64mm; }
+  .drink { top: calc(33.21mm - 0.065em); }
+  .genre { top: calc(44.87mm - 0.065em); }
   /* QR: x 0.705, y 0.549, w 0.23 of the card = 60.35 / 29.65 / 19.69 mm (inside the 4 mm safe area). */
   .qr { position: absolute; left: 60.35mm; top: 29.65mm; width: 19.69mm; height: 19.69mm; }
   .qr svg { display: block; width: 100%; height: 100%; }

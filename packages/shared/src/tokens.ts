@@ -103,8 +103,8 @@ export const brand: {
 /**
  * Faces. `varsity` matches the card's collegiate slab ("PATS UNIVERSITY") and is for display only:
  * page titles, the auth/join hero and the digital ID. `cardValue` is the ONE embedded font for the
- * KTM values on every platform (packages/shared/assets/fonts/card-value.ttf, now Figtree Black;
- * swap the file for licensed Avenir LT Pro Black later). Never a system Avenir: the card must look
+ * KTM values on every platform (packages/shared/assets/fonts/card-value.ttf = licensed Monotype
+ * Avenir Black, App + Web licence held by PATS). Never a system Avenir: the card must look
  * identical on web, iOS and Android. Everything else is `body` (Figtree).
  */
 export const fonts = {
@@ -116,8 +116,19 @@ export const fonts = {
     family: 'PATS Card Value',
     /** Repo path of the single font file. */
     file: 'packages/shared/assets/fonts/card-value.ttf',
-    /** Letter spacing in em; values are always upper case, colour brand.ink. */
-    tracking: -0.04,
+    /** The face's cap height in em (OS/2 sCapHeight 708 / 1000): ktm.valueCap / capHeight = font size. */
+    capHeight: 0.708,
+    /**
+     * Where the cap top sits below the top of a line-height-1 box, in em (fitted against the
+     * example card, includes the round letters' overshoot). Box top = cap top − capTop × size.
+     */
+    capTop: 0.065,
+    /** hhea ascent/descent in em (natives: a box without lineHeight puts the cap top at capTop + (ascent + descent − 1) / 2). */
+    ascent: 1.084,
+    descent: 0.491,
+    /** Letter spacing in em (fitted to example-front.png); values are always upper case, colour brand.ink.
+     * Keep it the last key of cardValue: apps/android/scripts/sync-shared.mjs reads it by position. */
+    tracking: -0.065,
   },
   mono: 'ui-monospace, SFMono-Regular, Menlo, monospace',
 } as const;
@@ -147,9 +158,12 @@ export const varsity = {
  */
 export const ktm = {
   ratio: 3213 / 2079,
-  /** Value text: left edge (fraction of width) and cap height (fraction of width), measured on the example card. */
-  valueX: 0.0523,
-  valueCap: 0.0317,
+  /**
+   * Value text: the text box's left edge (the glyph origin, fraction of width; the ink of "M" starts
+   * at 0.0523) and the cap height (fraction of width), measured on the example card with the card font.
+   */
+  valueX: 0.0492,
+  valueCap: 0.0312,
   /** Cap-top of each value line (fraction of height). */
   nameY: 0.398,
   drinkY: 0.615,
@@ -303,6 +317,7 @@ export function toCssVariables(): string {
     `--pats-motion-base:${motion.base}ms;`,
     `--pats-motion-slow:${motion.slow}ms;`,
     `--pats-ease:${motion.easing};`,
+    `--pats-card-value-tracking:${fonts.cardValue.tracking}em;`,
   ].join('');
   const typeVars = Object.entries(type)
     .map(
