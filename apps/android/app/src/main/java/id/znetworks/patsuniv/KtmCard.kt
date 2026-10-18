@@ -44,6 +44,7 @@ fun qrMatrix(value: String, onTile: Boolean = false) = QRCodeWriter().encode(val
     val context = LocalContext.current
     val face = remember { ResourcesCompat.getFont(context, R.font.card_value) }
     val tracking = LocalDesign.current["cardValueTracking"]!!.jsonPrimitive.float
+    val capHeight = LocalDesign.current["cardValueCapHeight"]!!.jsonPrimitive.float
     var flipped by remember { mutableStateOf(false) }
     val reduced = !ValueAnimator.areAnimatorsEnabled()
     val rotation by animateFloatAsState(if(flipped) 180f else 0f, tween(if(reduced) 200 else 500), label = "KTM flip")
@@ -67,7 +68,7 @@ fun qrMatrix(value: String, onTile: Boolean = false) = QRCodeWriter().encode(val
                             listOf(Triple("fullName", "nameY", "nameMaxW"), Triple("favoriteDrink", "drinkY", "valueMaxW"), Triple("favoriteGenre", "genreY", "valueMaxW")).forEach { (field, y, max) ->
                                 val value = member.text(field).uppercase(java.util.Locale.ROOT)
                                 textView.text = value
-                                val fontPx = size.width * g("valueCap") / .7f
+                                val fontPx = size.width * g("valueCap") / capHeight
                                 textView.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, fontPx)
                                 textView.measure(0, 0)
                                 val fit = (size.width * g(max) / textView.measuredWidth.coerceAtLeast(1)).coerceAtMost(1f)

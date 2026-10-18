@@ -1,8 +1,8 @@
 {
   "ktm": {
     "ratio": 1.5454545454545454,
-    "valueX": 0.0523,
-    "valueCap": 0.0317,
+    "valueX": 0.0492,
+    "valueCap": 0.0312,
     "nameY": 0.398,
     "drinkY": 0.615,
     "genreY": 0.831,
@@ -149,6 +149,7 @@
     "contentMax": 1120,
     "formMax": 440
   },
-  "cardValueTracking": -0.04,
+  "cardValueTracking": -0.065,
+  "cardValueCapHeight": 0.708,
   "varsityStroke": 0.045
 }

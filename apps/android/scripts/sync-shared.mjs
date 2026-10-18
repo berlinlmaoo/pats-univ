@@ -18,7 +18,9 @@ for (const name of ['ktm', 'varsity', 'nav', 'type', 'radius', 'space', 'size'])
   const block = tokens.match(new RegExp(`export const ${name} = (\\{[\\s\\S]*?\\n\\}) as const`))[1];
   design[name] = vm.runInNewContext(`(${block})`, Object.create(null));
 }
-design.cardValueTracking = Number(tokens.match(/tracking: (-[\d.]+),\s*\n  \},\s*\n  mono/)[1]);
+const cardValue = tokens.match(/cardValue: \{([\s\S]*?)\n  \},/)[1];
+design.cardValueTracking = Number(cardValue.match(/tracking: (-[\d.]+)/)[1]);
+design.cardValueCapHeight = Number(cardValue.match(/capHeight: ([\d.]+)/)[1]);
 design.varsityStroke = Number(tokens.match(/export const varsityStroke = ([\d.]+)/)[1]);
 fs.writeFileSync(path.join(assets, 'design.json'), JSON.stringify(design, null, 2) + '\n');
 const res = path.join(root, 'apps/android/app/build/generated/patsRes');
