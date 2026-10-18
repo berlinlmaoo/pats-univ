@@ -1,237 +1,208 @@
 # PATS University — Design
 
-Version 1.3, 16 Oct 2026 (Phase 2: cards, print files, NFC, notifications; 1.2 check-in QR, scanner, event badges; 1.1 brand colours and crest). Applies to the HQ dashboard, the public `/join` page, the Expo app and transactional emails.
+Version 2.0, 18 Oct 2026. **The KTM is the design.** Everything here is derived from the official student card (front, back) and the official logo files. It applies to the web dashboard, `/join`, `/login`, the public digital ID `/c/<token>`, the Expo app (see [NATIVE-DESIGN.md](NATIVE-DESIGN.md)), card print files and emails.
 
-**Bar:** Notion/Linear-grade polish, in the NEXUS visual language (PRODUCT.md §5.4), coloured by the PATS crest. This means calm warm neutrals, one brand accent (navy) and clear hierarchy. Nothing may be clipped, and every screen has empty, loading and error states.
+Older versions (1.x: cream SaaS, Inter + Plus Jakarta, the shield cut-out) are retired. Where this file and older reports disagree, this file wins.
 
-## 1. Where the tokens live
+## 0. Source of truth
 
-All design values are defined **once**, in [`packages/shared/src/tokens.ts`](../packages/shared/src/tokens.ts):
-
-| Consumer | How it reads tokens |
+| What | Where (masters stay out of the repo) |
 |---|---|
-| Web (`apps/web`) | The root layout injects `toCssVariables()` as `--pats-*` CSS variables (light, dark via `prefers-color-scheme`, and a forced theme via `data-theme`). [`globals.css`](../apps/web/src/app/globals.css) maps them onto Tailwind's theme, which is where utilities like `bg-surface`, `text-muted`, `rounded-control`, `text-title1` and `h-control-lg` come from. |
-| App (`apps/mobile`) | It imports the same objects through `src/theme` (`useColors()`, `textStyle()`, `space`, `radius`, `size`). |
-| Email | Templates in `apps/web/src/lib/email/templates.ts` inline the light colours. |
-| App config | `app.config.ts` reads the splash background (`bg`) and the adaptive-icon background (`brand.cream`) from [`colors.json`](../packages/shared/src/colors.json). |
+| KTM front (blank + example), back | `pats-univ:~/pats-univ-brand/ktm/` (`blank-front.png` 3213 × 2079, `example-front.png`, `example-back.png/.svg`) |
+| Logo (THE mark) | `pats-univ:~/pats-univ-brand/official/PATS UNIV_NEW LOGO-01.png` (9000 px, full crest, transparent) |
+| Logo variants | `LOGO-02/03` one-colour crest (black / outlined), `LOGO-07` cream "PATS / UNIVERSITY" ribbon lockup, `LOGO-08` maroon, `LOGO-09` navy, `LOGO-10` black, `LOGO-11` white lockup, `LOGO_BG-04/05/06` crest on navy / white / black |
+| Generated sizes | `tools/brand/make-assets.sh <official dir> <ktm dir>` → `apps/web/public/{brand,ktm}`, favicons, `og.png`, `apps/mobile/assets`, `apps/web/card-templates/ktm-2026/{front,back}.jpg` |
 
-Rule: **no raw colour, font size, radius or spacing in components.** If a value is missing, add a token first. NEXUS's conventions are kept on purpose: the token names map 1:1 to NEXUS's (`apps/web/src/styles.css`, `Theme.swift`, `Theme.kt`). A screen that looks right in NEXUS will therefore look right here.
+**Logo rules (Berlin, 18 Oct).** The full crest (LOGO-01) is the logo everywhere: web header, sidebar, auth pages, favicons, apple-touch icon, PWA icons, OG image, the app icon and the splash. Assets are made **only by resizing, padding onto a solid canvas, or removing fully transparent margin**. Never crop into the mark, mask a part out (the old shield cut-out is banned), recolour, redraw or re-letter it. At 16–32 px the crest's small text cannot be read: that is accepted, the full crest stays. The ribbon lockup (LOGO-07 cream on navy, LOGO-09 navy on paper) is an official mark too: use the file as-is, never retype "PATS UNIVERSITY" as a logo.
 
-## 2. Colour
+## 1. The world in one paragraph
 
-The palette comes from the official crest (`~/pats-univ-brand/pats-crest-9000.png`). It replaces the NEXUS violet. Three brand colours are sampled from it and exported as `brand` in `tokens.ts`:
+The card front is a **navy header band** with a **gold rule** under it, sitting on **grey paper**; labels are small heavy caps (`NAME :`), values are big **black heavy caps** (Avenir Black); the QR lives in a **distressed maroon tile**; the crest sits top-right. The back is **navy night** with cream varsity lettering and a maroon ribbon. So:
 
-| Brand | Hex | In the crest | In the UI |
-|---|---|---|---|
-| Navy | `#001836` | Shield quadrants, lettering | **Primary and accent** in light mode: primary buttons, focus ring, selection, links, accent badges. Dark mode uses lighter navy tints (`#a9c3eb` fill, `#8aacdf` ring), because the crest navy disappears on a dark background. |
-| Maroon | `#360c0c` | Outlines, the cap | **Secondary** accent (`secondary*` tokens) for brand highlights. **Never for errors**: errors keep a real red (`danger*`). |
-| Cream | `#fcead8` | The scroll, light quadrants | The **warm surface tint**: the light `bg` and the muted surfaces are cream tints, and the icon backgrounds use cream itself. Cream is never body text: text stays a neutral near-black (light) or near-white (dark). |
+- **Light scheme = the card front.** Paper ground, white-paper surfaces, navy ink, the navy band for app bars and the sidebar, gold rules for structure, maroon only for the card-related action.
+- **Dark scheme = the card back.** Navy night ground, card-navy surfaces, cream text, gold as the accent (focus, active tab), maroon for the card-related action.
+- **The band is navy in both schemes.** Sidebar, mobile top bar, dialog headers and the auth panel are always the card header.
+- **Operate surfaces stay calm.** Data reads in Figtree at normal case; the brand lives in the band, the gold rule, the label caps, squared corners and one varsity line per screen. Persuade moments (`/join`, `/c/<token>`, login) carry the card itself at full size.
 
-Brand and status colours are kept apart. Success, warning and danger are the same green, amber and red as before. Only the text tones were darkened where they missed 4.5:1. They never borrow navy or maroon, so a status always reads as a status.
+## 2. Where the tokens live
 
-| Token | Light | Dark | Use |
-|---|---|---|---|
-| `bg` | `#fdf6ed` | `#0a1220` | App background (cream tint / navy-black) |
-| `surface` | `#ffffff` | `#111a2b` | Cards, inputs, sheets |
-| `surfaceMuted` | `#f9efe3` | `#172238` | Table headers, chips, icon wells, active nav item |
-| `surfaceHover` | `#f5e8d9` | `#1d2a43` | Row and ghost-button hover |
-| `border` | `#eee2d4` | `#243149` | Hairlines, card borders |
-| `borderStrong` | `#dccdbb` | `#35425c` | Input borders |
-| `text` | `#23262d` | `#e8ebf0` | Primary text |
-| `textMuted` | `#5d6370` | `#9ca6b6` | Secondary text |
-| `placeholder` | `#70747e` | `#7e8899` | Placeholders only |
-| `primary` / `primaryText` | `#001836` / `#ffffff` | `#a9c3eb` / `#001836` | Primary buttons, the KTM card |
-| `accent` | `#001836` | `#8aacdf` | Focus ring, checkbox, selection |
-| `accentText` | `#001836` | `#a9c3eb` | Accent as text (links) |
-| `accentSubtle` / `accentSubtleText` | `#e6ebf3` / `#001836` | `#16284a` / `#bcd0f0` | Info alerts, accent badges, avatars, text selection |
-| `secondary` / `secondaryText` | `#360c0c` / `#ffffff` | `#e2b4ac` / `#360c0c` | Maroon brand fill (sparingly) |
-| `secondarySubtle` / `secondarySubtleText` | `#f6e4e0` / `#360c0c` | `#2e1a1e` / `#ebc4bd` | Maroon chips and highlights |
-| `success*`, `warning*` | see file | see file | Status badges, alerts |
-| `danger*` | `#ef4444`, text `#c42121`, solid `#dc2626` | `#f87171`, solid `#dc2626` | Errors, destructive buttons (`dangerSolid`) |
+All values are defined once in [`packages/shared/src/tokens.ts`](../packages/shared/src/tokens.ts) (colours in [`colors.json`](../packages/shared/src/colors.json) so Expo's `app.config.ts` can read them).
 
-### Contrast (WCAG 2.x AA)
-
-Every text/background pair the components use. Text needs 4.5:1. Placeholders are held to the same 4.5:1 here, even though WCAG exempts them. Non-text UI (focus ring, primary button edge) needs 3:1. The test `packages/shared/test/shared.test.ts` recomputes all of these and fails the build if a token change drops one below its threshold.
-
-| Foreground on background | Light | Dark | Needs |
-|---|---|---|---|
-| `text` on `bg` | 14.12 | 15.69 | 4.5 |
-| `text` on `surface` | 15.14 | 14.57 | 4.5 |
-| `text` on `surfaceMuted` | 13.33 | 13.29 | 4.5 |
-| `text` on `surfaceHover` | 12.57 | 12.00 | 4.5 |
-| `textMuted` on `bg` | 5.62 | 7.63 | 4.5 |
-| `textMuted` on `surface` | 6.03 | 7.08 | 4.5 |
-| `textMuted` on `surfaceMuted` | 5.31 | 6.46 | 4.5 |
-| `textMuted` on `surfaceHover` | 5.00 | 5.83 | 4.5 |
-| `placeholder` on `surface` | 4.68 | 4.86 | 4.5 |
-| `primaryText` on `primary` | 17.74 | 9.88 | 4.5 |
-| `accentText` on `bg` | 16.54 | 10.44 | 4.5 |
-| `accentText` on `surface` | 17.74 | 9.69 | 4.5 |
-| `accentSubtleText` on `accentSubtle` | 14.82 | 9.34 | 4.5 |
-| `secondaryText` on `secondary` | 17.29 | 9.35 | 4.5 |
-| `secondarySubtleText` on `secondarySubtle` | 14.07 | 10.26 | 4.5 |
-| `successText` on `successSubtle` | 4.76 | 8.77 | 4.5 |
-| `successText` on `surface` | 5.02 | 9.99 | 4.5 |
-| `warningText` on `warningSubtle` | 4.75 | 9.14 | 4.5 |
-| `warningText` on `surface` | 5.02 | 10.43 | 4.5 |
-| `dangerText` on `dangerSubtle` | 5.35 | 6.08 | 4.5 |
-| `dangerText` on `surface` | 5.86 | 6.29 | 4.5 |
-| `dangerText` on `bg` | 5.46 | 6.78 | 4.5 |
-| `onSolid` on `dangerSolid` | 4.83 | 4.83 | 4.5 |
-| `accent` on `surface` (non-text) | 17.74 | 7.50 | 3 |
-| `accent` on `bg` (non-text) | 16.54 | 8.08 | 3 |
-| `primary` on `surface` (non-text) | 17.74 | 9.69 | 3 |
-| `primary` on `bg` (non-text) | 16.54 | 10.44 | 3 |
-
-Status colour is **meaning**, never decoration. Card status badges, for example, run:
-
-| Status | Badge colour |
+| Consumer | How |
 |---|---|
-| `NOT_PRINTED` | neutral |
-| `IN_BATCH`, `SENT_TO_VENDOR`, `RECEIVED_HQ` | accent |
-| `ENCODED` | warning |
-| `DELIVERED` | success |
-| `REVOKED` | danger |
+| Web | Root layout injects `toCssVariables()` as `--pats-*` (light, dark via `prefers-color-scheme`, forced via `data-theme`). [`globals.css`](../apps/web/src/app/globals.css) maps them onto Tailwind (`bg-band`, `text-band-fg`, `bg-gold`, `text-gold-fg`, `rounded-card`, `shadow-card`, …) and defines the brand utilities `varsity`, `ktm-label`, `ktm-value`, `gold-rule`. |
+| App | `apps/mobile/src/theme` imports the same objects (`colors`, `type`, `varsity`, `ktm`, `radius`, `space`, `size`). |
+| Email | `apps/web/src/lib/email/templates.ts` inlines the light colours. |
+| Print | `apps/web/card-templates/ktm-2026/` uses the card artwork itself. |
 
-Print batches follow the same logic:
+Rule: **no raw colour, font size, radius or spacing in components.** Missing value → add a token first.
 
-| Batch status | Badge colour |
-|---|---|
-| `EXPORTED` (files ready) | neutral |
-| `SENT_TO_VENDOR`, `RECEIVED_HQ`, `SHIPPED_TO_CITY` | accent |
-| `ENCODING` | warning |
-| `DONE` | success |
+## 3. Colour
 
-## 3. Type
+### Brand (`brand` in tokens)
 
-- **Fonts:** Plus Jakarta Sans (display, 600–800) for page titles and stat numbers; Inter (400–700) for everything else.
-  - Web loads both with `next/font`.
-  - The app loads them with `@expo-google-fonts`.
-  - React Native selects a font by file, not by weight: `textStyle()` maps each weight to its file.
-- **Scale (px/dp):**
+| Token | Hex | On the card |
+|---|---|---|
+| `navy` | `#001836` | Crest navy; light primary/accent |
+| `cardNavy` | `#071935` | The header band as printed (sampled); `band` light, `surface` dark |
+| `gold` | `#c8a26f` | The rule under the header (sampled) |
+| `paper` | `#f2f2f3` | The grey paper body (sampled) |
+| `maroon` | `#360c0c` | Crest maroon; the QR tile (`#3f1d1d` with grain as printed) |
+| `cream` | `#fcead8` | Crest scroll; lettering on the back; text on navy |
+| `ink` | `#000000` | Card values |
 
-  | Style | Size / line height | Weight | Tracking |
-  |---|---|---|---|
-  | `display` | 32/40 | 800 | −2% |
-  | `title1` (page titles) | 26/32 | 700 | −1.5% |
-  | `title2` | 20/28 | 700 | — |
-  | `title3` (card titles) | 17/24 | 600 | — |
-  | `bodyLg` | 16/24 | — | — |
-  | `body` | 15/22 | — | — |
-  | `bodySm` (dashboard default) | 14/20 | — | — |
-  | `caption` (meta) | 13/18 | — | — |
-  | `label` (section labels) | 11/16 | 600 | +4%, uppercase |
+### Semantic
 
-- Numbers in tables, NIMs and counters use `tabular-nums`.
-- App text caps Dynamic Type at 1.4× (`maxFontSizeMultiplier`). This lets large text grow without breaking layouts.
+| Token | Light (card front) | Dark (card back) | Use |
+|---|---|---|---|
+| `bg` | `#f1efec` | `#020b19` | Page ground (paper / navy night) |
+| `surface` | `#fcfbf9` | `#071935` | Cards, inputs, sheets |
+| `surfaceMuted` | `#e9e6e1` | `#0c2246` | Table headers, wells |
+| `surfaceHover` | `#e3dfd8` | `#112a54` | Row / ghost hover |
+| `border` | `#d9d3ca` | `#1b3462` | Hairlines |
+| `borderStrong` | `#867e72` | `#5d7398` | Input edges (3:1) |
+| `text` | `#0b1220` | `#f6efe4` | Primary text (navy ink / cream) |
+| `textMuted` | `#4c5361` | `#aeb8c9` | Secondary text |
+| `placeholder` | `#666b76` | `#8f9bb0` | Placeholders only |
+| `primary` / `primaryText` | navy / cream | cream / navy | Primary buttons (header band ↔ back lettering) |
+| `accent` / `accentText` | navy / navy | gold `#c8a26f` / `#e3c690` | Focus ring, links, selection |
+| `accentSubtle` / `…Text` | `#e1e6ee` / navy | `#16305c` / `#dde4f0` | Info alerts, accent badges |
+| `secondary` / `secondaryText` | maroon / cream | `#6b2020` / cream | **The card action** (show KTM, check in, run draw), count chips |
+| `secondarySubtle` / `…Text` | `#f0e2df` / maroon | `#2c1418` / `#f0c9c3` | Maroon chips |
+| `gold` | `#c8a26f` | `#c8a26f` | Rules and indicators only, never text |
+| `goldText` | `#6f5226` | `#e3c690` | Gold as text (rank #1, period) |
+| `band` / `bandText` / `bandMuted` | `#071935` / cream / `#b9c2d3` | `#000f24` / cream / `#aeb8c9` | The header band in both schemes |
+| `success*`, `warning*`, `danger*` | see file | see file | Status only. **Never** navy/maroon/gold for status, never maroon for errors |
 
-## 4. Space, radius, size, motion
+### Contrast (WCAG 2.x AA, recomputed by `packages/shared/test/shared.test.ts`)
 
-- **Spacing:** a 4-pt scale (`space[1]` = 4 … `space[16]` = 64).
-  - Page gutters are 16 on mobile and 24–40 on the dashboard.
-  - Cards pad 20 (web) or 16 (app).
-  - Gaps between form fields are 16.
-- **Radius:**
+| Pair | Light | Dark | Needs |
+|---|---|---|---|
+| `text` on `bg` | 16.31 | 17.27 | 4.5 |
+| `text` on `surface` | 18.10 | 15.33 | 4.5 |
+| `text` on `surfaceHover` | 14.10 | 12.40 | 4.5 |
+| `textMuted` on `surfaceHover` | 5.82 | 7.08 | 4.5 |
+| `placeholder` on `surface` | 5.17 | 6.24 | 4.5 |
+| `primaryText` on `primary` | 15.12 | 15.12 | 4.5 |
+| `accentText` on `surface` | 17.15 | 10.63 | 4.5 |
+| `secondaryText` on `secondary` | 14.74 | 9.66 | 4.5 |
+| `goldText` on `surface` | 6.98 | 10.63 | 4.5 |
+| `bandText` on `band` | 14.92 | 16.36 | 4.5 |
+| `bandMuted` on `band` | 9.77 | 9.60 | 4.5 |
+| `successText` on `successSubtle` | 5.81 | 9.23 | 4.5 |
+| `warningText` on `warningSubtle` | 5.98 | 10.39 | 4.5 |
+| `dangerText` on `dangerSubtle` | 5.53 | 7.66 | 4.5 |
+| `onSolid` on `dangerSolid` | 5.62 | 5.62 | 4.5 |
+| `accent` on `surface` (non-text) | 17.15 | 7.38 | 3 |
+| `borderStrong` on `surface` (non-text) | 3.87 | 3.64 | 3 |
+| `gold` on `band` (non-text) | 7.38 | 8.09 | 3 |
+| Card: ink on paper / white QR on maroon tile / cream on navy | 18.77 / 14.95 / 14.92 | same | 4.5 |
 
-  | Token | Value | Use |
-  |---|---|---|
-  | `sm` | 8 | Nav items, small chips |
-  | `control` | 12 | Inputs, buttons |
-  | `card` | 20 | Cards, dialogs, the KTM |
-  | `pill` | — | Badges, avatars |
+Status mapping (unchanged meaning): card `NOT_PRINTED` neutral · `IN_BATCH`/`SENT_TO_VENDOR`/`RECEIVED_HQ` accent · `ENCODED` warning · `DELIVERED` success · `REVOKED` danger. Event phase `draft` neutral · `upcoming` accent · `open` success · `closed` warning · `ended` neutral. Claim `PENDING` warning · `APPROVED` success · `REJECTED` danger.
 
-- **Control heights:** 32 / 40 / 48. Primary form actions use 48 (`lg`). The minimum touch target in the app is 44.
-- **Check-in sizes** (Phase 1): the member's QR is drawn at `size.qr` (224, snapped to whole points per module so no seams show), the crew viewfinder is `size.scanFrame` (248), and the scan result avatar is `size.avatarLg` (64).
-- **Layout widths:**
-  - Sidebar: 248
-  - Dashboard content: max 1120
-  - Forms (`/join`, `/login`): max 440
-- **Motion:**
-  - Durations are 150 ms (hover/press), 200 ms and 300 ms (enter), all on `cubic-bezier(0.2, 0, 0, 1)`.
-  - Buttons scale to 0.98 on press. Pages fade up 8 px when they enter.
-  - `prefers-reduced-motion` turns all of it off.
+## 4. Type
 
-## 5. Components
+| Face | Role | Web / Android | iOS |
+|---|---|---|---|
+| **Graduate** (Google Fonts, OFL) | The card header's collegiate slab. **Display only, one line per screen**: page titles, the auth/join hero, the digital ID. Always upper case | `next/font/google` / `@expo-google-fonts/graduate` | bundled `Graduate-Regular.ttf` |
+| **Card value font** (`fonts.cardValue`, `--font-card`) | KTM values only. ONE embedded file on every platform and in print: `packages/shared/assets/fonts/card-value.ttf`. Now Figtree Black (closest free match, tracking −0.04 em measured against `example-front.png`); becomes the licensed Avenir LT Pro Black by replacing the file. **Never system Avenir**: the card must look identical on web, iOS and Android | `next/font/local` / `expo-font` | same file via `expo-font` |
+| **Figtree** (OFL) | Everything else; close to Avenir's geometry | `next/font/google` 400–900 / `@expo-google-fonts/figtree` | same (or system Avenir Next for body if preferred, keep one) |
 
-Web components are in `apps/web/src/components/ui` and the app's are in `apps/mobile/src/components`. Both platforms have the same set, with the same names where possible.
+Graduate was picked against the card's "PATS UNIVERSITY" (compared with Alfa Slab One, Bevan, Ultra, Holtwood, Roboto Slab, Arvo): it has the same collegiate letterforms (square S, wide R, bracketed slabs) but ships one light weight, so it is drawn with a stroke of `varsityStroke` (0.045 em) in the text colour (`-webkit-text-stroke` + `paint-order: stroke fill` on web), which matches the card's heavy block.
+
+| Style | Size / line | Weight | Tracking | Notes |
+|---|---|---|---|---|
+| `varsity.hero` | 40/44 | Graduate + stroke | +2% | Join/login/digital-ID hero |
+| `varsity.title` | 28/34 | Graduate + stroke | +2% | Dashboard page title (`PageHeader`) |
+| `varsity.small` | 18/22 | Graduate | +2% | Rare: card captions |
+| `display` | 32/38 | 800 | −1.5% | Big numbers |
+| `title1` | 26/32 | 800 | −1% | Stat values (900 on web) |
+| `title2` | 20/26 | 800 | −0.5% | Section titles |
+| `title3` | 17/22 | 700 | — | Card titles (800 on web) |
+| `bodyLg` / `body` / `bodySm` | 16/24 · 15/22 · 14/20 | 400 | — | Text, dashboard default 14 |
+| `caption` | 13/18 | 400 | — | Meta |
+| `label` | 11/16 | 800 (web 900) | +6%, CAPS | The card's `NAME :` labels: field labels, table headers, stat labels, nav groups, tabs, badges |
+
+Numbers, NIMs, money and dates use tabular figures. App text caps Dynamic Type at 1.4×.
+
+## 5. Shape, space, depth, motion
+
+- **Radius** (squarer, like a printed card): `sm` 4 (chips, nav items), `control` 6 (buttons, inputs), `card` 10 (cards, dialogs), `pill` for avatars only. The KTM uses its own corner (`ktm.radius` = 3.7% of width ≈ CR80's 3.18 mm).
+- **Spacing:** 4-pt scale (unchanged). Gutters 16 mobile, 24–40 dashboard; card padding 20 web / 16 app.
+- **Depth:** `soft` (1–6 px, navy-tinted) for cards, `pop` for dialogs, `card` for the KTM. No glow, no glass.
+- **Gold rule:** 3 px, `gold`. Under every band (sidebar head, top bar, dialog header, auth header), under the page title, under the active tab, and as a 24 × 3 px tick above card titles. Nowhere else.
+- **Motion:** 150 / 200 / 300 ms on `cubic-bezier(0.2,0,0,1)`. One signature moment: the **KTM flip** (500 ms rotateY; reduced motion = 200 ms crossfade). Buttons press to 0.98. `prefers-reduced-motion` removes the rest.
+
+## 6. Components
+
+Web: `apps/web/src/components/ui` (+ `components/ktm`). App: `apps/mobile/src/components`. Same names on both.
 
 | Component | Rules |
 |---|---|
-| Button | Variants: primary (navy), secondary (surface + border + soft shadow), ghost, danger. Labels are sentence case, never truncated (`whitespace-nowrap`; size the container instead). A button that is loading shows a spinner and keeps its width. |
-| Input / Select / Textarea | 48 high and 12 radius. Border is `borderStrong`, turning accent on focus, with a 4 px accent ring at 15%. Labels sit above in 14/500. Hints and errors go below in caption, and an error replaces the hint. |
-| OTP input | Six boxes over one real input. This keeps paste, `one-time-code` autofill and screen readers working, and it auto-submits on the 6th digit. |
-| Card | `surface`, 1 px `border`, 20 radius, and the soft shadow (web). |
-| Badge | 24 high, pill-shaped, with an optional status dot. Badges are the only place status colours appear as fills. |
-| Empty state | A 44 px muted icon well, then a title (why it's empty), one line of body (what happens next or what to do), and at most one action. No dashed boxes and no illustrations. |
-| Dialog | Web uses the platform `<dialog>`, which gives focus trap, Esc and the backdrop. The app uses `Alert.alert` for confirmations. A destructive confirm uses the danger button and says exactly what happens. |
-| Page header (dashboard) | Left-aligned title1, then the muted description (max 2 lines), actions on the right, and a hairline below. |
-| Table (dashboard) | Header row 40 on `surfaceMuted`; body rows 56. Secondary columns hide at small widths. A table scrolls inside its card, never the page. The row's primary link covers the whole row. |
-| Icons | One set: **Lucide** (`lucide-react` / `lucide-react-native`), outline, stroke 1.75 (2 for small status icons), sized 16 in controls and 20 in wells. No emoji as icons. |
-| Check-in QR (app) | Navy modules on white (`light.primary` on `light.surface`) in **both** themes, because scanners need the contrast. A thin accent progress bar shows time to the next code; the screen stays awake while it is shown. |
-| Scanner (app) | Full-screen camera with a dark overlay built from the `dark` tokens whatever the system theme, since the feed is dark. Results come up in a bottom card in the current theme: who it is first (avatar, name, NIM, city), then one primary action. |
-| Step strip (batch) | One tile per batch status, in order: done = check + timestamp, current = accent border on `accentSubtle`, later = muted dot. Wraps to 2/3/6 columns; never scrolls sideways. |
-| Progress bar | 6 high, `surfaceMuted` track, `accent` fill, with the numbers as a caption above (the caption is the accessible name). |
-| NFC tap (app) | The physical card comes first: in the scanner the primary button is **Tap card (NFC)**, the camera keeps reading app QRs, and "Check in by name" stays last (PRODUCT.md §6.1.2). On iOS the system sheet carries a short prompt ("Hold … near the top of the iPhone"). Where NFC can't work (Expo Go, NFC off, no NFC) the button is replaced by one muted line saying why, and the other methods stay. |
-| Encode flow (app) | Identify (printed QR or NIM) → who it is + "does the printed card show this name?" → tap → result. A failure says what happened, whether anything was written, and the one next step. |
-| Notification centre (app) | List rows: unread dot (accent), title, body, date + time. Opening the centre marks everything read. Category switches live in their own settings screen. |
-| Event phase badge | `draft` neutral, `upcoming` accent, `open` success, `closed` warning, `ended` neutral. Check-in method badges: NFC accent, App QR neutral, Manual warning (HQ audits the fallback). |
+| **KTM card** (`KtmCard`) | Background = official blank front (`/ktm/front-{800,1600}.webp`; app: bundled @2x/@3x WebP). Overlaid live values NAME / FAVORITE DRINK / FAVORITE GENRE in `ktm-value` (the one card-value font), **#000, all caps, −0.04 em**, positioned by the `ktm` geometry token (fractions of the artwork, so it scales from a 120 px thumbnail to full screen); values shrink to fit their max width, never clip or wrap. The QR is **white modules on transparent inside the maroon tile** (EC M). NIM is never on the card. Flip button shows the official back (`/ktm/back-*.webp`). Thumbnails (member detail, lists) omit the QR. `aspect-ratio` = 3213/2079, `shadow-card`. |
+| **Band** | `bg-band text-band-fg gold-rule`. Holds the crest (`Wordmark`), a heavy-caps label, and band-styled controls (`LanguageSwitch onBand`, white/10 hover). |
+| **Wordmark / BrandLockup** | `Wordmark` = full crest (LOGO-01) at `size.crest` 40 (48 sidebar, 72 auth). `BrandLockup tone=cream|navy` = official ribbon lockup files. Alt "PATS University"; lockup decorative when the crest is present. |
+| **Page header** | Varsity title (`varsity`), muted description ≤ 2 lines, actions right, 3 px gold rule below. One varsity line per page. |
+| **Tabs** (`Tabs`) | The only sub-navigation (replaces segmented / pill / underline-link variants). Heavy-caps labels, gold 3 px indicator on the active tab, optional maroon count chip, scrolls sideways under 640 px. Link tabs for routes, `role=tablist` with arrow keys for panels. |
+| **Button** | `primary` (navy/cream; dark cream/navy; hover shows a gold underline), `secondary` (surface + strong edge), `ghost`, `danger` (real red), `maroon` (**one card-related action per screen**). Bold, sentence case, never truncated. Disabled = transparent fill + dashed edge + muted text in both schemes (never a pale "active" look). Loading keeps width. Heights 32/40/48; touch ≥ 44 in the app. |
+| **Input / Select / Textarea** | 48 high, radius 6, `borderStrong` edge (3:1), focus = accent edge + 4 px ring (gold in dark). Labels above in `ktm-label` caps; hint/error below in caption; error replaces hint and is announced. |
+| **Date & time** | Always day-first and 24 h, in the city's zone with "WIB" in the label: `14/10/2026`, `19.30`. Never the browser's US `mm/dd/yyyy` / AM-PM (`components/ui/date-time.tsx`). |
+| **Money** | Typed and shown as `Rp 6.000.000` (thousands dots), stored as an integer. |
+| **Card** | `surface`, 1 px `border`, radius 10, `soft`. `CardHeader` = gold tick + `title3` 800 + muted description + one action. No nested cards. |
+| **Badge** | 24 high, radius 4, 11 px heavy caps, optional status dot. Status colours only here (and alerts). |
+| **Count chip** | Maroon square chip with cream numerals (nav, tabs). |
+| **Table** | Header row 40 on `surfaceMuted` with `ktm-label` caps; body rows 56; numbers right-aligned tabular. Scrolls inside its card; **under 640 px rows become stacked cards with the row action visible** (never a clipped action column). |
+| **Detail list** | `ktm-label` term, value in body. |
+| **Stat** | `ktm-label` label, value Figtree 900 tabular. Max 4 in a row; no hero-metric template. |
+| **Empty state** | Navy square well with cream icon and gold tick (a mini band), title (why), one line (what next), at most one action. |
+| **Loading** | Skeleton blocks in `surfaceMuted` matching the final layout; spinners only inside buttons. |
+| **Error** | `Alert tone=danger` with what happened + the recovery action; page-level errors use the empty-state layout with "Coba lagi". |
+| **Alert** | `info` (accent subtle), `success`, `warning`, `danger`; icon + text, radius 6. |
+| **Dialog** | Platform `<dialog>`. Band header with gold rule (title + close), scrolling body, footer pinned with a hairline (never cut off on a 900 px screen). Destructive confirm uses `danger`. App: centred `.alert`/`Alert.alert` for confirmations. |
+| **Sidebar** (dashboard) | The band, 248 wide: crest 48 + "DASHBOARD" + role/city; nav grouped (Operasi · Member & kartu · Loyalty · Komunitas · Sistem) with group labels in `ktm-label`; one unique Lucide icon per item; active = white/10 fill + gold icon. Mobile: band top bar + drawer. |
+| **Tab bar** (app) | See NATIVE-DESIGN.md: band-coloured bar, cream inactive icons at 70%, active = cream + 3 px gold indicator above the icon, centre "KTM" item in maroon. |
+| **Icons** | Lucide, outline, stroke 1.75 (2 small), 16 in controls, 20 in wells. No emoji. |
+| **Browser surfaces** | Selection = gold on navy text; caret and `accent-color` from tokens; scrollbars `borderStrong`; link underline offset 3 px; native pickers follow the scheme. |
 
-## 6. Card print files
+## 7. Surfaces
 
-The physical card is not a screen, but it follows the same tokens. Template: `apps/web/card-templates/placeholder/` (swappable, see its README).
+| Surface | Mode | Composition |
+|---|---|---|
+| `/login`, 404 | Persuade-light | `AuthFrame`: band header (mobile) or band panel with crest 72 + cream lockup (desktop), gold rule; paper side with the form card; varsity title. |
+| `/join` | Persuade | Band header + varsity hero, the **live KTM preview** filling as the member types (name, drink, genre), then the form; success = their card. |
+| `/c/<token>` (digital ID) | Persuade | The KTM (flip), live status badge (Active member / Card deactivated), city, member since, member photo for face-matching. **Never** NIM, email, phone, song or quote. App download block. `noindex`. |
+| Dashboard | Operate | Band sidebar, paper ground, varsity page title on the gold rule, Tabs for sub-views, tables/cards in Figtree. |
+| Print | — | `card-templates/ktm-2026`: the official artwork + values + white QR in the maroon tile; back = official back. |
+
+## 8. Card print files
 
 | Rule | Value |
 |---|---|
-| Page | 91.6 × 60 mm = CR80 85.6 × 54 mm + 3 mm bleed; TrimBox/BleedBox set in the PDF |
-| Safe area | 4 mm inside the trim: no text or QR closer to the cut |
-| Printed data | Name, NIM, QR only. Song, genre and quote stay digital (PRODUCT.md §10.3) |
-| Colours | `brand.navy`, `brand.maroon`, `brand.cream`, light `bg` / `text` / `textMuted` from `colors.json` |
-| Type | Plus Jakarta Sans 800 for the name (auto-shrinks to fit 2 lines, 13 → 8.5 pt), Inter 500/600 for labels and NIM (tabular). Fonts embedded |
-| QR | Navy on white, error correction M with its quiet zone, 24 mm, on a white tile with 2.4 mm radius |
-| Raster art | ≥ 300 dpi at printed size (the crest is 720 px at 15 mm ≈ 1.200 dpi) |
+| Template | `apps/web/card-templates/ktm-2026/` (default). `placeholder/` kept for tests only |
+| Page | 91.6 × 60 mm = CR80 85.6 × 54 mm + 3 mm bleed; TrimBox/BleedBox set |
+| Safe area | 4 mm inside trim |
+| Printed data | **Name, favorite drink, favorite genre, QR.** No NIM. Song and quote stay digital |
+| Values | The card-value font (`packages/shared/assets/fonts/card-value.ttf`), embedded; #000, caps, −0.04 em |
+| QR | White modules on the maroon tile, EC M, ≥ 18 mm; scan-tested before a vendor run |
+| Raster art | ≥ 300 dpi at printed size (`front.jpg`/`back.jpg` are 1440 px ≈ 400 dpi) |
 
-**Preview with guides** on a batch renders a proof with the trim (red) and safe area (blue) drawn; it never goes to the vendor.
+## 9. Copy and formatting
 
-## 7. Brand assets
+- All strings in `packages/shared/src/i18n/{en,id}.ts`; a test fails when a key exists in only one. Indonesian is the default and uses "kamu" for members.
+- Sentence case for UI copy; CAPS only via `ktm-label`, badges, tabs and the varsity/KTM faces (CSS `uppercase`, never typed in caps).
+- Numbers only via `packages/shared/src/format.ts`: `3.800`, `Rp 6.000.000`, `14 Okt`, `19.30 WIB`, inputs `14/10/2026`.
+- Errors say what happened and what to do. No raw codes.
+- Code comments in English.
 
-The crest master (9000 px) is **not** in the repo. [`tools/brand/make-assets.sh`](../tools/brand/make-assets.sh) regenerates every size from it. `sips` does the cropping and resizing; Pillow only masks the shield and centres it on a canvas. The art is never redrawn or recoloured.
+## 10. Craft checklist (every screen, before `dev`)
 
-| Asset | File | Content |
-|---|---|---|
-| App icon | `apps/mobile/assets/icon.png` (1024, no alpha) | The shield only, on cream. The full crest's small text blurs at icon size. |
-| Android adaptive icon | `apps/mobile/assets/adaptive-icon.png` (1024, transparent) | The shield, inside the 66% safe circle. The background colour is `brand.cream` in `app.config.ts`. |
-| Splash | `apps/mobile/assets/splash-icon.png` (1024) | The full crest at 200 pt, the same art on the light `bg` and the dark `bg` |
-| Favicons | `apps/web/public/favicon-32.png`, `icon-192.png`, `apple-touch-icon.png` (cream, no alpha); `apps/mobile/assets/favicon.png` | The shield |
-| Header crest | `apps/web/public/brand/crest-{80,120,160,240}.png` | `Wordmark` shows the crest at `size.crest` (40 px). It uses `srcset`, so it stays crisp from 1× to 6×. |
-
-The crest replaces the text wordmark on the web (dashboard header, `/join`, `/login`). Its alt text is the name, "PATS University". Never place the crest on a busy or saturated background: it already carries its own white halo.
-
-## 8. Copy and formatting
-
-- Every string is in `packages/shared/src/i18n/{en,id}.ts`. A test fails when a key exists in only one language. Indonesian is the default and uses "kamu" for members.
-- Code comments are in English.
-- Sentence case everywhere: no Title Case buttons and no ALL CAPS, except `label` section headings.
-- Numbers come only through the helpers in `packages/shared/src/format.ts`:
-
-  | Kind | Example |
-  |---|---|
-  | Count | `3.800` |
-  | Money | `Rp 6.000.000` |
-  | Date | `14 Oct` / `14 Okt`; the year appears only when it isn't the current year |
-  | Time | `19.30 WIB` |
-
-  Dates and times always use the city's time zone.
-- Error messages say what happened **and** what to do ("This code has expired. Request a new one."). Never show raw codes or stack traces.
-
-## 9. Craft checklist (run on every screen before merging to `dev`)
-
-1. No clipped or overlapping text at 360 px and at 1440 px, in ID **and** EN (Indonesian runs ~20% longer).
-2. Light and dark both checked; no hard-coded colour.
-3. Empty, loading and error states exist and offer a next step.
-4. Every interactive element has a visible focus state (web) and a touch target of at least 44 (app).
-5. Icons come from Lucide, at one stroke width, optically centred with their text.
-6. Numbers and dates go through the shared helpers.
-7. Forms: labels are tied to their inputs, errors are announced (`role="alert"` / live region), the first invalid field gets focus, and Enter submits.
-8. Destructive actions confirm through the platform dialog.
-9. Copy exists in both languages and is sentence case, with no placeholder lorem.
-10. A screen works on the user's real path: the web in the browser, the app on a simulator or device.
+1. Nothing clipped or overlapping at 360/390 and 1440, in ID **and** EN.
+2. Light and dark both checked; the band is navy in both.
+3. Empty, loading, error states with a next step.
+4. Visible focus (web), touch ≥ 44 (app).
+5. One varsity line max; gold only as rules; maroon only for the card action and count chips.
+6. Lucide icons, one per meaning.
+7. Numbers, money, dates through the helpers; inputs day-first, 24 h.
+8. Forms: labels tied, errors announced, first invalid field focused, Enter submits.
+9. Destructive actions confirm with a danger button that says what happens.
+10. The logo is the untouched full crest; the KTM matches the printed card.

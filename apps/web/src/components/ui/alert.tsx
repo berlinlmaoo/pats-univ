@@ -4,6 +4,7 @@ import { cn } from '@/lib/cn';
 
 const tones = {
   info: { box: 'bg-accent-subtle text-accent-subtle-fg', Icon: Info },
+  warning: { box: 'bg-warning-subtle text-warning-fg', Icon: CircleAlert },
   success: { box: 'bg-success-subtle text-success-fg', Icon: CircleCheck },
   danger: { box: 'bg-danger-subtle text-danger-fg', Icon: CircleAlert },
 } as const;

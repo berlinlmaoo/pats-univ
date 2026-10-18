@@ -3,19 +3,24 @@ import type { ComponentProps } from 'react';
 import { cn } from '@/lib/cn';
 import { Spinner } from './spinner';
 
-type Variant = 'primary' | 'secondary' | 'ghost' | 'danger';
+type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'maroon';
 type Size = 'sm' | 'md' | 'lg';
 
 const base =
-  'inline-flex shrink-0 select-none items-center justify-center gap-2 whitespace-nowrap rounded-control font-semibold ' +
-  'transition-[background-color,border-color,color,transform,opacity] active:scale-[0.98] ' +
-  'disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50';
+  'inline-flex shrink-0 select-none items-center justify-center gap-2 whitespace-nowrap rounded-control font-bold ' +
+  'transition-[background-color,border-color,color,transform,opacity,box-shadow] active:scale-[0.98] ' +
+  // Disabled reads as disabled in both schemes: no fill, dashed edge, muted text (never a pale "active" look).
+  'disabled:pointer-events-none disabled:border disabled:border-dashed disabled:border-border-strong/70 disabled:bg-transparent disabled:text-muted disabled:shadow-none ' +
+  'aria-disabled:pointer-events-none aria-disabled:opacity-50';
 
 const variants: Record<Variant, string> = {
-  primary: 'bg-primary text-primary-fg hover:opacity-90',
-  secondary: 'border border-border bg-surface text-fg shadow-soft hover:bg-surface-hover',
+  // Navy with cream lettering in light (the card header), cream with navy in dark (the card back).
+  primary: 'bg-primary text-primary-fg shadow-soft hover:shadow-[inset_0_-3px_0_var(--pats-gold)]',
+  secondary: 'border border-border-strong/60 bg-surface text-fg hover:border-border-strong hover:bg-surface-hover',
   ghost: 'text-muted hover:bg-surface-hover hover:text-fg',
   danger: 'bg-danger-solid text-on-solid hover:opacity-90',
+  // The QR tile maroon: reserved for the one KTM-related action on a screen (show card, check in).
+  maroon: 'bg-secondary text-secondary-fg shadow-soft hover:shadow-[inset_0_-3px_0_var(--pats-gold)]',
 };
 
 const sizes: Record<Size, string> = {

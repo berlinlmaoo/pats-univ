@@ -1,9 +1,12 @@
 /**
  * Design tokens: the single source of truth for colour, type, radius, spacing and motion.
  * Consumed by the web dashboard (as CSS variables, see `toCssVariables`) and by the Expo app
- * (as plain values, see apps/mobile/src/theme). Structure follows the NEXUS token conventions;
- * colours come from the PATS crest: navy primary/accent, maroon secondary, cream-tinted
- * surfaces. Status colours stay separate from the brand. See docs/DESIGN.md.
+ * (as plain values, see apps/mobile/src/theme). Token names follow the NEXUS conventions.
+ *
+ * The visual world is the official KTM (student card): navy header band with a gold rule, grey
+ * paper body, black heavy-caps values, a distressed maroon tile, cream lettering on the navy back.
+ * Light = the card front (paper + navy ink); dark = the card back (navy night + cream + gold).
+ * Status colours stay separate from the brand. See docs/DESIGN.md.
  */
 
 import palette from './colors.json';
@@ -49,6 +52,16 @@ export interface ColorTokens {
   secondarySubtle: string;
   /** Text on `secondarySubtle`. */
   secondarySubtleText: string;
+  /** The KTM's gold rule under the navy header. Decorative lines only, never text. */
+  gold: string;
+  /** Gold as text (contrast-safe on bg and surface). */
+  goldText: string;
+  /** The KTM header band: app bars, sidebar, auth headers. Navy in both schemes. */
+  band: string;
+  /** Text and the wordmark on `band` (cream, like the card back). */
+  bandText: string;
+  /** Secondary text on `band`. */
+  bandMuted: string;
   success: string;
   successSubtle: string;
   successText: string;
@@ -73,14 +86,76 @@ export const colors: Record<ColorScheme, ColorTokens> = { light: palette.light, 
  * The three colours sampled from the official crest. Use them for brand artwork (icon and
  * splash backgrounds); UI code reads the semantic tokens in `colors` instead.
  */
-export const brand: { navy: string; maroon: string; cream: string } = palette.brand;
+export const brand: {
+  navy: string;
+  maroon: string;
+  cream: string;
+  /** Gold/tan rule on the card. */
+  gold: string;
+  /** The card's grey paper body. */
+  paper: string;
+  /** The card's header navy as printed (a hair lighter than the crest navy). */
+  cardNavy: string;
+  /** Card values: pure black. */
+  ink: string;
+} = palette.brand;
 
+/**
+ * Faces. `varsity` matches the card's collegiate slab ("PATS UNIVERSITY") and is for display only:
+ * page titles, the auth/join hero and the digital ID. `cardValue` is the ONE embedded font for the
+ * KTM values on every platform (packages/shared/assets/fonts/card-value.ttf, now Figtree Black;
+ * swap the file for licensed Avenir LT Pro Black later). Never a system Avenir: the card must look
+ * identical on web, iOS and Android. Everything else is `body` (Figtree).
+ */
 export const fonts = {
-  /** Headings, numbers in stat tiles, the wordmark. */
-  display: 'Plus Jakarta Sans',
-  /** Everything else. */
-  body: 'Inter',
+  varsity: 'Graduate',
+  display: 'Figtree',
+  body: 'Figtree',
+  cardValue: {
+    /** Family name to register the file under (web @font-face / expo-font). */
+    family: 'PATS Card Value',
+    /** Repo path of the single font file. */
+    file: 'packages/shared/assets/fonts/card-value.ttf',
+    /** Letter spacing in em; values are always upper case, colour brand.ink. */
+    tracking: -0.04,
+  },
   mono: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+} as const;
+
+/**
+ * Varsity slab sizes (Graduate has one weight). Used sparingly: one varsity line per screen at most.
+ * Always upper case, slightly open tracking, like the card header. Rendered with a stroke of
+ * `varsityStroke` em in the text colour so it matches the card's heavy block lettering.
+ */
+export const varsityStroke = 0.045;
+
+export const varsity = {
+  hero: { size: 40, lineHeight: 44, tracking: 0.02 },
+  title: { size: 28, lineHeight: 34, tracking: 0.02 },
+  small: { size: 18, lineHeight: 22, tracking: 0.02 },
+} as const;
+
+/**
+ * KTM card geometry, as fractions of the card artwork (3213 × 2079 px, CR80 ratio 1.5455).
+ * Value boxes sit under the printed labels; the QR goes inside the maroon tile.
+ */
+export const ktm = {
+  ratio: 3213 / 2079,
+  /** Value text: left edge (fraction of width) and cap height (fraction of width), measured on the example card. */
+  valueX: 0.0523,
+  valueCap: 0.0317,
+  /** Cap-top of each value line (fraction of height). */
+  nameY: 0.398,
+  drinkY: 0.615,
+  genreY: 0.831,
+  /** Max width for values (fraction of width): the name clears the crest, the others clear the tile. */
+  nameMaxW: 0.65,
+  valueMaxW: 0.6,
+  /** Maroon tile (in the artwork) and the QR inside it (fractions of width/height; the QR is square). */
+  tile: { x: 0.682, y: 0.512, w: 0.275, h: 0.425 },
+  qr: { x: 0.705, y: 0.549, w: 0.23 },
+  /** Card corner radius as a fraction of width (the physical CR80 corner is 3.18 mm / 85.6 mm). */
+  radius: 0.037,
 } as const;
 
 export interface TypeStyle {
@@ -94,15 +169,16 @@ export interface TypeStyle {
 
 /** Type scale in px (web) / dp (native). */
 export const type = {
-  display: { size: 32, lineHeight: 40, weight: 800, tracking: -0.02, family: 'display' },
-  title1: { size: 26, lineHeight: 32, weight: 700, tracking: -0.015, family: 'display' },
-  title2: { size: 20, lineHeight: 28, weight: 700, tracking: -0.01, family: 'display' },
-  title3: { size: 17, lineHeight: 24, weight: 600, tracking: -0.005, family: 'body' },
+  display: { size: 32, lineHeight: 38, weight: 800, tracking: -0.015, family: 'display' },
+  title1: { size: 26, lineHeight: 32, weight: 800, tracking: -0.01, family: 'display' },
+  title2: { size: 20, lineHeight: 26, weight: 800, tracking: -0.005, family: 'display' },
+  title3: { size: 17, lineHeight: 22, weight: 700, tracking: 0, family: 'body' },
   bodyLg: { size: 16, lineHeight: 24, weight: 400, tracking: 0, family: 'body' },
   body: { size: 15, lineHeight: 22, weight: 400, tracking: 0, family: 'body' },
   bodySm: { size: 14, lineHeight: 20, weight: 400, tracking: 0, family: 'body' },
   caption: { size: 13, lineHeight: 18, weight: 400, tracking: 0, family: 'body' },
-  label: { size: 11, lineHeight: 16, weight: 600, tracking: 0.04, family: 'body' },
+  /** The card's "NAME :" labels: heavy caps (web/Android 900, the app's heaviest file until then). */
+  label: { size: 11, lineHeight: 16, weight: 800, tracking: 0.06, family: 'body' },
 } as const satisfies Record<string, TypeStyle>;
 
 export type TypeToken = keyof typeof type;
@@ -125,12 +201,13 @@ export const space = {
   16: 64,
 } as const;
 
+/** Squarer than a soft SaaS: printed-card corners (the KTM's own corner is ~3 mm). */
 export const radius = {
-  sm: 8,
+  sm: 4,
   /** Inputs, buttons, segmented controls. */
-  control: 12,
+  control: 6,
   /** Cards, panels, sheets. */
-  card: 20,
+  card: 10,
   pill: 9999,
 } as const;
 
@@ -174,12 +251,14 @@ export const motion = {
 
 export const shadow = {
   light: {
-    soft: '0 1px 2px rgba(17, 24, 39, 0.04), 0 4px 16px rgba(17, 24, 39, 0.04)',
-    pop: '0 8px 32px rgba(17, 24, 39, 0.1)',
+    soft: '0 1px 1px rgba(7, 25, 53, 0.06), 0 2px 6px rgba(7, 25, 53, 0.05)',
+    pop: '0 12px 32px rgba(7, 25, 53, 0.18)',
+    card: '0 2px 4px rgba(7, 25, 53, 0.12), 0 14px 32px rgba(7, 25, 53, 0.18)',
   },
   dark: {
-    soft: '0 1px 2px rgba(0, 0, 0, 0.3)',
-    pop: '0 8px 32px rgba(0, 0, 0, 0.5)',
+    soft: '0 1px 2px rgba(0, 0, 0, 0.4)',
+    pop: '0 12px 32px rgba(0, 0, 0, 0.6)',
+    card: '0 2px 4px rgba(0, 0, 0, 0.5), 0 16px 40px rgba(0, 0, 0, 0.55)',
   },
 } as const;
 
@@ -190,7 +269,11 @@ function kebab(name: string): string {
 function colorVars(scheme: ColorScheme): string {
   const c = colors[scheme];
   const lines = Object.entries(c).map(([k, v]) => `--pats-${kebab(k)}:${v};`);
-  lines.push(`--pats-shadow-soft:${shadow[scheme].soft};`, `--pats-shadow-pop:${shadow[scheme].pop};`);
+  lines.push(
+    `--pats-shadow-soft:${shadow[scheme].soft};`,
+    `--pats-shadow-pop:${shadow[scheme].pop};`,
+    `--pats-shadow-card:${shadow[scheme].card};`,
+  );
   lines.push(`color-scheme:${scheme};`);
   return lines.join('');
 }
@@ -222,8 +305,11 @@ export function toCssVariables(): string {
         `--pats-text-${kebab(k)}-weight:${t.weight};--pats-text-${kebab(k)}-tracking:${t.tracking}em;`,
     )
     .join('');
+  const varsityVars = Object.entries(varsity)
+    .map(([k, t]) => `--pats-varsity-${k}:${t.size}px;--pats-varsity-${k}-lh:${t.lineHeight}px;--pats-varsity-${k}-tracking:${t.tracking}em;`)
+    .join('');
   return (
-    `:root{${scale}${typeVars}${colorVars('light')}}` +
+    `:root{${scale}${typeVars}${varsityVars}${colorVars('light')}}` +
     `@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){${colorVars('dark')}}}` +
     `:root[data-theme="dark"]{${colorVars('dark')}}`
   );
