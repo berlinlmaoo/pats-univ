@@ -36,6 +36,15 @@ targets:
         Release:
           APS_ENVIRONMENT: production
     preBuildScripts:
+      - name: Bundle shared card font
+        inputFiles:
+          - "$(SRCROOT)/../../packages/shared/assets/fonts/card-value.ttf"
+        outputFiles:
+          - "$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/card-value.ttf"
+        script: |
+          set -eu
+          mkdir -p "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH"
+          cp "$SRCROOT/../../packages/shared/assets/fonts/card-value.ttf" "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/card-value.ttf"
       - name: Check Localization keys
         basedOnDependencyAnalysis: false
         script: '"$SRCROOT/scripts/check-localization.sh"'

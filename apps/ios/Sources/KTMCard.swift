@@ -6,7 +6,7 @@ struct CardValue: UIViewRepresentable {
     let value: String
     let width: CGFloat
     func makeUIView(context: Context) -> ValueDrawingView { ValueDrawingView() }
-    func updateUIView(_ view: ValueDrawingView, context: Context) { view.value = value.uppercased(); view.cardWidth = width; view.setNeedsDisplay() }
+    func updateUIView(_ view: ValueDrawingView, context: Context) { view.value = value; view.cardWidth = width; view.setNeedsDisplay() }
 }
 final class ValueDrawingView: UIView {
     var value = ""
@@ -15,15 +15,7 @@ final class ValueDrawingView: UIView {
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     override func draw(_ rect: CGRect) {
         guard let ctx = UIGraphicsGetCurrentContext() else { return }
-        let size = cardWidth * KTMGeometry.valueCap / 0.7
-        let font = CTFontCreateWithGraphicsFont(Theme.cardFont, size, nil, nil)
-        let text = NSAttributedString(string: value, attributes: [.font: font, .kern: -0.04 * size, .foregroundColor: UIColor.black])
-        let line = CTLineCreateWithAttributedString(text)
-        let length = CGFloat(CTLineGetTypographicBounds(line, nil, nil, nil))
-        let scale = min(1, bounds.width / max(1, length))
-        // Fit any legal value on one line; the cap top stays fixed as the font shrinks.
-        ctx.translateBy(x: 0, y: CTFontGetCapHeight(font) * scale)
-        ctx.scaleBy(x: scale, y: -scale); ctx.textPosition = .zero; CTLineDraw(line, ctx)
+        Theme.cardTypeface.layout(value, cardWidth: cardWidth, maxWidth: bounds.width).draw(in: ctx)
     }
 }
 struct KTMCard: View {
@@ -65,7 +57,7 @@ struct KTMCard: View {
         }
     }
     private func value(_ text: String, y: CGFloat, maxWidth: CGFloat, w: CGFloat, h: CGFloat) -> some View {
-        CardValue(value: text, width: w).frame(width: w * maxWidth, height: w * KTMGeometry.valueCap * 1.6)
+        CardValue(value: text, width: w).frame(width: w * maxWidth, height: w * KTMGeometry.valueCap / CardValueMetrics.capHeight * 3.2)
             .offset(x: w * KTMGeometry.valueX, y: h * y).accessibilityHidden(true)
     }
 }

@@ -22,12 +22,12 @@ enum Theme {
     static func title(_ size: CGFloat = 26) -> Font { .custom("Figtree-Regular", size: size, relativeTo: .title2).weight(.heavy) }
     static func body(_ size: CGFloat = 15) -> Font { .custom("Figtree-Regular", size: size, relativeTo: .body) }
     static var label: Font { body(11).weight(.heavy) }
-    // Resolve the embedded file directly: the replacement font may have any internal family name.
-    static let cardFont: CGFont = {
+    static let cardTypeface: CardTypeface = {
         guard let url = Bundle.main.url(forResource: "card-value", withExtension: "ttf"),
-              let provider = CGDataProvider(url: url as CFURL), let font = CGFont(provider) else { preconditionFailure("Missing shared card-value.ttf") }
-        return font
+              let typeface = try? CardTypeface(url: url) else { preconditionFailure("Missing shared card-value.ttf") }
+        return typeface
     }()
+
 }
 extension UIColor {
     convenience init(hex: String) {

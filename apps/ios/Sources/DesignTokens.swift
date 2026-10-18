@@ -2,8 +2,8 @@
 import Foundation
 enum KTMGeometry {
 static let ratio: CGFloat = 1.5454545454545454
-static let valueX: CGFloat = 0.0523
-static let valueCap: CGFloat = 0.0317
+static let valueX: CGFloat = 0.0492
+static let valueCap: CGFloat = 0.0312
 static let nameY: CGFloat = 0.398
 static let drinkY: CGFloat = 0.615
 static let genreY: CGFloat = 0.831
@@ -38,4 +38,11 @@ static let size: CGFloat = 18
 static let lineHeight: CGFloat = 22
 static let tracking: CGFloat = 0.02
 }
+}
+enum CardValueMetrics {
+static let capHeight: CGFloat = 0.708
+static let capTop: CGFloat = 0.065
+static let ascent: CGFloat = 1.084
+static let descent: CGFloat = 0.491
+static let tracking: CGFloat = -0.065
 }
