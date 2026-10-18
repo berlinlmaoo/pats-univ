@@ -89,3 +89,44 @@ struct MemberPhoto: View {
         }.frame(width: size, height: size).clipShape(RoundedRectangle(cornerRadius: Theme.controlRadius)).accessibilityLabel(L.t("native.photo"))
     }
 }
+
+/// The full-screen presentation owns its refresh task because covering the card can cancel its task.
+struct EnlargedQRView: View {
+    @State private var deadline: QRDeadline?
+    @StateObject private var resource = Resource()
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var phase
+    init(initial: QRDeadline?) { _deadline = State(initialValue: initial) }
+    var body: some View {
+        ZStack {
+            Color(uiColor: UIColor(hex: Theme.colors["brand"]?["maroon"] ?? "#360c0c")).ignoresSafeArea()
+            VStack(spacing: Theme.padding) {
+                HStack { Spacer(); Button(L.t("common.close")) { dismiss() }.buttonStyle(.plain).frame(minWidth: 44, minHeight: 44) }
+                Spacer()
+                TimelineView(.periodic(from: .now, by: 1)) { time in
+                    if let deadline, deadline.remaining(at: time.date) > 0 && phase == .active && resource.error == nil {
+                        QRImage(value: deadline.token, onTile: true).padding(24)
+                    } else if resource.loading { Text(L.t("common.loading")) }
+                    else { Text(resource.error ?? L.t("native.expired")); Button(L.t("common.retry")) { Task { await refresh() } }.buttonStyle(.plain).frame(minHeight: 44) }
+                }
+                Spacer()
+            }.padding(Theme.padding).foregroundStyle(Color.white)
+        }.task {
+            UIApplication.shared.isIdleTimerDisabled = true
+            if deadline == nil { await refresh() }
+            while !Task.isCancelled {
+                let delay = max(2, min(30, (deadline?.expiresAt.timeIntervalSinceNow ?? 5) - 5))
+                do { try await Task.sleep(for: .seconds(delay)) } catch { break }
+                if phase == .active { await refresh() }
+            }
+        }.onDisappear { UIApplication.shared.isIdleTimerDisabled = false; deadline = nil }
+            .onChange(of: phase) { _, value in
+                UIApplication.shared.isIdleTimerDisabled = value == .active
+                if value != .active { deadline = nil } else { Task { await refresh() } }
+            }
+    }
+    private func refresh() async {
+        await resource.load("/api/me/card-token")
+        deadline = resource.error == nil ? QRDeadline(response: resource.data, receivedAt: resource.receivedAt, requestStartedAt: resource.requestedAt) : nil
+    }
+}

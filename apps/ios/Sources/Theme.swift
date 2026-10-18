@@ -202,7 +202,7 @@ struct Badge: View {
     var member = false
     private var tone: String {
         if ["REVOKED", "REJECTED", "INACTIVE", "inactive", "revoked"].contains(value) { return "danger" }
-        if ["DELIVERED", "APPROVED", "CONFIRMED", "FULFILLED", "open", "active", "ktm.checkedIn"].contains(value) { return "success" }
+        if ["DELIVERED", "APPROVED", "CONFIRMED", "FULFILLED", "open", "active", "ACTIVE", "ktm.checkedIn"].contains(value) { return "success" }
         if ["PENDING", "ENCODED", "EXPIRED", "CLOSED", "closed"].contains(value) { return "warning" }
         if ["IN_BATCH", "SENT_TO_VENDOR", "RECEIVED_HQ", "upcoming", "ISSUED"].contains(value) { return "accent" }
         return "neutral"

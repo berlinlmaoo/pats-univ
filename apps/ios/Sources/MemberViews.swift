@@ -32,21 +32,7 @@ struct MemberCardView: View {
                 Text(L.t("app.cardQrBody", ["seconds": String(Int(deadline?.ttl ?? 60))])).font(Theme.body(13)).foregroundStyle(Theme.muted)
             } else { Notice(text: L.t("app.noMemberProfile")) }
         }
-        .fullScreenCover(isPresented: $enlarged) {
-            ZStack {
-                Color(uiColor: UIColor(hex: Theme.colors["brand"]?["maroon"] ?? "#360c0c")).ignoresSafeArea()
-                VStack(spacing: Theme.padding) {
-                    HStack { Spacer(); Button(L.t("common.close")) { enlarged = false }.frame(minWidth: 44, minHeight: 44) }
-                    Spacer()
-                    TimelineView(.periodic(from: .now, by: 1)) { time in
-                        if let deadline, deadline.remaining(at: time.date) > 0 && phase == .active && state.error == nil {
-                            QRImage(value: deadline.token, onTile: true).padding(24)
-                        } else { Text(L.t("native.expired")) }
-                    }
-                    Spacer()
-                }.padding(Theme.padding).foregroundStyle(Color.white)
-            }
-        }
+        .fullScreenCover(isPresented: $enlarged) { EnlargedQRView(initial: deadline) }
         .task {
             UIApplication.shared.isIdleTimerDisabled = true
             guard store.member.exists else { return }
@@ -57,7 +43,7 @@ struct MemberCardView: View {
             }
         }
         .refreshable { await refresh(); await store.reload() }
-        .onDisappear { UIApplication.shared.isIdleTimerDisabled = false; deadline = nil; linkReader.cancel() }
+        .onDisappear { if !enlarged { UIApplication.shared.isIdleTimerDisabled = false }; deadline = nil; linkReader.cancel() }
         .onChange(of: phase) { _, value in
             UIApplication.shared.isIdleTimerDisabled = value == .active
             if value != .active { deadline = nil } else { Task { await refresh() } }
