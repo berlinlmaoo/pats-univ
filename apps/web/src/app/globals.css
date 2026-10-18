@@ -149,7 +149,7 @@
     font-family: var(--font-ktm);
     font-weight: 900;
     text-transform: uppercase;
-    letter-spacing: -0.04em;
+    letter-spacing: var(--pats-card-value-tracking);
   }
   /* The gold rule under the card's navy header. */
   .gold-rule {

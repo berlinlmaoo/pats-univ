@@ -105,7 +105,7 @@ Status mapping (unchanged meaning): card `NOT_PRINTED` neutral · `IN_BATCH`/`SE
 | Face | Role | Web / Android | iOS |
 |---|---|---|---|
 | **Graduate** (Google Fonts, OFL) | The card header's collegiate slab. **Display only, one line per screen**: page titles, the auth/join hero, the digital ID. Always upper case | `next/font/google` / `@expo-google-fonts/graduate` | bundled `Graduate-Regular.ttf` |
-| **Card value font** (`fonts.cardValue`, `--font-card`) | KTM values only. ONE embedded file on every platform and in print: `packages/shared/assets/fonts/card-value.ttf`. Now Figtree Black (closest free match, tracking −0.04 em measured against `example-front.png`); becomes the licensed Avenir LT Pro Black by replacing the file. **Never system Avenir**: the card must look identical on web, iOS and Android | `next/font/local` / `expo-font` | same file via `expo-font` |
+| **Card value font** (`fonts.cardValue`, `--font-card`) | KTM values only. ONE embedded file on every platform and in print: `packages/shared/assets/fonts/card-value.ttf`. **Avenir Black** (Monotype, licensed App + Web; owner holds the invoice; private repo only, never copied anywhere public), tracking **−0.065 em**, cap height 0.708 em, fitted to `example-front.png` within 0.3% of card width. **Never system Avenir**: the card must look identical on web, iOS and Android | `next/font/local` / `expo-font` | same file via `expo-font` |
 | **Figtree** (OFL) | Everything else; close to Avenir's geometry | `next/font/google` 400–900 / `@expo-google-fonts/figtree` | same (or system Avenir Next for body if preferred, keep one) |
 
 Graduate was picked against the card's "PATS UNIVERSITY" (compared with Alfa Slab One, Bevan, Ultra, Holtwood, Roboto Slab, Arvo): it has the same collegiate letterforms (square S, wide R, bracketed slabs) but ships one light weight, so it is drawn with a stroke of `varsityStroke` (0.045 em) in the text colour (`-webkit-text-stroke` + `paint-order: stroke fill` on web), which matches the card's heavy block.
@@ -139,7 +139,7 @@ Web: `apps/web/src/components/ui` (+ `components/ktm`). App: `apps/mobile/src/co
 
 | Component | Rules |
 |---|---|
-| **KTM card** (`KtmCard`) | Background = official blank front (`/ktm/front-{800,1600}.webp`; app: bundled @2x/@3x WebP). Overlaid live values NAME / FAVORITE DRINK / FAVORITE GENRE in `ktm-value` (the one card-value font), **#000, all caps, −0.04 em**, positioned by the `ktm` geometry token (fractions of the artwork, so it scales from a 120 px thumbnail to full screen); values shrink to fit their max width, never clip or wrap. The QR is **white modules on transparent inside the maroon tile** (EC M). NIM is never on the card. Flip button shows the official back (`/ktm/back-*.webp`). Thumbnails (member detail, lists) omit the QR. `aspect-ratio` = 3213/2079, `shadow-card`. |
+| **KTM card** (`KtmCard`) | Background = official blank front (`/ktm/front-{800,1600}.webp`; app: bundled @2x/@3x WebP). Overlaid live values NAME / FAVORITE DRINK / FAVORITE GENRE in `ktm-value` (the one card-value font, Avenir Black), **#000, all caps, −0.065 em**, positioned by the `ktm` geometry token (fractions of the artwork, so it scales from a 120 px thumbnail to full screen); values shrink to fit their max width, never clip or wrap. The QR is **white modules on transparent inside the maroon tile** (EC M). NIM is never on the card. Flip button shows the official back (`/ktm/back-*.webp`). Thumbnails (member detail, lists) omit the QR. `aspect-ratio` = 3213/2079, `shadow-card`. |
 | **Band** | `bg-band text-band-fg gold-rule`. Holds the crest (`Wordmark`), a heavy-caps label, and band-styled controls (`LanguageSwitch onBand`, white/10 hover). |
 | **Wordmark / BrandLockup** | `Wordmark` = full crest (LOGO-01) at `size.crest` 40 (48 sidebar, 72 auth). `BrandLockup tone=cream|navy` = official ribbon lockup files. Alt "PATS University"; lockup decorative when the crest is present. |
 | **Page header** | Varsity title (`varsity`), muted description ≤ 2 lines, actions right, 3 px gold rule below. One varsity line per page. |
@@ -182,7 +182,7 @@ Web: `apps/web/src/components/ui` (+ `components/ktm`). App: `apps/mobile/src/co
 | Page | 91.6 × 60 mm = CR80 85.6 × 54 mm + 3 mm bleed; TrimBox/BleedBox set |
 | Safe area | 4 mm inside trim |
 | Printed data | **Name, favorite drink, favorite genre, QR.** No NIM. Song and quote stay digital |
-| Values | The card-value font (`packages/shared/assets/fonts/card-value.ttf`), embedded; #000, caps, −0.04 em |
+| Values | The card-value font (`packages/shared/assets/fonts/card-value.ttf`), embedded (Avenir Black); #000, caps, −0.065 em |
 | QR | White modules on the maroon tile, EC M, ≥ 18 mm; scan-tested before a vendor run |
 | Raster art | ≥ 300 dpi at printed size (`front.jpg`/`back.jpg` are 1440 px ≈ 400 dpi) |
 

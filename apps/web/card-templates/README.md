@@ -8,7 +8,7 @@ Berlin, 18 Oct 2026). `placeholder/` is the old token-built card, kept for refer
 ## ktm-2026
 
 - Front: `front.jpg` (the official blank front) on the trim box; values NAME / FAVORITE DRINK /
-  FAVORITE GENRE in `fonts/card-value.ttf`, black, all caps, −0.04 em; the QR in **white modules
+  FAVORITE GENRE in `fonts/card-value.ttf` (licensed Avenir Black), black, all caps, −0.065 em; the QR in **white modules
   inside the artwork's maroon tile** (`{{qrInverse}}`, 19.7 mm, error correction M). No NIM.
 - Back: `back.jpg`, the official back as-is.
 - Bleed: the artwork has no bleed of its own, so the same image is stretched underneath to fill the
@@ -16,7 +16,8 @@ Berlin, 18 Oct 2026). `placeholder/` is the old token-built card, kept for refer
 - `front.jpg` / `back.jpg` come from `tools/brand/make-assets.sh` (1440 px ≈ 427 dpi at 85.6 mm).
 - `fonts/card-value.ttf` is a **copy** of `packages/shared/assets/fonts/card-value.ttf` (the
   template folder is all the print container ships). `test/card-print.test.ts` fails if the two
-  differ: when the licensed Avenir replaces the shared file, copy it here too.
+  differ: whenever the shared file changes, copy it here too. The font is Monotype-licensed:
+  this repo is private and the file must never be copied anywhere public.
 - An inverted QR (light on dark) scans on current iOS/Android cameras and the crew app; test a
   printed proof with the crew app before sending a batch to the vendor.
 

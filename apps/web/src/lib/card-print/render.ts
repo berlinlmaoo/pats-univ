@@ -168,7 +168,9 @@ const FIT_SCRIPT = `(() => {
     const min = Number(opts.min || 6);
     el.style.maxHeight = 'none';
     let size = parseFloat(getComputedStyle(el).fontSize) * 0.75;
-    const fits = () => el.scrollHeight <= parseFloat(getComputedStyle(el).lineHeight) * lines + 0.5 && el.scrollWidth <= el.clientWidth + 0.5;
+    // Count line boxes by the box's own height, not scrollHeight: a face with tall ascent/descent
+    // (Avenir: 1.575 em) overflows a line-height-1 box, so scrollHeight > one line even on one line.
+    const fits = () => el.getBoundingClientRect().height <= parseFloat(getComputedStyle(el).lineHeight) * lines + 0.5 && el.scrollWidth <= el.clientWidth + 0.5;
     while (!fits() && size > min) {
       size = Math.max(min, size - 0.25);
       el.style.fontSize = size + 'pt';
