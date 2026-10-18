@@ -16,7 +16,7 @@ enum Config {
         guard let url = URL(string: raw, relativeTo: baseURL)?.absoluteURL else { return nil }
         #if PATS_DEV_SERVER
         if url.host == production.host, baseURL.host != production.host,
-           ["/api/social/media-file", "/api/loyalty/receipt-file"].contains(url.path),
+           ["/api/social/media-file", "/api/loyalty/receipt-file", "/api/photos/file"].contains(url.path),
            let signed = URLComponents(url: url, resolvingAgainstBaseURL: true),
            var target = URLComponents(url: baseURL, resolvingAgainstBaseURL: true) {
             target.percentEncodedPath = signed.percentEncodedPath; target.percentEncodedQuery = signed.percentEncodedQuery
@@ -107,6 +107,46 @@ actor APIClient {
         NotificationCenter.default.post(name: .patsSessionChanged, object: nil)
     }
     func updateMe(_ me: JSON) throws { guard session.exists else { return }; session["me"] = me; try persist() }
+    /// Refresh identity on launch as well as profile data: UUID migration can replace both IDs.
+    func refreshMe() async throws -> JSON {
+        let epoch = generation
+        let me = try await call("GET", "/api/me")
+        guard epoch == generation, session.exists else { throw CancellationError() }
+        try updateMe(me)
+        return me
+    }
+    func replacePhoto(_ bytes: Data) async throws -> JSON {
+        guard !bytes.isEmpty, bytes.count <= 5 * 1024 * 1024 else { throw APIError(code: "MEDIA_INVALID") }
+        let epoch = generation
+        func send(_ token: String) async throws -> JSON {
+            var request = URLRequest(url: Config.url("/api/me/photo")); request.httpMethod = "PUT"; request.httpBody = bytes
+            request.setValue("image/jpeg", forHTTPHeaderField: "Content-Type")
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            let (data, response) = try await transport.data(for: request)
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            let value = (try? JSON.parse(data)) ?? .null
+            guard (200..<300).contains(status) else { throw APIError(code: value["error"]["code"].text.isEmpty ? "MEDIA_INVALID" : value["error"]["code"].text, status: status) }
+            guard value.exists else { throw APIError(code: "MEDIA_INVALID") }
+            return value
+        }
+        do {
+            let token = try await accessToken()
+            guard epoch == generation, session.exists else { throw CancellationError() }
+            let result: JSON
+            do { result = try await send(token) }
+            catch let error as APIError where error.status == 401 {
+                guard epoch == generation, session.exists else { throw CancellationError() }
+                let next = try await accessToken(forceFor: token)
+                guard epoch == generation, session.exists else { throw CancellationError() }
+                result = try await send(next)
+            }
+            guard epoch == generation, session.exists else { throw CancellationError() }
+            try updateMe(result); return result
+        } catch let error as APIError {
+            if error.invalidSession && epoch == generation { clear() }
+            throw error
+        }
+    }
     func logout() async {
         let token = session["refreshToken"].text
         clear()

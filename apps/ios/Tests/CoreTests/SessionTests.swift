@@ -10,6 +10,7 @@ private actor StubServer {
     var refreshes = 0
     var reads = 0
     var mode = "success"
+    var photoRequests: [(String, String, String)] = []
     func setMode(_ value: String) { mode = value }
     func handle(_ request: URLRequest) async throws -> (Int, JSON) {
         if request.url?.path == "/api/auth/refresh" {
@@ -19,6 +20,10 @@ private actor StubServer {
             if mode == "revoked" { return (401, .object(["error": .object(["code": .str("UNAUTHENTICATED")])])) }
             return (200, .object(["accessToken": .str("next-access"), "refreshToken": .str("next-refresh"), "accessTokenExpiresAt": .str("2099-01-01T00:00:00Z")]))
         }
+        if request.url?.path == "/api/me/photo" {
+            photoRequests.append((request.httpMethod ?? "", request.value(forHTTPHeaderField: "Content-Type") ?? "", request.value(forHTTPHeaderField: "Authorization") ?? ""))
+        }
+        if mode == "uuid" { return (200, .object(["user": .object(["id": .str("019a0000-0000-7000-8000-000000000001")]), "member": .object(["id": .str("019a0000-0000-7000-8000-000000000002")])])) }
         reads += 1
         if mode == "slow" || mode == "slowUnauthorized" { try await Task.sleep(for: .milliseconds(80)) }
         if ["unauthorized", "slowUnauthorized"].contains(mode) && request.value(forHTTPHeaderField: "Authorization") == "Bearer old-access" {
@@ -53,6 +58,48 @@ final class SessionTests: XCTestCase {
         let api = APIClient(transport: URLSession(configuration: config), storage: storage)
         try await api.install(.object(["accessToken": .str("old-access"), "refreshToken": .str("old-refresh"), "accessTokenExpiresAt": .str(expired ? "2000-01-01T00:00:00Z" : "2099-01-01T00:00:00Z"), "me": .object(["user": .object(["id": .str("member")])])]))
         return (api, storage)
+    }
+    func testLaunchRefreshPersistsMigratedUUIDIdentities() async throws {
+        let (api, storage) = try await make(expired: false)
+        await StubProtocol.server.setMode("uuid")
+        let value = try await api.refreshMe()
+        XCTAssertEqual(value["user"].id, "019a0000-0000-7000-8000-000000000001")
+        let restored = APIClient(storage: storage)
+        let me = await restored.cachedMe
+        XCTAssertEqual(me["user"].id, value["user"].id)
+        XCTAssertEqual(me["member"].id, "019a0000-0000-7000-8000-000000000002")
+    }
+    func testLaunchRefreshCannotPersistPreviousAccountAfterLogout() async throws {
+        let (api, storage) = try await make(expired: false)
+        await StubProtocol.server.setMode("slow")
+        let refresh = Task { try await api.refreshMe() }
+        try await Task.sleep(for: .milliseconds(10)); await api.clear()
+        do { _ = try await refresh.value; XCTFail("Old profile must not restore the session") } catch { }
+        XCTAssertNil(storage.data)
+    }
+    func testPhotoReplacementUsesAuthenticatedImageBodyAndRetriesExpiredToken() async throws {
+        let (api, _) = try await make(expired: false)
+        await StubProtocol.server.setMode("unauthorized")
+        _ = try await api.replacePhoto(Data([0xff, 0xd8, 0xff, 0xd9]))
+        let photos = await StubProtocol.server.photoRequests
+        XCTAssertEqual(photos.count, 2)
+        XCTAssertEqual(photos.first?.0, "PUT")
+        XCTAssertEqual(photos.first?.1, "image/jpeg")
+        XCTAssertEqual(photos.last?.2, "Bearer next-access")
+    }
+    func testPhotoReplacementRejectsOversizedImageWithoutSendingIt() async throws {
+        let (api, _) = try await make(expired: false)
+        do { _ = try await api.replacePhoto(Data(repeating: 0, count: 5 * 1024 * 1024 + 1)); XCTFail() } catch { }
+        let photos = await StubProtocol.server.photoRequests
+        XCTAssertTrue(photos.isEmpty)
+    }
+    func testPhotoReplacementCannotRestoreLoggedOutSession() async throws {
+        let (api, storage) = try await make(expired: false)
+        await StubProtocol.server.setMode("slow")
+        let photo = Task { try await api.replacePhoto(Data([1])) }
+        try await Task.sleep(for: .milliseconds(10)); await api.clear()
+        do { _ = try await photo.value; XCTFail() } catch { }
+        XCTAssertNil(storage.data)
     }
     func testConcurrentCallsRotateRefreshTokenOnce() async throws {
         let (api, storage) = try await make()
