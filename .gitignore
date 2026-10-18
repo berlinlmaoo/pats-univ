@@ -45,3 +45,9 @@ coverage/
 
 # Local file storage (print PDFs, flyers)
 apps/web/.data/
+
+# Native iOS (XcodeGen is the source of truth)
+apps/ios/*.xcodeproj/
+apps/ios/.build/
+apps/ios/.swiftpm/
+*.xcuserstate
