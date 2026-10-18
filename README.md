@@ -2,7 +2,11 @@
 
 Aplikasi keanggotaan PATS: KTM ber-NFC, check-in event oleh admin, XP & leaderboard, reward, laporan PR, social hub per kota, reservasi venue, roaming antar kota, dan dashboard HQ.
 
-Repo privat. Status: showcase prototype — **Phase 0 dan 1 selesai** (lihat [docs/PHASE0-REPORT.md](docs/PHASE0-REPORT.md) dan [docs/PHASE1-REPORT.md](docs/PHASE1-REPORT.md)). Prioritas: sistem absensi berbasis kartu (Phase 0–2).
+Repo privat. Status: showcase prototype — implementasi Phase 0–5 tersedia; status verifikasi dan dependensi tersisa ada di [docs/STATUS.md](docs/STATUS.md).
+
+18 Oktober 2026: app iOS native SwiftUI tersedia di [`apps/ios`](apps/ios/README.md).
+Expo dipertahankan sebagai referensi fitur; backend tetap. Status dan batas QA native:
+[`docs/IOS-NATIVE.md`](docs/IOS-NATIVE.md). Build iOS saat ini hanya compile, tanpa simulator.
 
 ## Dokumen
 
@@ -17,11 +21,12 @@ Repo privat. Status: showcase prototype — **Phase 0 dan 1 selesai** (lihat [do
 | Path | Isi |
 |---|---|
 | `apps/web` | Next.js 16 (App Router) + Prisma 7 + PostgreSQL: API, `/join`, dashboard HQ |
-| `apps/mobile` | Expo SDK 58 (React Native): app member + admin kota |
-| `apps/realtime` | Placeholder server Socket.IO (Phase 4) |
+| `apps/mobile` | Expo SDK 58 (React Native): referensi fitur member + admin kota |
+| `apps/ios` | App native SwiftUI member/admin/HQ, XcodeGen, Core NFC |
+| `apps/realtime` | Server Socket.IO untuk chat dan invalidasi data live |
 | `packages/shared` | Design token, i18n EN/ID, validator, format angka/tanggal, NIM, setting |
 | `tools/card-station` | Rust + PC/SC: encode kartu NTAG213 dengan ACR122U |
-| `infra` | Docker Compose (postgres, minio, web, realtime) |
+| `infra` | Docker Compose (postgres, web, realtime, volume storage lokal) |
 
 ## Menjalankan lokal
 

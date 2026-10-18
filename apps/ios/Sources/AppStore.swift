@@ -16,15 +16,20 @@ import UserNotifications
         me = await APIClient.shared.cachedMe; signedIn = await APIClient.shared.signedIn
         if signedIn { await reload() }; loading = false
     }
+    func synchronize() async {
+        let snapshot = await APIClient.shared.snapshot()
+        signedIn = snapshot.exists; me = snapshot["me"]
+        if !signedIn { offline = false; link = nil }
+    }
     func login(_ result: JSON) async throws {
         try await APIClient.shared.install(result); me = result["me"]; signedIn = true; offline = false
         setLocale(user["locale"].text)
     }
     func reload() async {
         do { me = try await APIClient.shared.call("GET", "/api/me"); try await APIClient.shared.updateMe(me); signedIn = true; offline = false }
-        catch { offline = true; signedIn = await APIClient.shared.signedIn; if !signedIn { me = .null } }
+        catch { offline = true; signedIn = await APIClient.shared.signedIn; if !signedIn { me = .null; link = nil } }
     }
-    func signOut() async { await APIClient.shared.logout(); me = .null; signedIn = false; offline = false }
+    func signOut() async { await APIClient.shared.logout(); me = .null; signedIn = false; offline = false; link = nil }
     func setLocale(_ value: String) { locale = value == "en" ? "en" : "id"; UserDefaults.standard.set(locale, forKey: "locale") }
     func open(_ url: URL) { if let token = CardLink.token(url.absoluteString) { link = .card(token) } }
 }
@@ -39,17 +44,23 @@ enum AppLink: Identifiable {
     @Published var data: JSON = .null
     @Published var loading = false
     @Published var error: String?
+    @Published var failureCode: String?
+    private(set) var requestedAt = Date()
+    private(set) var receivedAt = Date()
     private var requestID = 0
     func load(_ path: String, auth: Bool = true) async {
         requestID += 1; let id = requestID
-        loading = true; error = nil
+        loading = true; error = nil; failureCode = nil; requestedAt = Date()
         do {
             let result = try await APIClient.shared.call("GET", path, auth: auth)
             guard id == requestID, !Task.isCancelled else { return }
-            data = result; loading = false
+            data = result; receivedAt = Date(); loading = false
         } catch {
             guard id == requestID else { return }
-            if !Task.isCancelled { self.error = error.localizedDescription }
+            if !Task.isCancelled {
+                self.error = error.localizedDescription; failureCode = (error as? APIError)?.code
+                if ["FORBIDDEN", "UNAUTHENTICATED", "ACCOUNT_DISABLED"].contains(failureCode ?? "") { data = .null }
+            }
             loading = false
         }
     }

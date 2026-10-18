@@ -2,12 +2,12 @@ import SwiftUI
 import CoreImage.CIFilterBuiltins
 
 struct Room: Equatable { var kind: String; var id: String }
-struct DataPage<Content: View>: View {
+@MainActor struct DataPage<Content: View>: View {
     let title: String
     let path: String
     var room: Room?
     var poll = false
-    @ViewBuilder var content: (JSON, @escaping () async -> Void) -> Content
+    @ViewBuilder var content: @MainActor (JSON, @escaping @MainActor () async -> Void) -> Content
     @StateObject private var resource = Resource()
     @StateObject private var live = RealtimeRoom()
     @Environment(\.scenePhase) private var phase
@@ -80,9 +80,13 @@ struct Choice: View {
     var allowEmpty = false
     var body: some View {
         Picker(L.t(label), selection: $selection) {
-            if allowEmpty || selection.isEmpty { Text(L.t("common.notSet")).tag("") }
+            if allowEmpty || (selection.isEmpty && !options.contains { $0.id.isEmpty }) { Text(L.t("common.notSet")).tag("") }
             ForEach(options) { option in Text(option["name"].text.isEmpty ? option["title"].text : option["name"].text).tag(option.id) }
         }.pickerStyle(.menu).frame(minHeight: 44).frame(maxWidth: .infinity, alignment: .leading)
+            .onAppear { selectDefault() }.onChange(of: options) { _, _ in selectDefault() }
+    }
+    private func selectDefault() {
+        if !allowEmpty, !options.contains(where: { $0.id == selection }), let first = options.first { selection = first.id }
     }
 }
 struct NavigationRow<Destination: View>: View {
@@ -125,7 +129,7 @@ struct QRImage: View {
 struct RemoteImage: View {
     var url: String
     var body: some View {
-        AsyncImage(url: URL(string: url, relativeTo: Config.baseURL)) { phase in
+        AsyncImage(url: Config.mediaURL(url)) { phase in
             switch phase {
             case .success(let image): image.resizable().scaledToFit()
             case .failure: Image(systemName: "photo").foregroundStyle(Theme.muted).frame(height: 80)

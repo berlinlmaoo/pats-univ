@@ -19,7 +19,9 @@ struct HandoverView: View {
             if preview.exists {
                 Panel {
                     MemberIdentity(member: preview["member"]); Badge(value: preview["card"]["status"].text)
-                    if preview["issue"].exists { Notice(text: L.status(preview["issue"]["code"].text), error: true) }
+                    if preview["issue"].exists {
+                        Notice(text: handoverIssue, error: true)
+                    }
                     ConfirmAction(label: "app.handoverConfirm", message: L.t("app.handoverCheck") + "\n" + preview["member"]["fullName"].text + " · " + preview["member"]["nim"].text, disabled: mutation.busy || preview["issue"].exists || scan == nil) {
                         guard let scan else { return }
                         await mutation.run {
@@ -30,6 +32,14 @@ struct HandoverView: View {
                 }
             }
         }.onDisappear { reader.cancel() }
+    }
+    private var handoverIssue: String {
+        switch preview["issue"]["code"].text {
+        case "ALREADY_DELIVERED": return L.t("app.handoverAlready", ["date": L.date(preview["issue"]["at"].text), "name": preview["issue"]["by"].text])
+        case "MEMBER_INACTIVE": return L.t("app.resultInactive")
+        case "OTHER_CITY": return L.t("app.handoverOtherCity", ["city": preview["member"]["city"]["name"].text])
+        default: return L.t("nfc.readFailed")
+        }
     }
 }
 struct MemberCardsView: View {
@@ -161,7 +171,7 @@ struct PendingEncode: Codable {
                 try await reportPending()
             } catch {
                 if pending == nil { await release(failure: "NFC session did not finish") }
-                if error is TagFailure { throw NSError(domain: "PATS", code: 1, userInfo: [NSLocalizedDescriptionKey: L.t("native.nfcFailure")]) }
+                if error is TagFailure { mutation.message = L.t("app.encodeNothingChanged") }
                 throw error
             }
         }
@@ -202,7 +212,7 @@ struct EncodeScreen: View {
     }
     var body: some View {
         Page(title: "app.adminEncode") {
-            EncodeStationContent(station: station, lookup: $lookup, camera: $camera, batchID: batchID, grantID: grantID, reencode: reencode)
+            EncodeStationContent(station: station, mutation: station.mutation, lookup: $lookup, camera: $camera, batchID: batchID, grantID: grantID, reencode: reencode)
         }
         .task { if !initialLookup.isEmpty && station.pending == nil { lookup = initialLookup; await prepare() } }
         .sheet(isPresented: $camera) { ScannerSheet { value in lookup = value; Task { await prepare() } } }
@@ -212,12 +222,13 @@ struct EncodeScreen: View {
 }
 private struct EncodeStationContent: View {
     @ObservedObject var station: EncodeStation
+    @ObservedObject var mutation: Mutation
     @Binding var lookup: String
     @Binding var camera: Bool
     let batchID: String, grantID: String
     let reencode: Bool
     var body: some View {
-        MutationState(mutation: station.mutation)
+        MutationState(mutation: mutation)
         if station.pending != nil {
             Notice(text: L.t("native.retryReport"))
             Button(L.t("app.encodeReportAgain")) { Task { await station.retryReport() } }.buttonStyle(PATSButtonStyle()).disabled(station.mutation.busy)

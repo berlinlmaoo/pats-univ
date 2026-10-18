@@ -11,8 +11,8 @@
   member/admin capability detection, public `/c/<token>` links, native push delegate,
   Socket.IO v4 over URLSession WebSocket following NEXUS's dependency-free approach.
 - Member screens: implemented and compile checked; camera, media and live service/device QA pending.
-- Admin screens and NFC: implemented and compile checked; 11 macOS SwiftPM tests pass.
-- Parity audit: final static audit in progress; no simulator or app has been launched.
+- Admin screens and NFC: implemented and compile checked; 20 macOS SwiftPM tests pass.
+- Static parity audit: complete against `pc/android-native` at `282ac2f` and the Expo sources. Device/visual QA remains pending; no simulator or app has been launched.
 
 ## Build without running
 
@@ -88,10 +88,73 @@ CC or static/dynamic lock pages. Failed hardware writes release the lease. A suc
 write is stored as a user/origin-scoped pending report in Keychain; retry submits `/encoded` without
 opening an NFC session. The station identifier is random per installation, stored in Keychain.
 
-`swift test --package-path apps/ios --jobs 2` runs on macOS without a simulator. The fake tag checks
+`swift test --package-path apps/ios --build-system native --jobs 2` runs on macOS without a simulator. The fake tag checks
 all three chip types, exact shared station fixtures, interruption at every command followed by
 recovery, wrong passwords/PACK, readback failure, lock bits, malformed NDEF lengths, QR clock skew,
 card links/query escaping, and Socket.IO handshake/heartbeat/events/acknowledgements.
+
+## Parity audit and remaining gaps
+
+There are 39 Expo routes excluding the eight layout files (47 files in the route tree).
+Every non-layout route has a native destination; reusable views keep aliases on the same flow.
+The Android reference is the remote-tracking branch read locally, without changing or fetching it.
+
+| Expo route group | Native counterpart |
+|---|---|
+| `index`, auth `login` / `verify` | `RootView`, two states of `LoginView` |
+| `/c/:token` | `PublicCardView`; optional bearer, restricted server response, own-card navigation |
+| Member tabs `card`, `events`, `rewards`, `hub`, `profile` | `MemberCardView`, `EventsView`, `WalletView`, `SocialHubView`, `ProfileView` |
+| Member `event/:id`, `history`, `leaderboard`, `region-change` | `EventDetailView`, `HistoryView`, `LeaderboardView`, `RegionChangeView` |
+| Member `claims`, `promoter` | `ClaimsView`, including server-eligible MEMBER/PR forms and pending edits |
+| Shared `social-hub`, `social-channel`, `social-operations` | `SocialHubView`, `ChannelView` (channel or private conversation), `SocialOperationsView` |
+| Shared `roaming`, `reservation`, `notifications`, `notification-settings` | `RoamingView`, `ReservationView`, `NotificationsView`, `NotificationSettingsView` |
+| Admin tabs `tools`, `account` | `AdminToolsView`, shared `ProfileView` |
+| Admin `scan`, `scan/:eventId`, `scan/:eventId/manual` | `ScanEventPicker`, `ScanView`, `ManualCheckInView` |
+| Admin `city-events`, `new`, `:id`, `:id/edit` | `EventsView(admin:true)`, `EventEditor`, `EventDetailView(admin:true)`, `EventEditor(eventID:)` |
+| Admin `member-cards`, `member-cards/:id`, `handover` | `MemberCardsView`, `MemberCardsDetail`, `HandoverView` |
+| Admin `encode`, `encode/run` | `EncodingBatchesView`, `EncodeView` / `EncodeStation` (HQ batch, any card, or approved personal grant) |
+| Admin `reward-validation`, `claims-review`, `operations` | `RewardValidationView`, `ClaimsReviewView`, `CrewOperationsView` |
+
+Behavioral checks from source: server capabilities drive the member/crew shell and tools; the
+legacy LOCAL_ADMIN alias uses the server's capability list; native alerts confirm consequential
+actions; event forms send local city wall-clock fields and leave overnight conversion to the server;
+claims edit only pending entries; venue filters and reward codes use server state; draw slots and
+winner come from the server, including quarterly free credit. The wheel presents that saved winner
+and honors Reduce Motion. QR validity uses server time and conservatively deducts request transit.
+
+The final pass also checks request/response contracts, static localization references, property-list
+syntax, Keychain access class, origin-scoped sessions/reports, release exclusion of development
+configuration, screenshot payloads, signed-media paths and the absence of simulator commands.
+
+| Gap / limit | Disposition |
+|---|---|
+| Native UI, EN/ID × light/dark, small iPhone/iPad, Dynamic Type and keyboard layouts have not been visually exercised | Owner QA; compile success is not visual evidence |
+| Live OTP, refresh rotation against the deployed server, concurrent crew actions, camera uploads/playback, socket reconnect/access expiry and notification routing have not been exercised in this app | Owner device/API smoke test; tests here use fake HTTP responses and tag IO |
+| NFC adapter, tag removal/cancellation, readback/protection and recovery on Berlin's iPhone | Physical QA with real 213/215/216 tags; no hardware success is fabricated |
+| Native push delivery | Backend supports Expo registration/delivery only. APNs permission/registration/delegate are prepared, but direct APNs registration/provider/unregister must be added separately |
+| Screenshot prevention on iOS | Platform limit: detection/reporting after a screenshot; screen recording hides the channel. No claim of guaranteed prevention |
+| HQ event metadata editor, draw prize/peak configuration, venue layout editor, payment recording, batch/vendor/export tools, reward catalogue settings, HQ region/re-encode approval | Existing web dashboard, matching Android/Expo boundaries. Supported native event lifecycle and approved personal re-encode remain available |
+| Product's editable song/genre/quote/photo profile | Existing `/api/me` PATCH accepts locale only. Current Android/Expo also display these fields read-only; a backend contract is needed to add editing |
+| Event deletion | The backend has no deletion endpoint. Native editing and publish/open/close match the supported API lifecycle |
+| Design adaptation | Native SF Symbols and native controls follow the NEXUS iOS pattern; the shared PATS palette, fonts, spacing and bilingual copy are reused |
+| Gallery import, OCR, media transcoding, comprehensive orphan-file cleanup | Outside current Android/Expo behavior; native camera capture and signed private uploads are included |
+
+## Validation record
+
+- Foundation and full member/admin implementation each compiled for the generic iOS Simulator SDK
+  before their respective Berlin commits. No simulator was started and the app was never run.
+- **20 macOS tests pass**: 12 encoder/presentation/protocol tests and 8 session tests. Tests cover
+  all shared command fixtures, interrupted writes at every command for all three chips, password
+  and PACK failures, readback/lock guards, QR clock/transit correction, query escaping, formatting,
+  Socket.IO packets, concurrent refresh, network failure, revocation, stale responses, server origin
+  isolation and an old unauthorized mutation arriving after another account signs in.
+- **1,340 keys per language**, identical EN/ID key sets, no duplicates. Literal UI-key references,
+  Info.plist, entitlements and privacy-manifest syntax pass static checks.
+- Backend, database, Expo implementation and remote branches are unchanged. No server fixtures,
+  accounts, pushes, deployment, simulator screenshots or hardware writes were created.
+- Final reliability changes compiled successfully with the required generic iOS Simulator destination,
+  two jobs and `~/dd-pats-ios`, after the NEXUS Xcode process exited. There are no app-source
+  compiler warnings; Xcode only notes skipped AppIntents metadata because the app has no intents.
 
 ## Owner tasks / limits
 
@@ -104,3 +167,5 @@ card links/query escaping, and Socket.IO handshake/heartbeat/events/acknowledgem
 - App Store: provisioning/signing, APNs key outside Git, public AASA with team/bundle ID,
   privacy/legal review, artwork, listing/screenshots and TestFlight/device QA.
 - Final HQ artwork/legal and notification copy dependencies in Phase 5 remain outstanding.
+
+IOS-NATIVE DONE (QA pending)

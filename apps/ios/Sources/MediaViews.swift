@@ -133,7 +133,7 @@ struct ReceiptCaptureView: View {
             CaptureControls(imageOnly: true) { media in
                 guard media.data.count <= 5 * 1024 * 1024 else { throw APIError(code: "MEDIA_INVALID") }
                 let signed = try await APIClient.shared.call("POST", "/api/loyalty/receipt-upload", .object(["contentType": .str(media.contentType)]))
-                guard let url = URL(string: signed["uploadUrl"].text) else { throw APIError(code: "MEDIA_INVALID") }
+                guard let url = Config.mediaURL(signed["uploadUrl"].text) else { throw APIError(code: "MEDIA_INVALID") }
                 try await APIClient.shared.upload(media.data, to: url, contentType: media.contentType)
                 key = signed["key"].text
             }
@@ -150,7 +150,7 @@ struct MediaPlayback: View {
             else if let player {
                 VideoPlayer(player: player).frame(height: kind == "VOICE" ? 72 : 248).clipShape(RoundedRectangle(cornerRadius: 12))
             }
-        }.task(id: url) { if kind != "IMAGE", let u = URL(string: url) { player?.pause(); player = AVPlayer(url: u) } }
+        }.task(id: url) { if kind != "IMAGE", let u = Config.mediaURL(url) { player?.pause(); player = AVPlayer(url: u) } }
             .onDisappear { player?.pause(); player = nil }
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in player?.pause() }
     }

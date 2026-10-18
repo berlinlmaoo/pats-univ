@@ -16,16 +16,21 @@ enum L {
         let value = t(key, params.mapValues(\.text))
         return value == key ? t("errors.generic") : value
     }
-    static func count(_ v: Int) -> String { v.formatted(.number.locale(Locale(identifier: locale == "id" ? "id_ID" : "en_US"))) }
+    static func count(_ v: Int) -> String { v.formatted(.number.locale(Locale(identifier: "id_ID"))) }
     static func money(_ v: Int) -> String { "Rp " + v.formatted(.number.locale(Locale(identifier: "id_ID"))) }
     static func date(_ s: String, zone: String = "Asia/Jakarta") -> String {
         guard let date = Dates.parse(s) else { return s }
         let f = DateFormatter(); f.locale = Locale(identifier: locale == "id" ? "id_ID" : "en_GB")
-        f.timeZone = TimeZone(identifier: zone); f.dateFormat = "d MMM yyyy · HH.mm z"
-        return f.string(from: date)
+        f.timeZone = TimeZone(identifier: zone) ?? TimeZone(identifier: "Asia/Jakarta")!
+        var calendar = Calendar(identifier: .gregorian); calendar.timeZone = f.timeZone
+        f.dateFormat = calendar.component(.year, from: date) == calendar.component(.year, from: Date()) ? "d MMM · HH.mm" : "d MMM yyyy · HH.mm"
+        let abbreviation = ["Asia/Jakarta": "WIB", "Asia/Pontianak": "WIB", "Asia/Makassar": "WITA", "Asia/Jayapura": "WIT"][zone] ?? f.timeZone.abbreviation(for: date) ?? ""
+        return f.string(from: date) + " " + abbreviation
     }
     static func status(_ raw: String) -> String {
-        for key in ["cardStatus.\(raw)", "eventPhase.\(raw)", "checkInMethod.\(raw)", "role.\(raw)", "phase5.\(raw)", "loyalty.\(raw)", "social.\(raw)", "events.\(raw)"] {
+        let publicKeys = ["active": "cardPage.active", "pending": "cardPage.pending", "revoked": "cardPage.revokedTitle", "inactive": "cardPage.inactiveTitle", "paid": "phase5.paid", "unpaid": "phase5.unpaid"]
+        if let key = publicKeys[raw] { return t(key) }
+        for key in ["cardStatus.\(raw)", "eventPhase.\(raw)", "checkInMethod.\(raw)", "role.\(raw)", "phase5.\(raw)", "social.\(raw)", "loyalty.\(raw)", "events.\(raw)"] {
             let result = t(key); if result != key { return result }
         }
         return raw.replacingOccurrences(of: "_", with: " ").localizedCapitalized

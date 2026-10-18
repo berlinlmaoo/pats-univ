@@ -5,7 +5,12 @@ let package = Package(
     platforms: [.macOS(.v13)],
     products: [.library(name: "PATSCore", targets: ["PATSCore"])],
     targets: [
-        .target(name: "PATSCore", path: "Sources/Core"),
+        .target(name: "PATSCore", path: "Sources", exclude: [
+            "AdminCards.swift", "AdminEvents.swift", "AdminLoyalty.swift", "AdminToolsView.swift",
+            "AppStore.swift", "CardReader.swift", "ClaimsViews.swift", "FeatureComponents.swift",
+            "Info.plist", "MediaViews.swift", "MemberViews.swift", "PATSApp.swift", "RealtimeRoom.swift",
+            "Resources", "ScannerViews.swift", "SocialViews.swift", "Theme.swift", "PrizeWheel.swift"
+        ], sources: ["Core", "APIClient.swift", "Localization.swift"]),
         .testTarget(name: "PATSCoreTests", dependencies: ["PATSCore"], path: "Tests/CoreTests", resources: [.copy("Fixtures")])
     ]
 )

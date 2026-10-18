@@ -11,6 +11,7 @@ import SwiftUI
                 .font(Theme.body()).foregroundStyle(Theme.text).tint(Theme.accent)
                 .preferredColorScheme(theme == "dark" ? .dark : theme == "light" ? .light : nil)
                 .environment(\.locale, Locale(identifier: store.locale))
+                .onReceive(NotificationCenter.default.publisher(for: .patsSessionChanged).receive(on: RunLoop.main)) { _ in Task { await store.synchronize() } }
                 .onOpenURL { store.open($0) }
                 .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { if let url = $0.webpageURL { store.open(url) } }
                 .task {
@@ -52,6 +53,7 @@ struct LoginView: View {
     @State private var resendAt = Date.distantPast
     @State private var busy = false
     @State private var error: String?
+    @AppStorage("server") private var server = "development"
     var body: some View {
         Page(title: "app.loginTitle") {
             HStack {
@@ -82,6 +84,12 @@ struct LoginView: View {
                 Link(L.t("auth.joinLink"), destination: Config.production.appendingPathComponent("join"))
             }
             if busy { ProgressView().frame(maxWidth: .infinity) }
+            #if PATS_DEV_SERVER
+            Picker(L.t("native.server"), selection: $server) {
+                Text(L.t("native.development")).tag("development"); Text(L.t("native.production")).tag("production")
+            }.pickerStyle(.segmented).disabled(busy)
+                .onChange(of: server) { _, _ in otp = .null; code = ""; error = nil; Task { await APIClient.shared.clear() } }
+            #endif
         }
     }
     private func request() async {
@@ -125,6 +133,7 @@ struct ProfileView: View {
     @AppStorage("theme") private var theme = "system"
     @State private var logout = false
     @State private var leaveError: String?
+    @StateObject private var preference = Mutation()
     var body: some View {
         Page(title: "native.profile") {
             if store.offline { Notice(text: L.t("native.offline")) }
@@ -132,11 +141,21 @@ struct ProfileView: View {
                 Text(store.user["name"].text).font(Theme.title())
                 Text(store.user["email"].text).foregroundStyle(Theme.muted)
                 Text(store.member["nim"].text).monospacedDigit()
+                Text(store.user["phone"].text).foregroundStyle(Theme.muted)
+                Text(store.member.exists ? store.member["city"]["name"].text : store.user["city"]["name"].text)
+                if store.member.exists {
+                    Text(L.t("app.song") + ": " + store.member["favoriteSong"].text)
+                    Text(L.t("app.genre") + ": " + store.member["favoriteGenre"].text)
+                    Text(store.member["quotes"].text).italic()
+                    if store.member["isPromoter"].bool { Badge(value: "PR") }
+                }
                 Badge(value: store.user["role"].text)
             }
+            if store.member.exists { ProfileXPView(memberID: store.member.id) }
+            MutationState(mutation: preference)
             Picker(L.t("common.language"), selection: Binding(get: { store.locale }, set: { value in
                 store.setLocale(value)
-                Task { _ = try? await APIClient.shared.call("PATCH", "/api/me", .object(["locale": .str(value)])) }
+                Task { await preference.send("/api/me", body: .object(["locale": .str(value)]), method: "PATCH", after: { await store.reload() }) }
             })) { Text("Bahasa Indonesia").tag("id"); Text("English").tag("en") }.pickerStyle(.segmented)
             Picker(L.t("native.theme"), selection: $theme) {
                 Text(L.t("native.system")).tag("system"); Text(L.t("native.light")).tag("light"); Text(L.t("native.dark")).tag("dark")
@@ -160,30 +179,17 @@ struct ProfileView: View {
         .refreshable { await store.reload() }
         .alert(L.t("common.signOut"), isPresented: $logout) {
             Button(L.t("common.cancel"), role: .cancel) {}
-            Panel {
-                NavigationRow(title: "app.notificationsTitle", icon: "bell") { NotificationsView() }
-                if store.member.exists {
-                    NavigationRow(title: "app.historyTitle", icon: "clock") { HistoryView() }
-                    NavigationRow(title: "phase5.claimTitle", icon: "doc.text") { ClaimsView() }
-                    NavigationRow(title: "phase5.regionChange", icon: "globe.asia.australia") { RegionChangeView() }
-                    NavigationRow(title: "social.reservations", icon: "list.bullet") { SocialOperationsView() }
-                    ConfirmAction(label: "phase5.leave", message: L.t("phase5.leaveConfirm"), destructive: true) {
-                        do { _ = try await APIClient.shared.call("POST", "/api/me/leave", .object([:])); await store.signOut() }
-                        catch { leaveError = error.localizedDescription }
-                    }
-                    if let leaveError { Notice(text: leaveError, error: true) }
-                }
-            }
             Button(L.t("common.signOut"), role: .destructive) { Task { await store.signOut() } }
         }
     }
 }
 struct LinkDestination: View {
     var link: AppLink
+    @EnvironmentObject private var store: AppStore
     var body: some View {
         switch link {
         case .card(let token): PublicCardView(token: token)
-        case .event(let id): EventDetailView(eventID: id)
+        case .event(let id): EventDetailView(eventID: id, admin: store.admin)
         case .channel(let id): ChannelView(room: Room(kind: "channel", id: id))
         case .conversation(let id): ChannelView(room: Room(kind: "conversation", id: id))
         case .notifications: NotificationsView()
@@ -192,21 +198,26 @@ struct LinkDestination: View {
 }
 struct PublicCardView: View {
     let token: String
+    @EnvironmentObject private var store: AppStore
     @StateObject private var resource = Resource()
     var body: some View {
         Page(title: "app.tabCard") {
             ResourceState(resource: resource) { await load() }
             if resource.data.exists {
                 Badge(value: resource.data["state"].text)
+                if resource.data["state"].text == "revoked" { Notice(text: L.t("cardPage.revokedBody")) }
+                if resource.data["state"].text == "inactive" { Notice(text: L.t("cardPage.inactiveBody")) }
                 if resource.data["member"].exists {
                     Panel {
                         Text(resource.data["member"]["fullName"].text).font(Theme.title())
                         Text(resource.data["member"]["nim"].text).monospacedDigit()
                         Text(resource.data["member"]["city"].text)
+                        Text(resource.data["member"]["favoriteGenre"].text)
                         Text(resource.data["member"]["favoriteSong"].text)
                         Text(resource.data["member"]["quotes"].text)
                     }
                 }
+                if resource.data["isMine"].bool && store.member.exists { NavigationRow(title: "app.cardLinkOpen", icon: "person.text.rectangle") { MemberCardView() } }
             }
         }.task { await load() }.refreshable { await load() }
     }

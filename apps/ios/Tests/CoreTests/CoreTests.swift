@@ -77,6 +77,8 @@ final class CoreTests: XCTestCase {
         let qr = QRDeadline(response: response, receivedAt: received)
         XCTAssertEqual(qr.remaining(at: received), 45)
         XCTAssertEqual(qr.remaining(at: received.addingTimeInterval(46)), 0)
+        let delayed = QRDeadline(response: response, receivedAt: received, requestStartedAt: received.addingTimeInterval(-10))
+        XCTAssertEqual(delayed.remaining(at: received), 35)
     }
     func testCardLinksAndQueryEscaping() {
         let token = "AbCdEfGhIjKlMnOpQrStUvWxYz012345"
@@ -99,5 +101,11 @@ final class CoreTests: XCTestCase {
         XCTAssertEqual(SocketPacket.parse(#"44{"message":"UNAUTHENTICATED"}"#), .closed)
         XCTAssertEqual(SocketPacket.parse("43[{}]"), .unsupported)
         XCTAssertEqual(SocketPacket.parse("42broken"), .unsupported)
+    }
+    func testHouseNumberCurrencyAndCityTimezoneFormatting() {
+        XCTAssertEqual(L.count(3800), "3.800")
+        XCTAssertEqual(L.money(6000000), "Rp 6.000.000")
+        XCTAssertTrue(L.date("2026-10-18T12:30:00Z").hasSuffix("19.30 WIB"))
+        XCTAssertTrue(L.date("2026-10-18T12:30:00Z", zone: "Asia/Makassar").hasSuffix("20.30 WITA"))
     }
 }

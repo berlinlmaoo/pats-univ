@@ -14,9 +14,10 @@ struct ClaimsView: View {
         DataPage(title: "phase5.claimTitle", path: "/api/loyalty/claims", room: Room(kind: "wallet", id: store.member.id)) { data, reload in
             Notice(text: L.t("phase5.claimBody"))
             Choice(label: "loyalty.event", options: data["events"].rows, selection: $eventID)
-                .onChange(of: eventID) { _, _ in if editing.isEmpty { clear() } }
+                .onChange(of: eventID) { _, _ in if editing.isEmpty || data["claims"].rows.first(where: { $0.id == editing })?["eventId"].text != eventID { clear() } }
             if data["isPromoter"].bool {
                 Picker(L.t("phase5.claimForm"), selection: $form) { Text(L.t("phase5.claimMember")).tag("MEMBER"); Text(L.t("phase5.claimPr")).tag("PR") }.pickerStyle(.segmented)
+                    .onChange(of: form) { _, _ in if data["claims"].rows.first(where: { $0.id == editing })?["formType"].text != form { clear() } }
             }
             let existing = data["claims"].rows.first { $0["eventId"].text == eventID && $0["formType"].text == form }
             if !eventID.isEmpty && (existing == nil || existing?.id == editing) {

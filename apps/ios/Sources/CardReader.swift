@@ -2,6 +2,24 @@ import Foundation
 import CoreNFC
 
 struct CardScan { let token: String; let uid: String }
+extension TagFailure: LocalizedError {
+    var errorDescription: String? {
+        let key: String
+        switch self {
+        case .unsupported: key = "nfc.notNtag"
+        case .format: key = "nfc.notFormatted"
+        case .locked: key = "nfc.locked"
+        case .readOnly: key = "nfc.readOnly"
+        case .password: key = "nfc.wrongPassword"
+        case .write: key = "nfc.writeFailed"
+        case .verify: key = "nfc.verifyFailed"
+        case .protect: key = "nfc.protectFailed"
+        case .lost: key = "nfc.tagLost"
+        case .capacity: key = "nfc.writeFailed"
+        }
+        return L.t(key)
+    }
+}
 @MainActor protocol CardReader: AnyObject {
     var available: Bool { get }
     func read() async throws -> CardScan
@@ -80,6 +98,7 @@ struct MiFareIO: TagIO {
 
 /// NDEF-only foreground reader for opening a public member card. Admin flows use TAG for the UID.
 @MainActor final class NDEFLinkReader: NSObject, NFCNDEFReaderSessionDelegate, ObservableObject {
+    var available: Bool { NFCNDEFReaderSession.readingAvailable }
     private var session: NFCNDEFReaderSession?
     var complete: ((URL) -> Void)?
     func begin() {

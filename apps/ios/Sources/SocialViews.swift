@@ -34,18 +34,20 @@ struct ChannelView: View {
     @State private var attachment: JSON = .null
     @State private var captured = UIScreen.main.isCaptured
     @State private var lost = false
+    @State private var screenshotTaken = false
     private var channel: JSON { hub.data["channels"].rows.first { $0.id == room.id } ?? .null }
     private var timeline: Bool { channel["kind"].text == "TIMELINE" }
     private var canPost: Bool { !channel["archived"].bool && (timeline ? channel["canPostTimeline"].bool : (store.admin || channel["memberPosting"] != .bool(false))) }
     var body: some View {
         Page(title: channel["name"].text.isEmpty ? "social.chat" : channel["name"].text) {
             if lost || live.accessLost || (room.kind == "channel" && hub.data.exists && !channel.exists) { Notice(text: L.t("native.accessLost"), error: true) }
-            else if captured && room.kind == "channel" { Notice(text: L.t("native.captured")) }
+            else if (captured || phase != .active) && room.kind == "channel" { Notice(text: L.t("native.captured")) }
             else {
                 ResourceState(resource: hub) { await hub.load("/api/social/hub") }
                 ResourceState(resource: feed) { await reload() }
                 Text(L.t(live.connected ? "social.live" : "social.offline")).font(Theme.body(13)).foregroundStyle(Theme.muted)
                 if room.kind == "channel" { Notice(text: L.t("social.secureHint")) }
+                if screenshotTaken { Notice(text: L.t("native.captured")) }
                 if store.admin && channel.exists { NavigationRow(title: "common.edit", icon: "pencil") { ChannelEditor(cityID: channel["cityId"].text, channel: channel) } }
                 if items.isEmpty && !feed.loading { EmptyState(title: "social.emptyTitle", message: "social.emptyBody", icon: "bubble.left") }
                 ForEach(ordered) { item in
@@ -84,7 +86,7 @@ struct ChannelView: View {
                             let maxBytes = max(1, hub.data["rules"]["mediaMaxMb"].int) * 1024 * 1024
                             guard media.data.count <= maxBytes else { throw APIError(code: "MEDIA_INVALID") }
                             let signed = try await APIClient.shared.call("POST", "/api/social/upload", .object(["room": .object(["kind": .str(room.kind), "id": .str(room.id)]), "contentType": .str(media.contentType)]))
-                            guard media.data.count <= signed["maxBytes"].int, let url = URL(string: signed["url"].text) else { throw APIError(code: "MEDIA_INVALID") }
+                            guard media.data.count <= signed["maxBytes"].int, let url = Config.mediaURL(signed["url"].text) else { throw APIError(code: "MEDIA_INVALID") }
                             try await APIClient.shared.upload(media.data, to: url, contentType: media.contentType)
                             attachment = .object(["mediaKey": signed["key"], "mediaType": .str(media.kind)])
                         }
@@ -110,7 +112,10 @@ struct ChannelView: View {
         .onChange(of: phase) { _, p in if p == .active { connect() } else { live.stop() } }
         .onReceive(NotificationCenter.default.publisher(for: UIScreen.capturedDidChangeNotification)) { _ in captured = UIScreen.main.isCaptured }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.userDidTakeScreenshotNotification)) { _ in
-            if room.kind == "channel", phase == .active { Task { _ = try? await APIClient.shared.call("POST", "/api/social/screenshot", .object(["channelId": .str(room.id), "platform": .str("IOS")])) } }
+            if room.kind == "channel", phase == .active {
+                screenshotTaken = true
+                if store.member.exists { Task { _ = try? await APIClient.shared.call("POST", "/api/social/screenshot", .object(["channelId": .str(room.id), "platform": .str("IOS")])) } }
+            }
         }
     }
     private var ordered: [JSON] {
@@ -127,7 +132,8 @@ struct ChannelView: View {
             // A full refresh replaces stale rows, including deleted messages.
             items = feed.data["items"].rows; nextCursor = feed.data["nextCursor"].text
         }
-        if !(await APIClient.shared.signedIn) { lost = true; items = [] }
+        let authenticated = await APIClient.shared.signedIn
+        if ["FORBIDDEN", "UNAUTHENTICATED", "ACCOUNT_DISABLED"].contains(feed.failureCode ?? "") || !authenticated { lost = true; items = []; live.stop() }
     }
     private func more() async {
         await mutation.run {

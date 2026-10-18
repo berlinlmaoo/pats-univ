@@ -13,6 +13,7 @@ final class ScannerController: UIViewController, AVCaptureMetadataOutputObjectsD
     private let scanned: (String) -> Void
     private var preview: AVCaptureVideoPreviewLayer?
     private let label = UILabel()
+    private let torch = UIButton(type: .system)
     private var active = true
     private var delivered = false
     init(scanned: @escaping (String) -> Void) { self.scanned = scanned; super.init(nibName: nil, bundle: nil) }
@@ -22,10 +23,14 @@ final class ScannerController: UIViewController, AVCaptureMetadataOutputObjectsD
         label.textColor = .white; label.numberOfLines = 0; label.textAlignment = .center; label.text = L.t("app.scanHint")
         label.translatesAutoresizingMaskIntoConstraints = false; view.addSubview(label)
         NSLayoutConstraint.activate([label.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24), label.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24), label.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -40)])
+        torch.setTitle(L.t("app.scanTorch"), for: .normal); torch.setTitleColor(.white, for: .normal)
+        torch.addTarget(self, action: #selector(toggleTorch), for: .touchUpInside); torch.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(torch)
+        NSLayoutConstraint.activate([torch.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -24), torch.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 16), torch.heightAnchor.constraint(greaterThanOrEqualToConstant: 44)])
         Task {
             guard await AVCaptureDevice.requestAccess(for: .video) else { label.text = L.t("native.permission"); return }
             guard active else { return }
-            queue.async { [weak self] in self?.configure() }
+            queue.async { self.configure() }
         }
     }
     private func configure() {
@@ -44,6 +49,10 @@ final class ScannerController: UIViewController, AVCaptureMetadataOutputObjectsD
         }
     }
     override func viewDidLayoutSubviews() { super.viewDidLayoutSubviews(); preview?.frame = view.bounds }
+    @objc private func toggleTorch() {
+        guard let device = AVCaptureDevice.default(for: .video), device.hasTorch else { return }
+        do { try device.lockForConfiguration(); defer { device.unlockForConfiguration() }; device.torchMode = device.torchMode == .on ? .off : .on } catch { }
+    }
     func metadataOutput(_ output: AVCaptureMetadataOutput, didOutput metadataObjects: [AVMetadataObject], from connection: AVCaptureConnection) {
         guard active, !delivered, let value = (metadataObjects.first as? AVMetadataMachineReadableCodeObject)?.stringValue else { return }
         delivered = true; scanned(value); stop()
@@ -126,6 +135,7 @@ struct ScanView: View {
         preview = .null; result = .null; self.subject = subject
         var body = subject.object; body["eventId"] = .str(eventID)
         preview = try await APIClient.shared.call("POST", "/api/admin/check-in/preview", .object(body))
+        UINotificationFeedbackGenerator().notificationOccurred(preview["issue"].exists ? .warning : .success)
     }
 }
 struct MemberIdentity: View {

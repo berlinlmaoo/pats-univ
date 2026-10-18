@@ -4,6 +4,7 @@ struct MemberCardView: View {
     @EnvironmentObject private var store: AppStore
     @StateObject private var state = Resource()
     @State private var deadline: QRDeadline?
+    @StateObject private var linkReader = NDEFLinkReader()
     @Environment(\.scenePhase) private var phase
     var body: some View {
         Page(title: "app.cardTitle") {
@@ -25,6 +26,7 @@ struct MemberCardView: View {
                     .foregroundStyle(Color.white)
                 Text(L.t("app.physicalCard")).font(Theme.title(17))
                 Badge(value: store.member["cardStatus"].text, member: true)
+                if linkReader.available { Button(L.t("native.tap"), systemImage: "wave.3.right") { linkReader.complete = { store.open($0) }; linkReader.begin() }.buttonStyle(.bordered) }
                 Text(L.t("app.cardQrTitle")).font(Theme.title(20))
                 ResourceState(resource: state) { await refresh() }
                 TimelineView(.periodic(from: .now, by: 1)) { time in
@@ -49,7 +51,7 @@ struct MemberCardView: View {
             }
         }
         .refreshable { await refresh(); await store.reload() }
-        .onDisappear { UIApplication.shared.isIdleTimerDisabled = false; deadline = nil }
+        .onDisappear { UIApplication.shared.isIdleTimerDisabled = false; deadline = nil; linkReader.cancel() }
         .onChange(of: phase) { _, value in
             UIApplication.shared.isIdleTimerDisabled = value == .active
             if value != .active { deadline = nil } else { Task { await refresh() } }
@@ -57,7 +59,7 @@ struct MemberCardView: View {
     }
     private func refresh() async {
         await state.load("/api/me/card-token")
-        if state.error == nil { deadline = QRDeadline(response: state.data) }
+        if state.error == nil { deadline = QRDeadline(response: state.data, receivedAt: state.receivedAt, requestStartedAt: state.requestedAt) }
     }
 }
 
@@ -209,6 +211,7 @@ struct DrawView: View {
                 Text("\(L.count(d["entries"].rows.count)) / \(L.count(d["capacity"].int)) · \(L.count(d["costXp"].int)) XP")
                 if d["peakStartsAt"].exists { Text(L.date(d["peakStartsAt"].text) + " — " + L.date(d["peakEndsAt"].text)).font(Theme.body(13)) }
                 if d["freeCredit"].exists { Notice(text: L.t("phase5.drawFree")) }
+                PrizeWheel(entries: d["entries"].rows, capacity: d["capacity"].int, winnerID: d["winnerEntryId"].text)
                 ForEach(0..<max(0, min(20, d["capacity"].int)), id: \.self) { position in
                     let row = d["entries"].rows.first { $0["position"].int == position + 1 }
                     HStack {
@@ -285,6 +288,29 @@ struct RegionChangeView: View {
         }
     }
 }
+struct ProfileXPView: View {
+    let memberID: String
+    @StateObject private var state = Resource()
+    @StateObject private var live = RealtimeRoom()
+    @Environment(\.scenePhase) private var phase
+    var body: some View {
+        Panel {
+            Text(L.t("loyalty.balance")).foregroundStyle(Theme.muted)
+            ResourceState(resource: state) { await load() }
+            if state.data.exists {
+                Text(L.count(state.data["balance"].int) + " XP").font(Theme.title(32)).monospacedDigit()
+                if state.data["milestone"].exists {
+                    ProgressView(value: min(1, max(0, state.data["milestone"]["progress"].double)))
+                    Text(state.data["milestone"]["reward"]["name"].text).font(Theme.body(13))
+                }
+            }
+            NavigationRow(title: "loyalty.leaderboard", icon: "trophy") { LeaderboardView() }
+        }.task { await load(); connect() }.onDisappear { live.stop() }
+            .onChange(of: phase) { _, p in if p == .active { connect(); Task { await load() } } else { live.stop() } }
+    }
+    private func load() async { await state.load("/api/loyalty/wallet") }
+    private func connect() { live.start(kind: "wallet", id: memberID) { await load() } }
+}
 struct NotificationsView: View {
     @EnvironmentObject private var store: AppStore
     var body: some View {
@@ -315,7 +341,7 @@ struct NotificationSettingsView: View {
                 Toggle(L.t("app.notifCategory.\(key).title"), isOn: Binding(get: { data["prefs"][key].bool }, set: { value in Task { await mutation.send("/api/me/notification-prefs", body: .object([key: .bool(value)]), method: "PATCH", after: reload) } })).disabled(mutation.busy)
             }
             MutationState(mutation: mutation)
-            Notice(text: L.t("native.pushPending"))
+            Notice(text: L.t("app.pushUnavailable"))
             Button(L.t("native.push")) { Task { await PushRegistration.request() } }.buttonStyle(.bordered)
         }
     }

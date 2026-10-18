@@ -19,8 +19,8 @@ enum Theme {
     }
     static let bg = color("bg"), surface = color("surface"), muted = color("textMuted"), text = color("text")
     static let accent = color("accentText"), border = color("border"), danger = color("dangerText")
-    static func title(_ size: CGFloat = 26) -> Font { .custom("PlusJakartaSans-Bold", size: size, relativeTo: .title2) }
-    static func body(_ size: CGFloat = 15) -> Font { .custom("Inter-Regular", size: size, relativeTo: .body) }
+    static func title(_ size: CGFloat = 26) -> Font { .custom("Plus Jakarta Sans", size: size, relativeTo: .title2).weight(.bold) }
+    static func body(_ size: CGFloat = 15) -> Font { .custom("Inter", size: size, relativeTo: .body) }
 }
 extension UIColor {
     convenience init(hex: String) {

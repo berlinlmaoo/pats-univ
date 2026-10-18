@@ -32,11 +32,11 @@ enum JSON: Codable, Equatable, Sendable, Identifiable {
     var text: String {
         switch self {
         case .string(let v): return v
-        case .number(let v): return v == v.rounded() ? String(Int(v)) : String(v)
+        case .number(let v): return Int(exactly: v).map(String.init) ?? String(v)
         default: return ""
         }
     }
-    var int: Int { if case .number(let v) = self { return Int(v) }; return Int(text) ?? 0 }
+    var int: Int { if case .number(let v) = self { return Int(exactly: v.rounded(.towardZero)) ?? 0 }; return Int(text) ?? 0 }
     var double: Double { if case .number(let v) = self { return v }; return Double(text) ?? 0 }
     var bool: Bool { self == .bool(true) }
     var exists: Bool { self != .null }
@@ -59,12 +59,13 @@ struct QRDeadline: Equatable {
     let token: String
     let expiresAt: Date
     let ttl: Double
-    init(response: JSON, receivedAt: Date = Date()) {
+    init(response: JSON, receivedAt: Date = Date(), requestStartedAt: Date? = nil) {
         token = response["token"].text
         ttl = max(1, response["ttlSeconds"].double)
         let server = Dates.parse(response["serverTime"].text) ?? receivedAt
         let expiry = Dates.parse(response["expiresAt"].text) ?? server
-        expiresAt = receivedAt.addingTimeInterval(max(0, expiry.timeIntervalSince(server)))
+        let transit = requestStartedAt.map { max(0, receivedAt.timeIntervalSince($0)) } ?? 0
+        expiresAt = receivedAt.addingTimeInterval(max(0, expiry.timeIntervalSince(server) - transit))
     }
     func remaining(at now: Date) -> Int { max(0, Int(ceil(expiresAt.timeIntervalSince(now)))) }
 }

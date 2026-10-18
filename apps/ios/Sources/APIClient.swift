@@ -12,6 +12,23 @@ enum Config {
         return production
     }
     static func url(_ path: String) -> URL { URL(string: path, relativeTo: baseURL)!.absoluteURL }
+    static func mediaURL(_ raw: String) -> URL? {
+        guard let url = URL(string: raw, relativeTo: baseURL)?.absoluteURL else { return nil }
+        #if PATS_DEV_SERVER
+        if url.host == production.host, baseURL.host != production.host,
+           ["/api/social/media-file", "/api/loyalty/receipt-file"].contains(url.path),
+           let signed = URLComponents(url: url, resolvingAgainstBaseURL: true),
+           var target = URLComponents(url: baseURL, resolvingAgainstBaseURL: true) {
+            target.percentEncodedPath = signed.percentEncodedPath; target.percentEncodedQuery = signed.percentEncodedQuery
+            return target.url
+        }
+        #endif
+        return url
+    }
+}
+
+private final class NoRedirects: NSObject, URLSessionTaskDelegate {
+    func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) { completionHandler(nil) }
 }
 
 struct APIError: LocalizedError {
@@ -44,29 +61,50 @@ enum Keychain {
     }
 }
 
+protocol SessionStorage {
+    func load() -> Data?
+    func save(_ data: Data?) throws
+}
+struct KeychainSessionStorage: SessionStorage {
+    func load() -> Data? { Keychain.load("session") }
+    func save(_ data: Data?) throws { try Keychain.save(data, "session") }
+}
+extension Notification.Name { static let patsSessionChanged = Notification.Name("pats.session.changed") }
+
 /// Actor isolation plus a shared refresh task prevents concurrent refresh-token rotation.
 actor APIClient {
     static let shared = APIClient()
     private var session: JSON = .null
     private var generation = 0
-    private var refreshTask: Task<JSON, Error>?
-    private let transport: URLSession = {
+    private struct RefreshFlight { let id: UUID; let task: Task<JSON, Error> }
+    private var refresh: RefreshFlight?
+    private let storage: SessionStorage
+    private let transport: URLSession
+    static func makeTransport() -> URLSession {
         let c = URLSessionConfiguration.ephemeral
         c.httpCookieStorage = nil; c.httpShouldSetCookies = false; c.urlCache = nil; c.timeoutIntervalForRequest = 30
-        return URLSession(configuration: c)
-    }()
-    init() { session = Keychain.load("session").flatMap { try? JSON.parse($0) } ?? .null }
+        return URLSession(configuration: c, delegate: NoRedirects(), delegateQueue: nil)
+    }
+    init(transport: URLSession = APIClient.makeTransport(), storage: SessionStorage = KeychainSessionStorage()) {
+        self.transport = transport; self.storage = storage
+        let cached = storage.load().flatMap { try? JSON.parse($0) } ?? .null
+        session = cached["_origin"].text == Config.baseURL.absoluteString ? cached : .null
+    }
     var cachedMe: JSON { session["me"] }
     var signedIn: Bool { !session["accessToken"].text.isEmpty }
-    private func persist() throws { try Keychain.save(session.exists ? session.encoded : nil, "session") }
+    func snapshot() -> JSON { session }
+    private func persist() throws { try storage.save(session.exists ? session.encoded : nil) }
     func install(_ login: JSON) throws {
-        generation += 1; refreshTask?.cancel(); refreshTask = nil
+        guard !login["accessToken"].text.isEmpty, !login["refreshToken"].text.isEmpty else { throw APIError(code: "INTERNAL") }
+        generation += 1; refresh?.task.cancel(); refresh = nil
         session = login
+        session["_origin"] = .str(Config.baseURL.absoluteString)
         do { try persist() } catch { session = .null; throw error }
     }
     func clear() {
-        generation += 1; refreshTask?.cancel(); refreshTask = nil; session = .null
-        try? Keychain.save(nil, "session")
+        generation += 1; refresh?.task.cancel(); refresh = nil; session = .null
+        try? storage.save(nil)
+        NotificationCenter.default.post(name: .patsSessionChanged, object: nil)
     }
     func updateMe(_ me: JSON) throws { guard session.exists else { return }; session["me"] = me; try persist() }
     func logout() async {
@@ -79,10 +117,19 @@ actor APIClient {
         let epoch = generation
         do {
             let token = try await accessToken()
-            do { return try await raw(method, path, body, token: token) }
+            guard epoch == generation, session.exists else { throw CancellationError() }
+            do {
+                let result = try await raw(method, path, body, token: token)
+                guard epoch == generation, session.exists else { throw CancellationError() }
+                return result
+            }
             catch let e as APIError where e.status == 401 {
+                guard epoch == generation, session.exists else { throw CancellationError() }
                 let next = try await accessToken(forceFor: token)
-                return try await raw(method, path, body, token: next)
+                guard epoch == generation, session.exists else { throw CancellationError() }
+                let result = try await raw(method, path, body, token: next)
+                guard epoch == generation, session.exists else { throw CancellationError() }
+                return result
             }
         } catch let e as APIError {
             if e.invalidSession && epoch == generation { clear() }
@@ -90,24 +137,26 @@ actor APIClient {
         }
     }
     private func accessToken(forceFor rejected: String? = nil) async throws -> String {
-        guard session.exists else { throw APIError(code: "UNAUTHENTICATED", status: 401) }
+        guard session.exists, session["_origin"].text == Config.baseURL.absoluteString else { throw APIError(code: "UNAUTHENTICATED", status: 401) }
         let current = session["accessToken"].text
         if let rejected, rejected != current { return current }
         if rejected == nil, let expiry = Dates.parse(session["accessTokenExpiresAt"].text), expiry.timeIntervalSinceNow > 30 { return current }
         let epoch = generation
-        if refreshTask == nil {
-            let refresh = session["refreshToken"]
-            refreshTask = Task { try await self.raw("POST", "/api/auth/refresh", .object(["refreshToken": refresh])) }
+        if refresh == nil {
+            let token = session["refreshToken"]
+            refresh = RefreshFlight(id: UUID(), task: Task { try await self.raw("POST", "/api/auth/refresh", .object(["refreshToken": token])) })
         }
-        let task = refreshTask!
+        let flight = refresh!
         do {
-            let next = try await task.value
+            let next = try await flight.task.value
             guard epoch == generation, session.exists else { throw CancellationError() }
-            // All waiters use the same result. Persist before anyone can initiate another rotation.
-            for (k, v) in next.object { session[k] = v }
-            try persist(); refreshTask = nil
+            if refresh?.id == flight.id {
+                guard !next["accessToken"].text.isEmpty, !next["refreshToken"].text.isEmpty else { throw APIError(code: "INTERNAL") }
+                for (k, v) in next.object { session[k] = v }
+                try persist(); refresh = nil
+            }
             return session["accessToken"].text
-        } catch { if epoch == generation { refreshTask = nil }; throw error }
+        } catch { if epoch == generation && refresh?.id == flight.id { refresh = nil }; throw error }
     }
     private func raw(_ method: String, _ path: String, _ body: JSON? = nil, token: String? = nil) async throws -> JSON {
         var request = URLRequest(url: Config.url(path)); request.httpMethod = method

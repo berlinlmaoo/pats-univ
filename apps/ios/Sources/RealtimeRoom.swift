@@ -68,7 +68,9 @@ import Combine
                             self.ackHandlers.removeValue(forKey: number)?.resume(returning: payload)
                         case .event(let name, _):
                             if name == "access_lost" { self.accessLost = true; ws.cancel(with: .normalClosure, reason: nil) }
-                            if ["changed", "message"].contains(name) { await changed() }
+                            if ["changed", "message"].contains(name) {
+                                Task { if run == self.runID { await changed() } }
+                            }
                         case .closed: ws.cancel(with: .normalClosure, reason: nil)
                         case .unsupported: break
                         }
