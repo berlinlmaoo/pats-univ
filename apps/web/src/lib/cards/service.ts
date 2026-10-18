@@ -15,6 +15,7 @@ import { db } from '../db';
 import { isUniqueViolation } from '../db-errors';
 import { env } from '../env';
 import { AppError } from '../http/errors';
+import { photoReadUrl } from '../members/photo';
 import { notifyUsers } from '../push/notify';
 import { isGenuineCardToken, newCardToken } from './token';
 
@@ -67,7 +68,7 @@ export type CardMemberRow = Prisma.MemberGetPayload<{ select: typeof cardMemberS
 
 export function toCardMember(m: CardMemberRow): CardMember {
   const inactive = m.status !== 'ACTIVE' || m.user.status !== 'ACTIVE';
-  return { id: m.id, nim: m.nim, fullName: m.fullName, photoUrl: m.photoUrl, city: m.city, status: inactive ? 'INACTIVE' : 'ACTIVE' };
+  return { id: m.id, nim: m.nim, fullName: m.fullName, photoUrl: photoReadUrl(m.photoUrl, 3600, true), city: m.city, status: inactive ? 'INACTIVE' : 'ACTIVE' };
 }
 
 /** Card by the token from a printed QR or a chip; refuses forged tokens before the lookup. */
@@ -253,7 +254,7 @@ export async function revokeCard(actor: AuthUser, cardId: string, reason: string
  * What /c/<token> shows (PRODUCT.md §4.1, §10.3). Song, genre and quote are on the digital
  * profile only; a revoked or unknown card shows nothing personal, and DOB never appears.
  */
-export async function cardProfile(token: string, viewerMemberId?: string | null): Promise<CardProfileResponse | null> {
+export async function cardProfile(token: string, viewerMemberId?: string | null, absolutePhoto = false): Promise<CardProfileResponse | null> {
   if (!isGenuineCardToken(cardKey(), token)) return null;
   const card = await db.card.findUnique({
     where: { ndefToken: token },
@@ -267,14 +268,15 @@ export async function cardProfile(token: string, viewerMemberId?: string | null)
   return {
     state: card.status === 'DELIVERED' ? 'active' : 'pending',
     isMine,
+    // The digital ID: what the printed card shows, plus status, city, member since and the photo.
+    // Never NIM, email, phone, song or quote (PRODUCT.md §10.3).
     member: {
       fullName: m.fullName,
-      nim: m.nim,
+      favoriteDrink: m.favoriteDrink,
+      favoriteGenre: m.favoriteGenre,
       city: m.city.name,
       joinedAt: m.joinedAt.toISOString(),
-      favoriteSong: m.favoriteSong,
-      favoriteGenre: m.favoriteGenre,
-      quotes: m.quotes,
+      photoUrl: photoReadUrl(m.photoUrl, 3600, absolutePhoto),
     },
   };
 }

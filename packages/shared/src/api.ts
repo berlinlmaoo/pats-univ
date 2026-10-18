@@ -119,7 +119,9 @@ export interface MeResponse {
     city: CitySummary;
     favoriteSong: string;
     favoriteGenre: string;
+    favoriteDrink: string;
     quotes: string;
+    /** Short-lived signed URL of the member photo, or null. */
     photoUrl: string | null;
     isPromoter: boolean;
     status: MemberStatus;
@@ -142,6 +144,8 @@ export interface LoginResponse extends AuthTokens {
 export interface RegistrationResponse {
   nim: string;
   fullName: string;
+  favoriteDrink: string;
+  favoriteGenre: string;
   city: CitySummary & { waGroupUrl: string | null };
   appLinks: { ios: string | null; android: string | null };
   /** Whether a welcome email with the same details was sent. */
@@ -389,17 +393,21 @@ export interface CrewMemberCardsResponse {
   reencode: ReencodeRequestInfo | null;
 }
 
-/** Public view of a card URL (web /c/<token> and the app's deep link). */
+/**
+ * Public view of a card URL (web /c/<token> and the app's deep link): the digital ID. Only what the
+ * printed card shows plus status, city, member since and the photo; never NIM, email, phone, song
+ * or quote.
+ */
 export interface CardProfileResponse {
   state: 'active' | 'pending' | 'revoked' | 'inactive';
   member: {
     fullName: string;
-    nim: string;
+    favoriteDrink: string;
+    favoriteGenre: string;
     city: string;
     joinedAt: string;
-    favoriteSong: string;
-    favoriteGenre: string;
-    quotes: string;
+    /** Short-lived signed URL, or null when the member has no photo. */
+    photoUrl: string | null;
   } | null;
   /** The signed-in member is the card's owner. */
   isMine: boolean;

@@ -1,4 +1,4 @@
-import { ageOn, formatCount, formatDate, formatPhone, formatTime, formatUid } from '@pats/shared';
+import { ageOn, cardUrl, formatCount, formatDate, formatPhone, formatTime, formatUid } from '@pats/shared';
 import { ChevronLeft } from 'lucide-react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
@@ -7,6 +7,9 @@ import { DetailList } from '@/components/dashboard/detail-list';
 import { ActiveBadge, CardStatusBadge, MethodBadge } from '@/components/dashboard/status';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardHeader } from '@/components/ui/card';
+import { KtmCard } from '@/components/ktm/ktm-card';
+import { photoReadUrl } from '@/lib/members/photo';
+import { UserRound } from 'lucide-react';
 import { batchLabel } from '@/lib/cards/service';
 import { db } from '@/lib/db';
 import { requireHq } from '@/lib/hq/guard';
@@ -58,6 +61,8 @@ export default async function MemberPage({ params }: Params) {
   const dobIso = dob.toISOString().slice(0, 10);
   const tz = member.city.timezone;
   const dash = <span className="text-muted">{t('common.notSet')}</span>;
+  const liveCard = member.cards.find((c) => c.status !== 'REVOKED' && c.ndefToken);
+  const photo = photoReadUrl(member.photoUrl);
 
   return (
     <div className="flex flex-col gap-6">
@@ -87,6 +92,8 @@ export default async function MemberPage({ params }: Params) {
               dateOfBirth: dobIso,
               cityId: member.cityId,
               phone: member.user.phone,
+              favoriteDrink: member.favoriteDrink,
+              favoriteGenre: member.favoriteGenre,
               active: member.status === 'ACTIVE',
             }}
             cities={cities}
@@ -107,8 +114,9 @@ export default async function MemberPage({ params }: Params) {
                     value: `${formatDate(dob, t.locale, { timeZone: 'UTC', withYear: true })} · ${t('members.age', { age: ageOn(dobParts, new Date(), tz) })}`,
                   },
                   { label: t('members.city'), value: `${member.city.name} (${member.city.code})` },
-                  { label: t('members.song'), value: member.favoriteSong || dash },
+                  { label: t('members.drink'), value: member.favoriteDrink || dash },
                   { label: t('members.genre'), value: member.favoriteGenre || dash },
+                  { label: t('members.song'), value: member.favoriteSong || dash },
                   { label: t('members.quotes'), value: member.quotes ? `“${member.quotes}”` : dash },
                 ]}
               />
@@ -147,6 +155,31 @@ export default async function MemberPage({ params }: Params) {
         </div>
 
         <div className="flex min-w-0 flex-col gap-6 lg:col-span-2">
+          <Card className="min-w-0">
+            <CardHeader title={t('members.ktmPreview')} className="pb-3" />
+            <div className="flex flex-col gap-4 border-t border-border p-5">
+              <KtmCard
+                name={member.fullName}
+                drink={member.favoriteDrink}
+                genre={member.favoriteGenre}
+                qrValue={liveCard?.ndefToken ? cardUrl(liveCard.ndefToken) : null}
+              />
+              <div className="flex items-center gap-3">
+                <div className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-sm border border-border bg-surface-muted text-muted">
+                  {photo ? (
+                    // eslint-disable-next-line @next/next/no-img-element -- short-lived signed private URL
+                    <img src={photo} alt={t('cardPage.photoAlt', { name: member.fullName })} className="size-full object-cover" />
+                  ) : (
+                    <UserRound className="size-7" strokeWidth={1.5} aria-hidden="true" />
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <p className="ktm-label text-muted">{t('members.photo')}</p>
+                  <p className="mt-0.5 text-body-sm text-fg">{photo ? member.fullName : t('members.noPhoto')}</p>
+                </div>
+              </div>
+            </div>
+          </Card>
           <Card>
             <CardHeader title={t('members.contact')} className="pb-3" />
             <div className="border-t border-border">

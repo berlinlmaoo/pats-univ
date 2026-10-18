@@ -14,7 +14,7 @@ export const GET = route(async (req: Request, { params }: Params) => {
   if (!limit.ok) throw new AppError('RATE_LIMITED', 429, 'Too many lookups', { retryAfter: limit.retryAfter });
   const viewer = await getApiUser(req);
   const member = viewer ? await db.member.findUnique({ where: { userId: viewer.id }, select: { id: true } }) : null;
-  const profile = await cardProfile((await params).token, member?.id);
+  const profile = await cardProfile((await params).token, member?.id, true);
   if (!profile) throw new AppError('CARD_NOT_FOUND', 404);
   return ok(profile);
 });

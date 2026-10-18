@@ -1,0 +1,56 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<!--
+  The official KTM (Berlin's Drive, 18 Oct 2026): blank front + back artwork, the member's values in
+  the card value font (fonts/card-value.ttf, a copy of packages/shared/assets/fonts/card-value.ttf,
+  kept identical by a test), white QR inside the artwork's maroon tile. No NIM on the card.
+  Geometry = packages/shared/src/tokens.ts `ktm` (fractions of the trimmed card, 85.6 × 54 mm).
+  Slots: {{fullName}} {{favoriteDrink}} {{favoriteGenre}} {{qrInverse}}.
+-->
+<style>
+  @font-face { font-family: 'PATS Card Value'; src: url('{{asset:fonts/card-value.ttf}}') format('truetype'); font-weight: 900; }
+  @page { size: 91.6mm 60mm; margin: 0; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 91.6mm; }
+  body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .page { position: relative; width: 91.6mm; height: 60mm; overflow: hidden; break-after: page; }
+  .page:last-child { break-after: auto; }
+  /* Bleed fill: the same artwork stretched under the trim so the 3 mm bleed continues its colours.
+     Replace with vendor artwork that includes bleed when it arrives. */
+  .bleed { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; }
+  /* The artwork itself sits exactly on the trim box. */
+  .art { position: absolute; left: 3mm; top: 3mm; width: 85.6mm; height: 54mm; }
+  .card { position: absolute; left: 3mm; top: 3mm; width: 85.6mm; height: 54mm; }
+  /* Cap height 0.0317 × 85.6 mm = 2.71 mm → 3.88 mm (11 pt) for a 0.70 cap-ratio face; cap top sits 0.15 em into a line-height-1 box. */
+  .value {
+    position: absolute; left: 4.48mm; width: 51.36mm;
+    font-family: 'PATS Card Value', sans-serif; font-weight: 900; font-size: 11pt; line-height: 1;
+    letter-spacing: -0.04em; text-transform: uppercase; color: #000; overflow-wrap: anywhere;
+  }
+  .name { top: calc(21.49mm - 0.15em); width: 55.64mm; }
+  .drink { top: calc(33.21mm - 0.15em); }
+  .genre { top: calc(44.87mm - 0.15em); }
+  /* QR: x 0.705, y 0.549, w 0.23 of the card = 60.35 / 29.65 / 19.69 mm (inside the 4 mm safe area). */
+  .qr { position: absolute; left: 60.35mm; top: 29.65mm; width: 19.69mm; height: 19.69mm; }
+  .qr svg { display: block; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+  <section class="page">
+    <img class="bleed" src="{{asset:front.jpg}}" alt="">
+    <img class="art" src="{{asset:front.jpg}}" alt="">
+    <div class="card">
+      <div class="value name" data-fit="lines:2;min:7">{{fullName}}</div>
+      <div class="value drink" data-fit="lines:1;min:7">{{favoriteDrink}}</div>
+      <div class="value genre" data-fit="lines:2;min:6.5">{{favoriteGenre}}</div>
+      <div class="qr">{{qrInverse}}</div>
+    </div>
+  </section>
+  <section class="page">
+    <img class="bleed" src="{{asset:back.jpg}}" alt="">
+    <img class="art" src="{{asset:back.jpg}}" alt="">
+  </section>
+</body>
+</html>

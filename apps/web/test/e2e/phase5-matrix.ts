@@ -2,6 +2,7 @@
 import 'dotenv/config';
 import { createHash, randomUUID } from 'node:crypto';
 import { SignJWT } from 'jose';
+import QRCode from 'qrcode';
 import { io, type Socket } from 'socket.io-client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { addMonths, leaderboardWindow } from '@pats/shared';
@@ -72,7 +73,11 @@ async function main() {
   const scoped = await api('admin/loyalty/operations', crew.token);
   check('regional operation list excludes other cities', scoped.json.events.every((e: Json) => e.id !== elsewhere.id));
 
-  const signup = { fullName: `${prefix} Signup`, dateOfBirth: '2000-01-01', cityId: a!.id, favoriteSong: 'Song', favoriteGenre: 'Pop', email: `${prefix}-signup@patsuniv.test`, phone: '+6281234567891', consent: true, locale: 'en' };
+  // The KTM photo step: any real 300 px PNG will do.
+  const photoRes = await fetch(`${base}/api/join/photo`, { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: new Uint8Array(await QRCode.toBuffer(prefix, { width: 300 })) });
+  const photo = (await photoRes.json()) as Json;
+  check('join photo upload returns a pending key', photoRes.status === 201 && /^photos\/pending\//.test(photo.key));
+  const signup = { fullName: `${prefix} Signup`, dateOfBirth: '2000-01-01', cityId: a!.id, favoriteSong: 'Song', favoriteGenre: 'Pop', favoriteDrink: 'Tequila', photoKey: photo.key, email: `${prefix}-signup@patsuniv.test`, phone: '+6281234567891', consent: true, locale: 'en' };
   const otp = await api('join/otp', '', signup);
   check('registration OTP available', otp.status === 200 && otp.json.demoCode);
   const signups = await Promise.all([api('join', '', { ...signup, code: otp.json.demoCode }), api('join', '', { ...signup, code: otp.json.demoCode })]);

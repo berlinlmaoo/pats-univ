@@ -16,6 +16,8 @@ interface MemberCore {
   dateOfBirth: string;
   cityId: string;
   phone: string;
+  favoriteDrink: string;
+  favoriteGenre: string;
   active: boolean;
 }
 
@@ -27,7 +29,7 @@ export function MemberActions({ member, cities }: { member: MemberCore; cities: 
 
   return (
     <div className="flex shrink-0 items-center gap-2">
-      <Button variant={member.active ? 'ghost' : 'secondary'} onClick={() => setConfirming(true)}>
+      <Button variant={member.active ? 'danger' : 'secondary'} onClick={() => setConfirming(true)}>
         {member.active ? t('members.deactivate') : t('members.reactivate')}
       </Button>
       <Button variant="secondary" onClick={() => setEditing(true)}>
@@ -104,6 +106,12 @@ function EditMemberDialog({
         </Field>
         <Field label={t('members.phone')} htmlFor="phone" error={err('phone')}>
           <Input id="phone" name="phone" type="tel" defaultValue={member.phone} aria-invalid={Boolean(err('phone'))} />
+        </Field>
+        <Field label={t('members.drink')} htmlFor="favoriteDrink" error={err('favoriteDrink')} hint={t('members.printedHint')}>
+          <Input id="favoriteDrink" name="favoriteDrink" maxLength={40} defaultValue={member.favoriteDrink} aria-invalid={Boolean(err('favoriteDrink'))} />
+        </Field>
+        <Field label={t('members.genre')} htmlFor="favoriteGenre" error={err('favoriteGenre')} hint={t('members.printedHint')}>
+          <Input id="favoriteGenre" name="favoriteGenre" maxLength={50} defaultValue={member.favoriteGenre} aria-invalid={Boolean(err('favoriteGenre'))} />
         </Field>
         {state && !state.ok && state.message && <Alert tone="danger">{t.loose(state.message)}</Alert>}
         <div className="flex justify-end gap-2 pt-2">

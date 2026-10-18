@@ -1,6 +1,7 @@
 import 'server-only';
 import { capabilitiesOf, CARD_DISPLAY_PRIORITY, type MeResponse } from '@pats/shared';
 import { db } from './db';
+import { photoReadUrl } from './members/photo';
 
 export async function buildMe(userId: string): Promise<MeResponse> {
   const user = await db.user.findUniqueOrThrow({
@@ -38,8 +39,9 @@ export async function buildMe(userId: string): Promise<MeResponse> {
           city: m.city,
           favoriteSong: m.favoriteSong,
           favoriteGenre: m.favoriteGenre,
+          favoriteDrink: m.favoriteDrink,
           quotes: m.quotes,
-          photoUrl: m.photoUrl,
+          photoUrl: photoReadUrl(m.photoUrl, 3600, true),
           isPromoter: m.isPromoter,
           status: m.status,
           joinedAt: m.joinedAt.toISOString(),
