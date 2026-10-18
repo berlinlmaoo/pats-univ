@@ -18,7 +18,8 @@ export type SettingGroup =
   | 'hub'
   | 'app';
 
-type Unit = 'months' | 'rupiah' | 'slots' | 'requests' | 'days' | 'mb' | 'years' | 'xp' | 'minutes' | 'seconds' | 'hours' | 'percent' | 'ranks' | 'spins';
+/** `toggle` = a 0/1 rule the dashboard edits as an on/off switch. */
+type Unit = 'months' | 'rupiah' | 'slots' | 'requests' | 'days' | 'mb' | 'years' | 'xp' | 'minutes' | 'seconds' | 'hours' | 'percent' | 'ranks' | 'admins' | 'toggle';
 
 interface Base<T> {
   group: SettingGroup;
@@ -42,15 +43,15 @@ export const SETTINGS = {
   xpExpiryMonths: { group: 'xp', kind: 'int', min: 1, max: 120, unit: 'months', default: 18, scopes: ['GLOBAL'] },
   drawSlots: { group: 'xp', kind: 'int', min: 1, max: 100, unit: 'slots', default: 5, scopes: ['GLOBAL', 'EVENT'] },
   freeDrawExpiryMonths: { group: 'leaderboard', kind: 'int', min: 1, max: 12, unit: 'months', default: 3, scopes: ['GLOBAL'] },
-  regionalAdminLimit: { group: 'membership', kind: 'int', min: 1, max: 100, unit: 'requests', default: 5, scopes: ['GLOBAL', 'CITY'] },
+  regionalAdminLimit: { group: 'membership', kind: 'int', min: 1, max: 100, unit: 'admins', default: 5, scopes: ['GLOBAL', 'CITY'] },
   cardReplacementFee: { group: 'membership', kind: 'int', min: 0, max: 2000000000, unit: 'rupiah', default: 100000, scopes: ['GLOBAL'] },
-  memberClaimAllowGl: { group: 'promoter', kind: 'int', min: 0, max: 1, unit: 'requests', default: 0, scopes: ['GLOBAL'] },
+  memberClaimAllowGl: { group: 'promoter', kind: 'int', min: 0, max: 1, unit: 'toggle', default: 0, scopes: ['GLOBAL'] },
   memberBonusPerGuestXp: { group: 'promoter', kind: 'int', min: 0, max: 10000, unit: 'xp', default: 5, scopes: ['GLOBAL', 'CITY'] },
   memberBonusPerReservationXp: { group: 'promoter', kind: 'int', min: 0, max: 10000, unit: 'xp', default: 25, scopes: ['GLOBAL', 'CITY'] },
   promoterBonusPerReservationXp: { group: 'promoter', kind: 'int', min: 0, max: 10000, unit: 'xp', default: 25, scopes: ['GLOBAL', 'CITY'] },
   xpPerCheckIn: { group: 'xp', kind: 'int', min: 0, max: 10_000, unit: 'xp', default: 50, scopes: ['GLOBAL', 'CITY'] },
   spinCostXp: { group: 'xp', kind: 'int', min: 0, max: 100_000, unit: 'xp', default: 250, scopes: ['GLOBAL'] },
-  maxSpinsPerEvent: { group: 'xp', kind: 'int', min: 0, unit: 'spins', default: 1, max: 1, scopes: ['GLOBAL', 'EVENT'] },
+  maxSpinsPerEvent: { group: 'xp', kind: 'int', min: 0, unit: 'slots', default: 1, max: 1, scopes: ['GLOBAL', 'EVENT'] },
   redeemCodeTtlMinutes: { group: 'xp', kind: 'int', min: 1, max: 1440, unit: 'minutes', default: 15, scopes: ['GLOBAL'] },
   leaderboardPeriod: {
     group: 'leaderboard',

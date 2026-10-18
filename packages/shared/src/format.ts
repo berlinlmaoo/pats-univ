@@ -80,6 +80,11 @@ export function formatDate(date: Date, locale: Locale, opts: DateFormatOptions =
   return opts.withYear || p.year !== nowYear ? `${base} ${p.year}` : base;
 }
 
+/** "Oct 2026" / "Okt 2026" (month is 1-based). */
+export function formatMonth(year: number, month: number, locale: Locale): string {
+  return `${MONTHS[locale][month - 1]} ${year}`;
+}
+
 /** "19.30 WIB". */
 export function formatTime(date: Date, opts: { timeZone?: string; withZone?: boolean } = {}): string {
   const tz = opts.timeZone ?? DEFAULT_TIMEZONE;

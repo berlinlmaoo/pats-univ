@@ -1,10 +1,11 @@
 "use client";
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
-import { MessageCircle } from "lucide-react";
+import { Camera, MessageCircle, Pencil, Plus, Trash2, VolumeX } from "lucide-react";
 import {
   formatCount,
   formatDateTime,
+  formatRupiah,
   orderHubItems,
   type FeedResponse,
   type HubChannel,
@@ -15,20 +16,39 @@ import {
 } from "@pats/shared";
 import { useT } from "@/components/i18n/provider";
 import { useLoyalty, DataState } from "@/components/loyalty/state";
+import { Table, Td, Th, Tr } from "@/components/dashboard/table";
+import { Badge, type BadgeTone } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Card, CardHeader } from "@/components/ui/card";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
+import { RupiahInput } from "@/components/ui/rupiah-input";
 import { PageHeader } from "@/components/ui/page-header";
 import { EmptyState } from "@/components/ui/empty-state";
-import { ConfirmDialog } from "@/components/ui/dialog";
+import { ConfirmDialog, Dialog } from "@/components/ui/dialog";
+import { Switch } from "@/components/ui/switch";
+import { Tabs } from "@/components/ui/tabs";
 import { postJson } from "@/lib/client/api";
 import { useRealtime } from "@/lib/client/realtime";
+import { cn } from "@/lib/cn";
+
+const HUB_TABS = ["channels", "reservations", "roaming", "floorPlan", "screenshots"] as const;
+
+/** Request and reservation statuses as badges (DESIGN.md §2: status colour is meaning). */
+const STATUS_TONE: Record<string, BadgeTone> = {
+  PENDING: "warning",
+  CONFIRMED: "success",
+  APPROVED: "success",
+  REJECTED: "danger",
+  CANCELLED: "neutral",
+  EXPIRED: "neutral",
+};
 
 export default function HubPage() {
   const t = useT();
   const state = useLoyalty<HubResponse>("/api/social/hub");
-  const [tab, setTab] = useState("channels");
+  const [tab, setTab] = useState<string>("channels");
   const [selected, setSelected] = useState<HubChannel | null>(null);
+  const [editing, setEditing] = useState<HubChannel | "new" | null>(null);
   const feedPanel = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (selected && window.matchMedia("(max-width: 1023px)").matches)
@@ -39,109 +59,149 @@ export default function HubPage() {
           : "smooth",
       });
   }, [selected]);
+  const cityName = (id: string) => state.data?.cities.find((c) => c.id === id)?.name ?? "";
   return (
-    <>
+    <div className="flex flex-col gap-6">
       <PageHeader
         title={t("social.title")}
         description={t("social.operationsBody")}
+        actions={
+          state.data ? (
+            <Button onClick={() => setEditing("new")}>
+              <Plus aria-hidden="true" />
+              {t("social.newChannel")}
+            </Button>
+          ) : undefined
+        }
       />
-      <div className="my-5 flex flex-wrap gap-2">
-        {[
-          "channels",
-          "reservations",
-          "roaming",
-          "floorPlan",
-          "screenshots",
-        ].map((key) => (
-          <Button
-            key={key}
-            variant={tab === key ? "primary" : "secondary"}
-            onClick={() => setTab(key)}
-          >
-            {t.loose(`social.${key}`)}
-          </Button>
-        ))}
-      </div>
+      <Tabs
+        label={t("social.title")}
+        active={tab}
+        onChange={setTab}
+        items={HUB_TABS.map((key) => ({ value: key, label: t.loose(`social.${key}`) }))}
+      />
       {!state.data ? (
         <DataState error={state.error} reload={state.reload} />
       ) : tab === "channels" ? (
-        <div className="grid gap-5 lg:grid-cols-2">
-          <div className="space-y-4">
-            <ChannelForm hub={state.data} onSaved={state.reload} />
-            {state.data.channels.map((channel) => (
-              <Card key={channel.id} className="space-y-3 p-4">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <h2 className="font-semibold">{channel.name}</h2>
-                    <p className="text-caption text-muted">
-                      {
-                        state.data!.cities.find((c) => c.id === channel.cityId)
-                          ?.name
-                      }{" "}
-                      · {t.loose(`social.${channel.kind}`)}
-                      {channel.archived ? ` · ${t("social.archived")}` : ""}
-                    </p>
-                  </div>
-                  <Button
-                    variant="secondary"
-                    onClick={() => setSelected(channel)}
-                  >
-                    {t("social.openChannel")}
-                  </Button>
-                </div>
-                <ChannelForm
-                  hub={state.data!}
-                  channel={channel}
-                  onSaved={state.reload}
-                />
-              </Card>
-            ))}
-          </div>
-          {selected ? (
-            <div ref={feedPanel} className="min-w-0 scroll-mt-16">
-              <Feed
-                key={selected.id}
-                room={{ kind: "channel", id: selected.id }}
-                channel={selected}
+        <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
+          <Card className="overflow-hidden">
+            <CardHeader title={t("social.channels")} className="pb-3" />
+            {!state.data.channels.length ? (
+              <EmptyState
+                icon={MessageCircle}
+                title={t("social.noChannels")}
+                body={t("social.noChannelsAdmin")}
+                action={<Button onClick={() => setEditing("new")}>{t("social.newChannel")}</Button>}
               />
-            </div>
-          ) : (
-            <EmptyState
-              icon={MessageCircle}
-              title={t("social.channels")}
-              body={t("social.emptyBody")}
-            />
-          )}
+            ) : (
+              <ul className="divide-y divide-border border-t border-border">
+                {state.data.channels.map((channel) => {
+                  const active = selected?.id === channel.id;
+                  const editable = channel.kind !== "TIMELINE" || channel.canPostTimeline;
+                  return (
+                    <li key={channel.id} className={cn("flex items-center gap-2 pr-3 transition-colors", active ? "bg-accent-subtle" : "hover:bg-surface-hover")}>
+                      <button
+                        type="button"
+                        aria-pressed={active}
+                        onClick={() => setSelected(channel)}
+                        className="min-w-0 flex-1 py-3 pl-5 text-left"
+                      >
+                        <span className={cn("block truncate text-body-sm font-bold", active ? "text-accent-subtle-fg" : "text-fg")}>{channel.name}</span>
+                        <span className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-caption text-muted">
+                          <span>{cityName(channel.cityId)}</span>
+                          <span aria-hidden="true">·</span>
+                          <span>{t.loose(`social.${channel.kind}`)}</span>
+                          {channel.visibility === "ADMINS_ONLY" && (
+                            <>
+                              <span aria-hidden="true">·</span>
+                              <span>{t("social.ADMINS_ONLY")}</span>
+                            </>
+                          )}
+                        </span>
+                      </button>
+                      {channel.archived && <Badge>{t("social.archived")}</Badge>}
+                      {editable && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="w-control-sm shrink-0 px-0"
+                          aria-label={`${t("social.editChannel")}: ${channel.name}`}
+                          onClick={() => setEditing(channel)}
+                        >
+                          <Pencil aria-hidden="true" />
+                        </Button>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </Card>
+          <div ref={feedPanel} className="min-w-0 scroll-mt-16">
+            {selected ? (
+              <Feed key={selected.id} room={{ kind: "channel", id: selected.id }} channel={selected} />
+            ) : (
+              <Card>
+                <EmptyState icon={MessageCircle} title={t("social.pickChannel")} body={t("social.pickChannelBody")} />
+              </Card>
+            )}
+          </div>
         </div>
       ) : (
         <Operations tab={tab} />
       )}
-    </>
+      {editing && state.data && (
+        <ChannelDialog
+          key={editing === "new" ? "new" : editing.id}
+          hub={state.data}
+          channel={editing === "new" ? undefined : editing}
+          onClose={() => setEditing(null)}
+          onSaved={() => {
+            setEditing(null);
+            void state.reload();
+          }}
+        />
+      )}
+    </div>
   );
 }
-function ChannelForm({
+
+function ChannelDialog({
   hub,
   channel,
+  onClose,
   onSaved,
 }: {
   hub: HubResponse;
   channel?: HubChannel;
+  onClose: () => void;
   onSaved: () => void;
 }) {
   const t = useT();
-  const [open, setOpen] = useState(!channel);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  if (!open)
-    return (
-      <Button variant="ghost" size="sm" onClick={() => setOpen(true)}>
-        {t("common.edit")}
-      </Button>
-    );
+  const formId = `channel-form-${channel?.id ?? "new"}`;
+  const fid = (key: string) => `${key}-${channel?.id ?? "new"}`;
   return (
-    <Card className="p-4">
-      {(channel?.kind !== "TIMELINE" || channel.canPostTimeline) &&       <form
-        className="space-y-3"
+    <Dialog
+      open
+      onClose={onClose}
+      title={channel ? t("social.editChannel") : t("social.newChannel")}
+      description={channel ? channel.name : t("social.newChannelBody")}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose} disabled={busy}>
+            {t("common.cancel")}
+          </Button>
+          <Button type="submit" form={formId} loading={busy}>
+            {channel ? t("common.save") : t("social.createChannel")}
+          </Button>
+        </>
+      }
+    >
+      <form
+        id={formId}
+        className="flex flex-col gap-4 pb-2"
         onSubmit={async (e) => {
           e.preventDefault();
           const f = new FormData(e.currentTarget);
@@ -154,117 +214,89 @@ function ChannelForm({
             kind: f.get("kind"),
             visibility: f.get("visibility"),
             memberPosting:
-              f.get("posting") === "default"
-                ? null
-                : f.get("posting") === "members",
+              f.get("posting") === "default" ? null : f.get("posting") === "members",
             archived: f.get("archived") === "on",
           });
           setBusy(false);
           if (!result.ok) setError(result.error.messageKey);
-          else {
-            onSaved();
-            if (channel) setOpen(false);
-          }
+          else onSaved();
         }}
       >
-        <h2 className="text-title3">
-          {channel ? t("common.edit") : t("social.newChannel")}
-        </h2>
-        <Field htmlFor={`name-${channel?.id}`} label={t("social.channelName")}>
-          <Input
-            id={`name-${channel?.id}`}
-            name="name"
-            required
-            maxLength={80}
-            defaultValue={channel?.name}
-          />
+        <Field htmlFor={fid("name")} label={t("social.channelName")}>
+          <Input id={fid("name")} name="name" required maxLength={80} defaultValue={channel?.name} />
         </Field>
-        <Field htmlFor={`city-${channel?.id}`} label={t("social.city")}>
-          <Select
-            id={`city-${channel?.id}`}
-            name="city"
-            defaultValue={channel?.cityId}
-          >
-            {hub.cities
-              .filter((c) => !channel || c.id === channel.cityId)
-              .map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field htmlFor={fid("city")} label={t("social.city")}>
+            <Select id={fid("city")} name="city" defaultValue={channel?.cityId ?? ""} required disabled={Boolean(channel)}>
+              {!channel && (
+                <option value="" disabled>
+                  {t("social.chooseCity")}
                 </option>
-              ))}
-          </Select>
-        </Field>
-        <Field htmlFor={`kind-${channel?.id}`} label={t("social.kind")}>
-          <Select
-            id={`kind-${channel?.id}`}
-            name="kind"
-            defaultValue={channel?.kind}
-          >
-            {["TIMELINE", "CHAT"]
-              .filter((k) => !channel || k === channel.kind)
-              .map((k) => (
+              )}
+              {hub.cities
+                .filter((c) => !channel || c.id === channel.cityId)
+                .map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+            </Select>
+            {channel && <input type="hidden" name="city" value={channel.cityId} />}
+          </Field>
+          <Field htmlFor={fid("kind")} label={t("social.kind")}>
+            <Select id={fid("kind")} name="kind" defaultValue={channel?.kind ?? "CHAT"} disabled={Boolean(channel)}>
+              {["CHAT", "TIMELINE"]
+                .filter((k) => !channel || k === channel.kind)
+                .map((k) => (
+                  <option key={k} value={k}>
+                    {t.loose(`social.${k}`)}
+                  </option>
+                ))}
+            </Select>
+            {channel && <input type="hidden" name="kind" value={channel.kind} />}
+          </Field>
+          <Field htmlFor={fid("visibility")} label={t("social.visibility")}>
+            <Select id={fid("visibility")} name="visibility" defaultValue={channel?.visibility ?? "MEMBERS"}>
+              {["MEMBERS", "ADMINS_ONLY"].map((k) => (
                 <option key={k} value={k}>
                   {t.loose(`social.${k}`)}
                 </option>
               ))}
-          </Select>
-        </Field>
-        <Field
-          htmlFor={`visibility-${channel?.id}`}
-          label={t("social.visibility")}
-        >
-          <Select
-            id={`visibility-${channel?.id}`}
-            name="visibility"
-            defaultValue={channel?.visibility}
-          >
-            {["MEMBERS", "ADMINS_ONLY"].map((k) => (
-              <option key={k} value={k}>
-                {t.loose(`social.${k}`)}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Field htmlFor={`posting-${channel?.id}`} label={t("social.posting")}>
-          <Select
-            id={`posting-${channel?.id}`}
-            name="posting"
-            defaultValue={
-              channel?.memberPosting == null
-                ? "default"
-                : channel.memberPosting
-                  ? "members"
-                  : "admins"
-            }
-          >
-            <option value="default">{t("social.defaultPosting")}</option>
-            <option value="members">{t("social.membersPosting")}</option>
-            <option value="admins">{t("social.adminsPosting")}</option>
-          </Select>
-        </Field>
+            </Select>
+          </Field>
+          <Field htmlFor={fid("posting")} label={t("social.posting")}>
+            <Select
+              id={fid("posting")}
+              name="posting"
+              defaultValue={channel?.memberPosting == null ? "default" : channel.memberPosting ? "members" : "admins"}
+            >
+              <option value="default">{t("social.defaultPosting")}</option>
+              <option value="members">{t("social.membersPosting")}</option>
+              <option value="admins">{t("social.adminsPosting")}</option>
+            </Select>
+          </Field>
+        </div>
         {channel && (
-          <label className="flex gap-2 text-body-sm">
-            <input
-              type="checkbox"
-              name="archived"
-              defaultChecked={channel.archived}
-            />
-            {t("social.archive")}
-          </label>
+          <Switch
+            id={fid("archived")}
+            name="archived"
+            onValue="on"
+            offValue={null}
+            defaultChecked={channel.archived}
+            label={t("social.archive")}
+            description={t("social.archiveHint")}
+          />
         )}
         {error && (
-          <p role="alert" className="text-danger-fg">
+          <p role="alert" className="text-body-sm text-danger-fg">
             {t.loose(error)}
           </p>
         )}
-        <Button loading={busy} type="submit">
-          {t("common.save")}
-        </Button>
-      </form>}
-
-    </Card>
+      </form>
+    </Dialog>
   );
 }
+
 export function Feed({
   room,
   channel,
@@ -299,12 +331,12 @@ export function Feed({
   if (lost || state.error === "errors.forbidden")
     return <p className="text-muted">{t("social.accessLost")}</p>;
   return (
-    <Card className="space-y-4 self-start p-4">
-      <div>
-        <h2 className="text-title3">{channel?.name ?? t("social.chat")}</h2>
-        <p className="text-caption text-muted">
-          {t(live ? "social.live" : "social.offline")}
-        </p>
+    <Card className="space-y-4 self-start p-5">
+      <div className="flex items-start justify-between gap-3 border-b border-border pb-3">
+        <h2 className="min-w-0 break-words text-title3 text-fg">{channel?.name ?? t("social.chat")}</h2>
+        <Badge tone={live ? "success" : "warning"} dot>
+          {t(live ? "social.liveShort" : "social.offlineShort")}
+        </Badge>
       </div>
       {!state.data ? (
         <DataState error={state.error} reload={state.reload} />
@@ -488,177 +520,204 @@ function Operations({ tab }: { tab: string }) {
   const [decision, setDecision] = useState<{
     action: string;
     body: unknown;
+    label: string;
+    destructive?: boolean;
   } | null>(null);
   if (!state.data)
     return <DataState error={state.error} reload={state.reload} />;
   const data = state.data;
+  const list = tab === "reservations" ? data.reservations : data.roaming;
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-4">
       {error && (
-        <p role="alert" className="text-danger-fg">
+        <p role="alert" className="text-body-sm text-danger-fg">
           {t.loose(error)}
         </p>
       )}
       {tab === "floorPlan" ? (
-        data.venues.map((v) => <LayoutEditor key={v.id} venue={v} />)
+        !data.venues.length ? (
+          <Card>
+            <EmptyState icon={MessageCircle} title={t("social.noSlots")} body={t("social.noVenuesAdmin")} />
+          </Card>
+        ) : (
+          data.venues.map((v) => <LayoutEditor key={v.id} venue={v} />)
+        )
       ) : tab === "screenshots" ? (
-        <>
-          <Card className="space-y-3 p-4">
-            <h2 className="text-title3">{t("social.screenshots")}</h2>
-            {!data.screenshots.length && <p>{t("social.noScreenshots")}</p>}
-            {data.screenshots.map((s) => (
-              <p key={s.memberId}>
-                {s.name} · {t("social.count", { count: formatCount(s.count) })}
-              </p>
-            ))}
+        <div className="grid items-start gap-4 lg:grid-cols-2">
+          <Card className="overflow-hidden">
+            <CardHeader title={t("social.screenshots")} description={t("social.secureHint")} className="pb-4" />
+            {!data.screenshots.length ? (
+              <EmptyState icon={Camera} title={t("social.noScreenshots")} body={t("social.noScreenshotsBody")} />
+            ) : (
+              <ul className="divide-y divide-border border-t border-border">
+                {data.screenshots.map((s) => (
+                  <li key={s.memberId} className="flex items-center justify-between gap-3 px-5 py-3 text-body-sm">
+                    <span className="min-w-0 truncate font-semibold text-fg">{s.name}</span>
+                    <Badge tone="warning">{t("social.count", { count: formatCount(s.count) })}</Badge>
+                  </li>
+                ))}
+              </ul>
+            )}
           </Card>
-          <Card className="space-y-3 p-4">
-            <h2 className="text-title3">{t("social.muted")}</h2>
-            {!data.muted.length && <p>{t("social.noMuted")}</p>}
-            {data.muted.map((m) => (
-              <div
-                key={`${m.cityId}:${m.userId}`}
-                className="flex flex-wrap justify-between gap-2"
-              >
-                <span>{m.name}</span>
-                <Button
-                  variant="secondary"
-                  onClick={() =>
-                    setDecision({
-                      action: "moderate",
-                      body: {
-                        action: "mute",
-                        cityId: m.cityId,
-                        userId: m.userId,
-                        muted: false,
-                      },
-                    })
-                  }
-                >
-                  {t("social.unmute")}
-                </Button>
-              </div>
-            ))}
+          <Card className="overflow-hidden">
+            <CardHeader title={t("social.muted")} description={t("social.muteBody")} className="pb-4" />
+            {!data.muted.length ? (
+              <EmptyState icon={VolumeX} title={t("social.noMuted")} body={t("social.noMutedBody")} />
+            ) : (
+              <ul className="divide-y divide-border border-t border-border">
+                {data.muted.map((m) => (
+                  <li key={`${m.cityId}:${m.userId}`} className="flex items-center justify-between gap-3 px-5 py-3">
+                    <span className="min-w-0 truncate text-body-sm font-semibold text-fg">{m.name}</span>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() =>
+                        setDecision({
+                          action: "moderate",
+                          label: t("social.unmute"),
+                          body: { action: "mute", cityId: m.cityId, userId: m.userId, muted: false },
+                        })
+                      }
+                    >
+                      {t("social.unmute")}
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </Card>
-        </>
+        </div>
+      ) : !list.length ? (
+        <Card>
+          <EmptyState
+            icon={MessageCircle}
+            title={t("social.noRequests")}
+            body={t(tab === "reservations" ? "social.noReservationsBody" : "social.noRoamingBody")}
+          />
+        </Card>
       ) : (
-        <>
-          {!(tab === "reservations" ? data.reservations : data.roaming)
-            .length && (
-            <EmptyState
-              icon={MessageCircle}
-              title={t("social.noRequests")}
-              body={t("social.noRequestsBody")}
-            />
-          )}
+        <div className="grid items-start gap-4 lg:grid-cols-2">
           {tab === "reservations"
             ? data.reservations.map((r) => (
-                <Card key={r.id} className="space-y-3 p-4">
-                  <h2 className="font-semibold">
-                    {r.event.title} · {r.slotCode}
-                  </h2>
-                  <p>
-                    {r.member.fullName} · {formatCount(r.pax)} ·{" "}
-                    {t.loose(`social.${r.status}`)}
-                  </p>
-                  {r.note && <p>{r.note}</p>}
-                  <div className="flex flex-wrap gap-2">
-                    {r.canDecide &&
-                      r.status === "PENDING" &&
-                      ["CONFIRMED", "REJECTED"].map((status) => (
+                <Card key={r.id} className="flex flex-col gap-3 p-5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h2 className="break-words text-title3 text-fg">{r.member.fullName}</h2>
+                      <p className="mt-0.5 break-words text-body-sm text-muted">
+                        {r.event.title} · <span className="font-semibold text-fg">{r.slotCode}</span> ·{" "}
+                        {t("social.paxCount", { count: formatCount(r.pax) })}
+                      </p>
+                    </div>
+                    <Badge tone={STATUS_TONE[r.status] ?? "neutral"} dot>
+                      {t.loose(`social.${r.status}`)}
+                    </Badge>
+                  </div>
+                  {r.note && <p className="break-words rounded-control bg-surface-muted px-3 py-2 text-body-sm text-fg">{r.note}</p>}
+                  <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border pt-3">
+                    {r.conversation && (
+                      <Button variant="ghost" size="sm" onClick={() => setConversation(r.conversation!.id)}>
+                        <MessageCircle aria-hidden="true" />
+                        {t("social.chat")}
+                      </Button>
+                    )}
+                    {r.canDecide && r.status === "PENDING" && (
+                      <>
                         <Button
-                          key={status}
                           variant="secondary"
+                          size="sm"
                           onClick={() =>
                             setDecision({
                               action: "reservation-decision",
-                              body: { id: r.id, status },
+                              label: t("social.reject"),
+                              destructive: true,
+                              body: { id: r.id, status: "REJECTED" },
                             })
                           }
                         >
-                          {t(
-                            status === "CONFIRMED"
-                              ? "social.confirm"
-                              : "social.reject",
-                          )}
+                          {t("social.reject")}
                         </Button>
-                      ))}
-                    {r.conversation && (
-                      <Button
-                        variant="ghost"
-                        onClick={() => setConversation(r.conversation!.id)}
-                      >
-                        {t("social.chat")}
-                      </Button>
+                        <Button
+                          size="sm"
+                          onClick={() =>
+                            setDecision({
+                              action: "reservation-decision",
+                              label: t("social.confirm"),
+                              body: { id: r.id, status: "CONFIRMED" },
+                            })
+                          }
+                        >
+                          {t("social.confirm")}
+                        </Button>
+                      </>
                     )}
                   </div>
                 </Card>
               ))
             : data.roaming.map((r) => (
-                <Card key={r.id} className="space-y-3 p-4">
-                  <h2 className="font-semibold">
-                    {r.member.fullName} · {r.event.title}
-                  </h2>
-                  <p>
-                    {t.loose(`social.${r.type}`)} ·{" "}
-                    {t.loose(`social.${r.status}`)}
-                  </p>
+                <Card key={r.id} className="flex flex-col gap-3 p-5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h2 className="break-words text-title3 text-fg">{r.member.fullName}</h2>
+                      <p className="mt-0.5 break-words text-body-sm text-muted">
+                        {t.loose(`social.${r.type}`)} · {r.event.title}
+                      </p>
+                    </div>
+                    <Badge tone={STATUS_TONE[r.status] ?? "neutral"} dot>
+                      {t.loose(`social.${r.status}`)}
+                    </Badge>
+                  </div>
                   {r.accessExpiresAt && (
                     <p className="text-caption text-muted">
-                      {t("social.expires", {
-                        date: formatDateTime(
-                          new Date(r.accessExpiresAt),
-                          t.locale,
-                        ),
-                      })}
+                      {t("social.expires", { date: formatDateTime(new Date(r.accessExpiresAt), t.locale) })}
                     </p>
                   )}
                   {r.status === "PENDING" && r.type === "SOCIAL_HUB" && (
-                    <div className="flex gap-2">
-                      {["APPROVED", "REJECTED"].map((value) => (
-                        <Button
-                          key={value}
-                          variant="secondary"
-                          onClick={() =>
-                            setDecision({
-                              action: "roaming-decision",
-                              body: { id: r.id, decision: value },
-                            })
-                          }
-                        >
-                          {t(
-                            value === "APPROVED"
-                              ? "social.approve"
-                              : "social.reject",
-                          )}
-                        </Button>
-                      ))}
+                    <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-3">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() =>
+                          setDecision({
+                            action: "roaming-decision",
+                            label: t("social.reject"),
+                            destructive: true,
+                            body: { id: r.id, decision: "REJECTED" },
+                          })
+                        }
+                      >
+                        {t("social.reject")}
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() =>
+                          setDecision({
+                            action: "roaming-decision",
+                            label: t("social.approve"),
+                            body: { id: r.id, decision: "APPROVED" },
+                          })
+                        }
+                      >
+                        {t("social.approve")}
+                      </Button>
                     </div>
                   )}
                 </Card>
               ))}
-          {conversation && (
-            <Feed
-              key={conversation}
-              room={{ kind: "conversation", id: conversation }}
-            />
-          )}
-        </>
+        </div>
       )}
+      {conversation && <Feed key={conversation} room={{ kind: "conversation", id: conversation }} />}
       <ConfirmDialog
         open={Boolean(decision)}
         onClose={() => setDecision(null)}
-        title={t("social.review")}
+        title={decision?.label ?? t("social.review")}
         body={t("social.decisionBody")}
-        confirmLabel={t("social.confirm")}
+        confirmLabel={decision?.label ?? t("social.confirm")}
+        destructive={decision?.destructive}
         busy={busy}
         onConfirm={async () => {
           if (!decision) return;
           setBusy(true);
-          const r = await postJson(
-            `/api/social/${decision.action}`,
-            decision.body,
-          );
+          const r = await postJson(`/api/social/${decision.action}`, decision.body);
           setBusy(false);
           if (r.ok) {
             setDecision(null);
@@ -669,162 +728,297 @@ function Operations({ tab }: { tab: string }) {
     </div>
   );
 }
-function LayoutEditor({
-  venue,
-}: {
-  venue: SocialOperations["venues"][number];
-}) {
+
+const GRID = 12;
+const NEW_SLOT: VenueSlot = { code: "", kind: "SOFA", x: 0, y: 0, w: 2, h: 2, pax: 4 };
+
+function LayoutEditor({ venue }: { venue: SocialOperations["venues"][number] }) {
   const t = useT();
-  const [minimumCharge, setMinimumCharge] = useState(venue.minimumCharge);
+  const [minimumCharge, setMinimumCharge] = useState(String(venue.minimumCharge));
   const [slots, setSlots] = useState<VenueSlot[]>(venue.layout.slots),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
     [saved, setSaved] = useState(false);
-  const update = (index: number, key: keyof VenueSlot, value: string) =>
-    setSlots((old) =>
-      old.map((s, i) =>
-        i === index
-          ? {
-              ...s,
-              [key]: ["code", "kind", "minimumSpend"].includes(key)
-                ? value
-                : key === "minimumCharge" && value === "" ? undefined : Number(value),
-            }
-          : s,
-      ),
-    );
+  const [editing, setEditing] = useState<{ index: number | null; slot: VenueSlot } | null>(null);
+  const dirty = () => setSaved(false);
   return (
-    <Card className="space-y-4 p-5">
-      <h2 className="text-title3">{venue.name}</h2>
-      <p className="text-caption text-muted">{t("social.layoutHint")}</p>
-      <div className="grid aspect-square w-full max-w-md grid-cols-12 grid-rows-12 gap-1 rounded-control bg-surface-muted p-2">
-        {slots.map((s, i) => (
+    <Card className="overflow-hidden">
+      <CardHeader
+        title={venue.name}
+        description={venue.cityName ? `${venue.cityName} · ${t("social.layoutHint")}` : t("social.layoutHint")}
+        className="pb-4"
+      />
+      <div className="grid gap-6 border-t border-border p-5 lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)]">
+        <div>
+          <p className="ktm-label mb-2 text-muted">{t("social.preview")}</p>
           <div
-            key={i}
-            className="flex items-center justify-center overflow-hidden rounded-sm bg-accent-subtle text-caption text-accent-subtle-fg"
-            style={{
-              gridColumn: `${s.x + 1} / span ${s.w}`,
-              gridRow: `${s.y + 1} / span ${s.h}`,
-            }}
+            className="grid aspect-square w-full gap-1 rounded-control border border-border bg-surface-muted p-1.5"
+            style={{ gridTemplateColumns: `repeat(${GRID}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${GRID}, minmax(0, 1fr))` }}
           >
-            {s.code}
+            {slots.map((s, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => setEditing({ index: i, slot: s })}
+                aria-label={`${t("social.editSlot")}: ${s.code}`}
+                className={cn(
+                  "flex min-w-0 flex-col items-center justify-center overflow-hidden rounded-sm border px-0.5 text-center leading-tight transition-colors",
+                  s.kind === "SOFA"
+                    ? "border-secondary/40 bg-secondary-subtle text-secondary-subtle-fg hover:border-secondary"
+                    : "border-accent/40 bg-accent-subtle text-accent-subtle-fg hover:border-accent",
+                )}
+                style={{ gridColumn: `${s.x + 1} / span ${s.w}`, gridRow: `${s.y + 1} / span ${s.h}` }}
+              >
+                <span className="max-w-full truncate text-caption font-black">{s.code}</span>
+                {s.h > 1 && <span className="max-w-full truncate text-[11px]">{t("social.paxShort", { count: s.pax })}</span>}
+              </button>
+            ))}
           </div>
-        ))}
+          <div className="mt-2 flex flex-wrap gap-3 text-caption text-muted">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="size-3 rounded-sm border border-secondary/40 bg-secondary-subtle" aria-hidden="true" />
+              {t("social.SOFA")}
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="size-3 rounded-sm border border-accent/40 bg-accent-subtle" aria-hidden="true" />
+              {t("social.TABLE")}
+            </span>
+          </div>
+        </div>
+        <form
+          className="flex min-w-0 flex-col gap-4"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            setBusy(true);
+            setSaved(false);
+            const r = await postJson("/api/social/layout", {
+              venueId: venue.id,
+              layout: { slots },
+              minimumCharge: Number(minimumCharge || 0),
+            });
+            setBusy(false);
+            setError(r.ok ? "" : r.error.messageKey);
+            setSaved(r.ok);
+          }}
+        >
+          <Field htmlFor={`minimum-${venue.id}`} label={t("phase5.minimumCharge")} hint={t("phase5.venueMinimum")}>
+            <div className="sm:max-w-64">
+              <RupiahInput
+                id={`minimum-${venue.id}`}
+                defaultValue={Number(minimumCharge) || null}
+                onValueChange={(v) => {
+                  setMinimumCharge(v === null ? "" : String(v));
+                  dirty();
+                }}
+                aria-describedby={`minimum-${venue.id}-hint`}
+              />
+            </div>
+          </Field>
+          <div className="overflow-hidden rounded-control border border-border">
+            {!slots.length ? (
+              <EmptyState icon={Plus} title={t("social.noSlots")} body={t("social.noSlotsAdmin")} className="py-8 md:py-8" />
+            ) : (
+              <Table>
+                <thead>
+                  <tr>
+                    <Th>{t("social.slotCode")}</Th>
+                    <Th>{t("social.kind")}</Th>
+                    <Th>{t("social.position")}</Th>
+                    <Th className="text-right">{t("social.pax")}</Th>
+                    <Th className="text-right">{t("phase5.minimumCharge")}</Th>
+                    <Th>
+                      <span className="sr-only">{t("social.actions")}</span>
+                    </Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {slots.map((s, i) => (
+                    <Tr key={i}>
+                      <Td className="font-bold">{s.code}</Td>
+                      <Td>{t.loose(`social.${s.kind}`)}</Td>
+                      <Td className="whitespace-nowrap tabular-nums text-muted">
+                        {t("social.positionValue", { x: s.x, y: s.y, w: s.w, h: s.h })}
+                      </Td>
+                      <Td className="text-right tabular-nums">{formatCount(s.pax)}</Td>
+                      <Td className="whitespace-nowrap text-right tabular-nums">
+                        {s.minimumCharge == null ? <span className="text-muted">{t("social.venueDefault")}</span> : formatRupiah(s.minimumCharge)}
+                      </Td>
+                      <Td>
+                        <div className="flex justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="w-control-sm px-0"
+                            aria-label={`${t("social.editSlot")}: ${s.code}`}
+                            onClick={() => setEditing({ index: i, slot: s })}
+                          >
+                            <Pencil aria-hidden="true" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="w-control-sm px-0 hover:text-danger-fg"
+                            aria-label={`${t("social.removeSlot")}: ${s.code}`}
+                            onClick={() => {
+                              setSlots(slots.filter((_, n) => n !== i));
+                              dirty();
+                            }}
+                          >
+                            <Trash2 aria-hidden="true" />
+                          </Button>
+                        </div>
+                      </Td>
+                    </Tr>
+                  ))}
+                </tbody>
+              </Table>
+            )}
+          </div>
+          {error && (
+            <p role="alert" className="text-body-sm text-danger-fg">
+              {t.loose(error)}
+            </p>
+          )}
+          {saved && (
+            <p role="status" className="text-body-sm text-success-fg">
+              {t("social.saved")}
+            </p>
+          )}
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button variant="secondary" onClick={() => setEditing({ index: null, slot: { ...NEW_SLOT, code: `S${slots.length + 1}` } })}>
+              <Plus aria-hidden="true" />
+              {t("social.addSlot")}
+            </Button>
+            <Button type="submit" loading={busy}>
+              {t("social.saveLayout")}
+            </Button>
+          </div>
+        </form>
       </div>
+      {editing && (
+        <SlotDialog
+          key={editing.index ?? "new"}
+          venueId={venue.id}
+          slot={editing.slot}
+          isNew={editing.index === null}
+          onClose={() => setEditing(null)}
+          onDone={(slot) => {
+            setSlots(editing.index === null ? [...slots, slot] : slots.map((s, n) => (n === editing.index ? slot : s)));
+            setEditing(null);
+            dirty();
+          }}
+        />
+      )}
+    </Card>
+  );
+}
+
+function SlotDialog({
+  venueId,
+  slot,
+  isNew,
+  onClose,
+  onDone,
+}: {
+  venueId: string;
+  slot: VenueSlot;
+  isNew: boolean;
+  onClose: () => void;
+  onDone: (slot: VenueSlot) => void;
+}) {
+  const t = useT();
+  const [draft, setDraft] = useState(slot);
+  const [charge, setCharge] = useState(slot.minimumCharge == null ? "" : String(slot.minimumCharge));
+  const [invalid, setInvalid] = useState(false);
+  const formId = `slot-${venueId}`;
+  const id = (k: string) => `${venueId}-slot-${k}`;
+  const num = (k: "x" | "y" | "w" | "h" | "pax", v: string) => setDraft({ ...draft, [k]: v === "" ? 0 : Number(v) });
+  const valid =
+    /^[A-Za-z0-9-]{1,20}$/.test(draft.code.trim()) &&
+    draft.x >= 0 && draft.y >= 0 && draft.w >= 1 && draft.h >= 1 &&
+    draft.x + draft.w <= GRID && draft.y + draft.h <= GRID && draft.pax >= 1;
+  return (
+    <Dialog
+      open
+      onClose={onClose}
+      title={isNew ? t("social.addSlot") : t("social.editSlot")}
+      description={t("social.layoutHint")}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>
+            {t("common.cancel")}
+          </Button>
+          <Button type="submit" form={formId}>
+            {isNew ? t("social.addSlot") : t("social.done")}
+          </Button>
+        </>
+      }
+    >
       <form
-        className="space-y-4"
-        onSubmit={async (e) => {
+        id={formId}
+        noValidate
+        className="grid grid-cols-2 gap-4 pb-2"
+        onSubmit={(e) => {
           e.preventDefault();
-          setBusy(true);
-          setSaved(false);
-          const r = await postJson("/api/social/layout", {
-            venueId: venue.id,
-            layout: { slots },
-            minimumCharge,
+          if (!valid) {
+            setInvalid(true);
+            return;
+          }
+          const minimumSpend = draft.minimumSpend?.trim();
+          onDone({
+            ...draft,
+            code: draft.code.trim(),
+            minimumCharge: charge === "" ? undefined : Number(charge),
+            minimumSpend: minimumSpend ? minimumSpend : undefined,
           });
-          setBusy(false);
-          setError(r.ok ? "" : r.error.messageKey);
-          setSaved(r.ok);
         }}
       >
-        <Field htmlFor={`minimum-${venue.id}`} label={t("phase5.venueMinimum")}><Input id={`minimum-${venue.id}`} type="number" min={0} required value={minimumCharge} onChange={e => setMinimumCharge(Number(e.target.value))} /></Field>
-        {slots.map((s, i) => (
-          <fieldset
-            key={i}
-            className="grid grid-cols-2 gap-3 rounded-control border border-border p-3 sm:grid-cols-4"
-          >
-            <legend className="px-2 text-caption">
-              {s.code || t("social.slot")}
-            </legend>
-            {(
-              [
-                "code",
-                "kind",
-                "x",
-                "y",
-                "w",
-                "h",
-                "pax",
-                "minimumSpend",
-                "minimumCharge",
-              ] as const
-            ).map((key) => (
-              <Field
-                key={key}
-                htmlFor={`${venue.id}-${i}-${key}`}
-                label={key === "minimumCharge" ? t("phase5.minimumCharge") : t.loose(
-                  `social.${({ code: "slotCode", kind: "kind", w: "width", h: "height" } as Record<string, string>)[key] ?? key}`,
-                )}
-              >
-                {key === "kind" ? (
-                  <Select
-                    id={`${venue.id}-${i}-${key}`}
-                    value={s.kind}
-                    onChange={(e) => update(i, key, e.target.value)}
-                  >
-                    {["SOFA", "TABLE"].map((k) => (
-                      <option key={k} value={k}>
-                        {t.loose(`social.${k}`)}
-                      </option>
-                    ))}
-                  </Select>
-                ) : (
-                  <Input
-                    id={`${venue.id}-${i}-${key}`}
-                    value={s[key] ?? ""}
-                    type={
-                      ["code", "minimumSpend"].includes(key) ? "text" : "number"
-                    }
-                    min={["x", "y", "minimumCharge"].includes(key) ? 0 : 1}
-                    onChange={(e) => update(i, key, e.target.value)}
-                    required={key !== "minimumSpend" && key !== "minimumCharge"}
-                  />
-                )}
-              </Field>
+        <Field htmlFor={id("code")} label={t("social.slotCode")}>
+          <Input id={id("code")} value={draft.code} maxLength={20} onChange={(e) => setDraft({ ...draft, code: e.target.value })} required />
+        </Field>
+        <Field htmlFor={id("kind")} label={t("social.kind")}>
+          <Select id={id("kind")} value={draft.kind} onChange={(e) => setDraft({ ...draft, kind: e.target.value as VenueSlot["kind"] })}>
+            {["SOFA", "TABLE"].map((k) => (
+              <option key={k} value={k}>
+                {t.loose(`social.${k}`)}
+              </option>
             ))}
-            <Button
-              variant="ghost"
-              onClick={() => setSlots(slots.filter((_, n) => n !== i))}
-            >
-              {t("social.removeSlot")}
-            </Button>
-          </fieldset>
+          </Select>
+        </Field>
+        {(["x", "y", "w", "h"] as const).map((k) => (
+          <Field key={k} htmlFor={id(k)} label={t.loose(`social.${({ w: "width", h: "height" } as Record<string, string>)[k] ?? k}`)}>
+            <Input
+              id={id(k)}
+              type="number"
+              inputMode="numeric"
+              min={k === "x" || k === "y" ? 0 : 1}
+              max={k === "x" || k === "y" ? GRID - 1 : GRID}
+              value={draft[k]}
+              onChange={(e) => num(k, e.target.value)}
+              className="tabular-nums"
+            />
+          </Field>
         ))}
-        {error && (
-          <p role="alert" className="text-danger-fg">
-            {t.loose(error)}
+        <Field htmlFor={id("pax")} label={t("social.pax")}>
+          <Input id={id("pax")} type="number" inputMode="numeric" min={1} max={100} value={draft.pax} onChange={(e) => num("pax", e.target.value)} className="tabular-nums" />
+        </Field>
+        <Field htmlFor={id("charge")} label={t("phase5.minimumCharge")} hint={t("social.chargeHint")}>
+          <RupiahInput
+            id={id("charge")}
+            defaultValue={charge === "" ? null : Number(charge)}
+            onValueChange={(v) => setCharge(v === null ? "" : String(v))}
+            aria-describedby={`${id("charge")}-hint`}
+          />
+        </Field>
+        <Field htmlFor={id("spend")} label={t("social.minimumSpend")} className="col-span-2">
+          <Input id={id("spend")} value={draft.minimumSpend ?? ""} maxLength={200} onChange={(e) => setDraft({ ...draft, minimumSpend: e.target.value })} />
+        </Field>
+        {invalid && !valid && (
+          <p role="alert" className="col-span-2 text-body-sm text-danger-fg">
+            {t("social.slotInvalid")}
           </p>
         )}
-        {saved && (
-          <p role="status" className="text-success-fg">
-            {t("social.saved")}
-          </p>
-        )}
-        <div className="flex flex-wrap gap-2">
-          <Button
-            variant="secondary"
-            onClick={() =>
-              setSlots([
-                ...slots,
-                {
-                  code: `S${slots.length + 1}`,
-                  kind: "SOFA",
-                  x: 0,
-                  y: 0,
-                  w: 2,
-                  h: 2,
-                  pax: 4,
-                },
-              ])
-            }
-          >
-            {t("social.addSlot")}
-          </Button>
-          <Button type="submit" loading={busy}>
-            {t("common.save")}
-          </Button>
-        </div>
       </form>
-    </Card>
+    </Dialog>
   );
 }

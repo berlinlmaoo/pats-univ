@@ -8,9 +8,9 @@ import { db } from '../db';
 import type { ActionResult } from './action-result';
 import { requireHq } from './guard';
 
-const editSchema = registrationSchema.pick({ fullName: true, dateOfBirth: true, cityId: true, phone: true });
+const editSchema = registrationSchema.pick({ fullName: true, dateOfBirth: true, cityId: true, phone: true, favoriteDrink: true, favoriteGenre: true });
 
-/** HQ edits a member's core data (name, date of birth, home city, WhatsApp). NIM never changes. */
+/** HQ edits a member's core data (name, date of birth, home city, WhatsApp, the drink and genre printed on the KTM). NIM never changes. */
 export async function updateMemberAction(memberId: string, _prev: ActionResult | null, form: FormData): Promise<ActionResult> {
   const hq = await requireHq();
   const parsed = editSchema.safeParse(Object.fromEntries(form));
@@ -31,6 +31,8 @@ export async function updateMemberAction(memberId: string, _prev: ActionResult |
     ...(member.dateOfBirth.getTime() !== dateOfBirth.getTime() && { dateOfBirth: true }),
     ...(member.cityId !== input.cityId && { cityId: [member.cityId, input.cityId] }),
     ...(member.user.phone !== input.phone && { phone: true }),
+    ...(member.favoriteDrink !== input.favoriteDrink && { favoriteDrink: [member.favoriteDrink, input.favoriteDrink] }),
+    ...(member.favoriteGenre !== input.favoriteGenre && { favoriteGenre: [member.favoriteGenre, input.favoriteGenre] }),
   };
   if (Object.keys(changed).length === 0) return { ok: true };
 
@@ -39,6 +41,8 @@ export async function updateMemberAction(memberId: string, _prev: ActionResult |
     data: {
       fullName: input.fullName,
       dateOfBirth,
+      favoriteDrink: input.favoriteDrink,
+      favoriteGenre: input.favoriteGenre,
       city: { connect: { id: input.cityId } },
       user: { update: { name: input.fullName, phone: input.phone } },
     },

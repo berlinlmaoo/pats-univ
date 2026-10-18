@@ -1,12 +1,15 @@
 'use client';
 
-import { formatCount, SETTINGS, type SettingDefinition, type SettingKey } from '@pats/shared';
+import { formatCount, formatRupiah, SETTINGS, type SettingDefinition, type SettingKey } from '@pats/shared';
 import { Check } from 'lucide-react';
 import { useActionState, useState } from 'react';
 import { useT } from '@/components/i18n/provider';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input, Select } from '@/components/ui/field';
+import { TimeInput } from '@/components/ui/date-time';
+import { RupiahInput } from '@/components/ui/rupiah-input';
+import { Switch } from '@/components/ui/switch';
 import type { ActionResult } from '@/lib/hq/action-result';
 import { saveSettingAction } from '@/lib/hq/settings';
 import { cn } from '@/lib/cn';
@@ -25,8 +28,12 @@ const UNIT_LABEL = {
   hours: 'settings.unitHours',
   percent: 'settings.unitPercent',
   ranks: 'settings.unitRanks',
-  spins: 'settings.unitSpins',
+  admins: 'settings.unitAdmins',
+  toggle: 'settings.unitXp',
 } as const;
+
+/** Every control on the right column has the same width, so the save buttons line up. */
+const CONTROL_W = 'w-full sm:w-56';
 
 /** One editable rule: label + hint on the left, control + save on the right. */
 export function SettingRow({ settingKey, value, defaultValue }: { settingKey: SettingKey; value: string; defaultValue: string }) {
@@ -50,14 +57,11 @@ export function SettingRow({ settingKey, value, defaultValue }: { settingKey: Se
           <label htmlFor={id} className="text-body-sm font-medium text-fg">
             {label}
           </label>
-          {'tbd' in def && def.tbd && (
-            <span title={t('settings.tbdHint')}>
-              <Badge tone="warning">{t('settings.tbd')}</Badge>
-            </span>
-          )}
+          {'tbd' in def && def.tbd && <Badge tone="warning">{t('settings.tbd')}</Badge>}
         </div>
         <p className="mt-0.5 text-caption text-muted">
           {t.loose(`settings.keys.${settingKey}.hint`)}
+          {'tbd' in def && def.tbd && <span className="text-warning-fg"> {t('settings.tbdHint')}</span>}
           {defaultValue !== '' && (
             <span className="whitespace-nowrap">
               {' '}
@@ -68,9 +72,9 @@ export function SettingRow({ settingKey, value, defaultValue }: { settingKey: Se
       </div>
 
       <div className="flex flex-col gap-1.5 md:items-end">
-        <div className="flex items-center gap-2">
+        <div className="flex w-full items-center gap-2 sm:w-auto">
           <Control def={def} id={id} value={draft} onChange={setDraft} invalid={Boolean(error)} />
-          <Button type="submit" variant={dirty ? 'primary' : 'secondary'} size="md" disabled={!dirty} loading={pending} className="w-24">
+          <Button type="submit" variant={dirty ? 'primary' : 'secondary'} size="md" disabled={!dirty} loading={pending} className="w-24 shrink-0">
             {justSaved && !dirty ? <Check aria-hidden="true" /> : null}
             {justSaved && !dirty ? t('common.saved') : t('common.save')}
           </Button>
@@ -93,6 +97,8 @@ function displayValue(def: SettingDefinition, value: string, t: ReturnType<typeo
     case 'time':
       return value.replace(':', '.');
     case 'int':
+      if (def.unit === 'toggle') return value === '1' ? t('settings.on') : t('settings.off');
+      if (def.unit === 'rupiah') return formatRupiah(Number(value));
       return `${formatCount(Number(value))} ${t(UNIT_LABEL[def.unit])}`;
     default:
       return value;
@@ -116,13 +122,36 @@ function Control({
   const common = { id, name: 'value', value, 'aria-invalid': invalid || undefined };
   switch (def.kind) {
     case 'int':
+      if (def.unit === 'toggle') {
+        return (
+          <div className={cn('flex h-control-md items-center justify-between gap-3 sm:justify-end', CONTROL_W)}>
+            <span className="text-body-sm font-semibold text-fg">{value === '1' ? t('settings.on') : t('settings.off')}</span>
+            <Switch id={id} name="value" checked={value === '1'} onChange={(on) => onChange(on ? '1' : '0')} />
+          </div>
+        );
+      }
+      if (def.unit === 'rupiah') {
+        return (
+          <div className={CONTROL_W}>
+            <RupiahInput
+              id={id}
+              name="value"
+              defaultValue={value === '' ? null : Number(value)}
+              onValueChange={(v) => onChange(v === null ? '' : String(v))}
+              aria-invalid={invalid || undefined}
+              className="h-control-md text-right text-body-sm"
+            />
+          </div>
+        );
+      }
       // Value and unit share one bordered control, so long units ("peringkat") never overlap the number.
       return (
         <div
           className={cn(
-            'flex h-control-md w-44 items-center rounded-control border bg-surface transition-[border-color,box-shadow]',
+            'flex h-control-md items-center rounded-control border bg-surface transition-[border-color,box-shadow]',
             'border-border-strong focus-within:border-accent focus-within:ring-4 focus-within:ring-accent/15',
             invalid && 'border-danger focus-within:ring-danger/15',
+            CONTROL_W,
           )}
         >
           <input
@@ -140,7 +169,7 @@ function Control({
       );
     case 'enum':
       return (
-        <Select {...common} onChange={(e) => onChange(e.target.value)} className="h-control-md w-44 text-body-sm">
+        <Select {...common} onChange={(e) => onChange(e.target.value)} className={cn('h-control-md text-body-sm', CONTROL_W)}>
           {def.options.map((o) => (
             <option key={o.value} value={o.value}>
               {t.loose(o.labelKey)}
@@ -149,14 +178,18 @@ function Control({
         </Select>
       );
     case 'time':
+      // 24-hour with the locale separator (19.30 / 19:30): native time pickers showed AM/PM to ID crews.
       return (
-        <Input
-          {...common}
-          type="time"
-          step={60}
-          onChange={(e) => onChange(e.target.value)}
-          className="block h-control-md w-44 appearance-none text-body-sm tabular-nums [&::-webkit-date-and-time-value]:text-left"
-        />
+        <div className={CONTROL_W}>
+          <TimeInput
+            id={id}
+            name="value"
+            defaultValue={value}
+            onValueChange={(iso) => onChange(iso || value)}
+            aria-invalid={invalid || undefined}
+            className="h-control-md text-body-sm"
+          />
+        </div>
       );
     case 'url':
       return (
@@ -166,7 +199,7 @@ function Control({
           inputMode="url"
           placeholder="https://"
           onChange={(e) => onChange(e.target.value)}
-          className={cn('h-control-md w-full text-body-sm md:w-72')}
+          className={cn('h-control-md text-body-sm', CONTROL_W)}
         />
       );
   }

@@ -1,8 +1,9 @@
+import { dashboardHome } from '@pats/shared';
 import { redirect } from 'next/navigation';
 import { getWebUser } from '@/lib/auth/current-user';
 
-/** Root: HQ goes to the dashboard, everyone else to registration. */
+/** Root: every dashboard role goes to its own home (HQ overview, city operations); members and visitors to registration. */
 export default async function Home() {
   const user = await getWebUser();
-  redirect(user?.role === 'SUPER_ADMIN' ? '/overview' : '/join');
+  redirect((user && dashboardHome(user.role)) ?? '/join');
 }

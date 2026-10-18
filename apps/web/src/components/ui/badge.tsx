@@ -15,7 +15,8 @@ export function Badge({ tone = 'neutral', dot, children, className }: { tone?: B
   return (
     <span
       className={cn(
-        'inline-flex h-6 max-w-full items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 text-caption font-medium',
+        // Squared chips with the card's heavy caps, like a printed patch.
+        'inline-flex h-6 max-w-full items-center gap-1.5 whitespace-nowrap rounded-sm px-2 text-[11px] font-extrabold uppercase tracking-[0.05em]',
         tones[tone].box,
         className,
       )}

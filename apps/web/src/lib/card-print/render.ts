@@ -29,13 +29,16 @@ export interface TemplateMeta {
 
 export interface CardPrintData {
   fullName: string;
+  /** Not printed on the official KTM (ktm-2026); kept for the PDF title and older templates. */
   nim: string;
+  favoriteDrink: string;
+  favoriteGenre: string;
   /** The card URL the QR encodes. */
   url: string;
 }
 
 export function templateDir(): string {
-  const dir = env().CARD_TEMPLATE_DIR ?? 'card-templates/placeholder';
+  const dir = env().CARD_TEMPLATE_DIR ?? 'card-templates/ktm-2026';
   // Runtime config, never an input to the deployment bundle (keeps tracing from pulling in the whole repo).
   return path.isAbsolute(dir) ? dir : path.join(/* turbopackIgnore: true */ process.cwd(), dir);
 }
@@ -72,6 +75,11 @@ export async function qrSvg(url: string): Promise<string> {
   return QRCode.toString(url, { type: 'svg', errorCorrectionLevel: 'M', margin: 4, color: { dark: '#001836', light: '#ffffff' } });
 }
 
+/** White modules on a transparent ground, no quiet zone: for the official KTM's maroon tile. */
+export async function qrSvgInverse(url: string): Promise<string> {
+  return QRCode.toString(url, { type: 'svg', errorCorrectionLevel: 'M', margin: 0, color: { dark: '#ffffff', light: '#0000' } });
+}
+
 /** Trim (red) and safe-area (blue) guides drawn over each page, for proofs only. */
 function proofOverlay(meta: TemplateMeta): string {
   const b = meta.bleedMm;
@@ -88,7 +96,11 @@ export async function cardHtml(data: CardPrintData, opts: { proof?: boolean } = 
   let out = html
     .split('{{fullName}}').join(escapeHtml(data.fullName))
     .split('{{nim}}').join(escapeHtml(data.nim))
-    .split('{{qr}}').join(await qrSvg(data.url));
+    .split('{{favoriteDrink}}').join(escapeHtml(data.favoriteDrink))
+    .split('{{favoriteGenre}}').join(escapeHtml(data.favoriteGenre));
+  // Only render the QR variants the template uses.
+  if (out.includes('{{qrInverse}}')) out = out.split('{{qrInverse}}').join(await qrSvgInverse(data.url));
+  if (out.includes('{{qr}}')) out = out.split('{{qr}}').join(await qrSvg(data.url));
   if (opts.proof) {
     out = out
       .replace('</head>', `${proofOverlay(meta)}</head>`)

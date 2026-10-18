@@ -5,6 +5,7 @@ import { isUniqueViolation } from './db-errors';
 import { welcomeEmail } from './email/templates';
 import { AppError } from './http/errors';
 import { sendMail, smtpConfigured } from './mail';
+import { isPendingPhotoKey, photoExists } from './members/photo';
 import { allocateNim } from './nim';
 import { creditXp } from './loyalty/xp';
 import { getSetting } from './settings';
@@ -28,6 +29,13 @@ export async function precheckRegistration(input: Registration) {
 
   const existing = await db.user.findUnique({ where: { email: input.email }, select: { id: true } });
   if (existing) throw new AppError('EMAIL_TAKEN', 409, 'Email already registered', { fields: { email: 'errors.emailTaken' } });
+
+  // The photo was uploaded first (POST /api/join/photo); it must exist and not belong to anyone yet.
+  if (!isPendingPhotoKey(input.photoKey) || !(await photoExists(input.photoKey))) {
+    throw new AppError('VALIDATION', 422, 'Photo missing', { fields: { photoKey: 'validation.photoRequired' } });
+  }
+  const claimed = await db.member.findFirst({ where: { photoUrl: input.photoKey }, select: { id: true } });
+  if (claimed) throw new AppError('VALIDATION', 422, 'Photo already used', { fields: { photoKey: 'validation.photoRequired' } });
 
   return city;
 }
@@ -56,7 +64,9 @@ export async function registerMember(input: Registration): Promise<RegistrationR
               cityId: city.id,
               favoriteSong: input.favoriteSong,
               favoriteGenre: input.favoriteGenre,
+              favoriteDrink: input.favoriteDrink,
               quotes: input.quotes,
+              photoUrl: input.photoKey,
               signupSource: input.source || null,
               consentAt: new Date(),
               cards: { create: { status: 'NOT_PRINTED' } },
@@ -104,6 +114,8 @@ export async function registerMember(input: Registration): Promise<RegistrationR
   return {
     nim: created.nim,
     fullName: input.fullName,
+    favoriteDrink: input.favoriteDrink,
+    favoriteGenre: input.favoriteGenre,
     city: { id: city.id, code: city.code, name: city.name, waGroupUrl: city.waGroupUrl },
     appLinks: { ios: ios || null, android: android || null },
     emailSent: smtpConfigured(),

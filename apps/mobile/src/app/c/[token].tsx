@@ -74,7 +74,7 @@ export default function CardLinkScreen() {
         </Text>
         <View style={styles.meta}>
           <Text variant="body" tone="textMuted" style={styles.tabular}>
-            {`${m.nim} · ${m.city}`}
+            {m.city}
           </Text>
           <Badge dot tone={data.state === 'active' ? 'success' : 'accent'} label={data.state === 'active' ? t('cardPage.active') : t('cardPage.pending')} />
         </View>
@@ -82,9 +82,9 @@ export default function CardLinkScreen() {
       <Card style={styles.clip}>
         <DetailList
           items={[
-            { label: t('app.song'), value: m.favoriteSong },
+            // Public digital ID: never NIM, song or quote (docs/NATIVE-DESIGN.md has the full KTM layout).
+            { label: t('ktm.drink'), value: m.favoriteDrink },
             { label: t('app.genre'), value: m.favoriteGenre },
-            ...(m.quotes ? [{ label: t('app.quotes'), value: `“${m.quotes}”` }] : []),
             { label: t('members.joined'), value: formatDate(new Date(m.joinedAt), t.locale) },
           ]}
         />

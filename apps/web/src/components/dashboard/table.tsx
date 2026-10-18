@@ -14,7 +14,7 @@ export function Th({ className, ...props }: ComponentProps<'th'>) {
   return (
     <th
       scope="col"
-      className={cn('h-10 whitespace-nowrap border-b border-border bg-surface-muted px-4 text-caption font-medium text-muted first:pl-5 last:pr-5', className)}
+      className={cn('ktm-label h-10 whitespace-nowrap border-b border-border bg-surface-muted px-4 text-muted first:pl-5 last:pr-5', className)}
       {...props}
     />
   );
