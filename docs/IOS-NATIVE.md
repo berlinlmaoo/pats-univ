@@ -1,17 +1,18 @@
 # PATS University native iOS
 
-18 October 2026. SwiftUI in `apps/ios`, bundle `id.znetworks.patsuniv`, team `5YR5T42G97`.
-`project.yml` is the XcodeGen source of truth. The backend and Expo sources are unchanged.
+19 October 2026. SwiftUI in `apps/ios`, bundle `id.znetworks.patsuniv`, team `5YR5T42G97`.
+`project.yml` is the XcodeGen source of truth. Approved backend/shared/Expo design changes arrived
+via `vm/dev`; this round adds native iOS consumption and shared bilingual copy.
 
 ## Status
 
-- Foundation: XcodeGen, PATS palette and crest, Inter/Jakarta fonts, EN/ID shared dictionaries,
+- Foundation: XcodeGen, KTM palette and official full crest, Figtree/Graduate/card-value fonts, EN/ID shared dictionaries,
   duplicate-key/locale parity build check, OTP including demo code and resend cooldown,
   Keychain session cache, serialized refresh-token rotation, theme/language settings,
   member/admin capability detection, public `/c/<token>` links, native push delegate,
   Socket.IO v4 over URLSession WebSocket following NEXUS's dependency-free approach.
 - Member screens: implemented and compile checked; camera, media and live service/device QA pending.
-- Admin screens and NFC: implemented and compile checked; 20 macOS SwiftPM tests pass.
+- Admin screens and NFC: implemented and compile checked; 28 macOS SwiftPM tests pass.
 - Static parity audit: complete against `pc/android-native` at `282ac2f` and the Expo sources. Device/visual QA remains pending; no simulator or app has been launched.
 
 ## Build without running
@@ -119,8 +120,8 @@ Behavioral checks from source: server capabilities drive the member/crew shell a
 legacy LOCAL_ADMIN alias uses the server's capability list; native alerts confirm consequential
 actions; event forms send local city wall-clock fields and leave overnight conversion to the server;
 claims edit only pending entries; venue filters and reward codes use server state; draw slots and
-winner come from the server, including quarterly free credit. The wheel presents that saved winner
-and honors Reduce Motion. QR validity uses server time and conservatively deducts request transit.
+winner come from the server, including quarterly free credit. Five outlined draw slots present the
+saved winner. QR validity uses server time and conservatively deducts request transit.
 
 The final pass also checks request/response contracts, static localization references, property-list
 syntax, Keychain access class, origin-scoped sessions/reports, release exclusion of development
@@ -134,12 +135,12 @@ configuration, screenshot payloads, signed-media paths and the absence of simula
 | Native push delivery | Backend supports Expo registration/delivery only. APNs permission/registration/delegate are prepared, but direct APNs registration/provider/unregister must be added separately |
 | Screenshot prevention on iOS | Platform limit: detection/reporting after a screenshot; screen recording hides the channel. No claim of guaranteed prevention |
 | HQ event metadata editor, draw prize/peak configuration, venue layout editor, payment recording, batch/vendor/export tools, reward catalogue settings, HQ region/re-encode approval | Existing web dashboard, matching Android/Expo boundaries. Supported native event lifecycle and approved personal re-encode remain available |
-| Product's editable song/genre/quote/photo profile | Existing `/api/me` PATCH accepts locale only. Current Android/Expo also display these fields read-only; a backend contract is needed to add editing |
+| Editable member profile | Implemented: favorite drink, genre, song and quote use `/api/me` PATCH; square camera/library photo uses `/api/me/photo` PUT. Name/city changes remain crew workflows |
 | Event deletion | The backend has no deletion endpoint. Native editing and publish/open/close match the supported API lifecycle |
 | Design adaptation | Native SF Symbols and native controls follow the NEXUS iOS pattern; the shared PATS palette, fonts, spacing and bilingual copy are reused |
-| Gallery import, OCR, media transcoding, comprehensive orphan-file cleanup | Outside current Android/Expo behavior; native camera capture and signed private uploads are included |
+| Gallery import | Square member-photo import is implemented. Community/receipt capture retains the existing camera workflow; OCR and comprehensive orphan-file cleanup remain outside scope |
 
-## Validation record
+## Earlier validation record
 
 - Foundation and full member/admin implementation each compiled for the generic iOS Simulator SDK
   before their respective Berlin commits. No simulator was started and the app was never run.
@@ -169,3 +170,69 @@ configuration, screenshot payloads, signed-media paths and the absence of simula
 - Final HQ artwork/legal and notification copy dependencies in Phase 5 remain outstanding.
 
 IOS-NATIVE DONE (QA pending)
+
+
+## 19 October 2026 — KTM design round
+
+Merged `vm/dev` through `64069db`, retaining iOS review fixes `6da5eb9`, `d012c05`,
+`51176f1`, and `926a086`. Commits use Berlin <bagasputro.bp@gmail.com>.
+
+Implemented:
+
+- Shared light paper / dark navy palettes, Figtree UI, stroked Graduate navigation titles,
+  square controls/cards/badges, navy navigation and sheet headers, gold rules, accessible
+  empty/error states, skeleton loading, scrollable heavy-caps sub-tabs and danger confirmations.
+- Member tabs: Home, Events, KTM, Hub, Profile. The bar is navy in both themes, with a gold
+  active indicator and maroon KTM well. Crew Tools shows the pending claims count.
+- Home starts with the next event, then live XP/reward milestone progress and a maroon KTM
+  shortcut. Rewards remain reachable from Home/Profile. The wallet API supplies a reward
+  milestone, not a named level; no client-only level or XP threshold was invented.
+- Exact web 1600 px front/back artwork decoded losslessly to PNG at resource import, shared
+  fractional geometry, cap-top placement and the
+  exact bundled `packages/shared/assets/fonts/card-value.ttf` drawn directly with CoreText.
+  The font is read directly from its bytes, avoiding collisions with Figtree's named instances
+  and preserving the future licensed-font replacement path. No system Avenir.
+- Live white QR inside the maroon tile, error correction M, one filled vector path; gold expiry
+  progress, expired/background code removal, plain-maroon enlarged QR. Physical status and
+  NIM/song/quote stay below the artwork. Card flip hides backfaces; Reduce Motion crossfades.
+- Profile edits drink/genre/song/quote with shared limits, first-invalid-field focus and error
+  announcements. Camera/library square crop normalizes to JPEG, 400–1600 px and at most 5 MB;
+  authenticated PUT preserves token refresh and stale-session protection. Profile has a QR-free
+  KTM thumbnail. Join continues through the selected origin's web flow, including drink/photo.
+- Public digital ID shows the card, status, city, member-since and photo; no NIM, contact details,
+  song or quote. Crew identity components show the photo first.
+- Explicit `dd/MM/yyyy` and `HH.mm` date/time controls with city-zone labels; fixed 24-hour
+  wheel locale. Leaderboard city/national tabs, rank chips, period/reset line, tabular XP;
+  draw slots and ended-event result summaries; Hub and claims Pending/History sub-tabs.
+- Full official LOGO-01 crest assets copied unchanged for the icon and splash. The launch
+  storyboard fits a 200 pt full crest on the navy band; the login hero uses the official lockup.
+- Launch/foreground `/api/me` refresh replaces and persists migrated user/member IDs and
+  remounts the shell if the user ID changes. No CUID-length or prefix assumptions are used.
+
+Verification:
+
+- Compile-only build for the generic iOS Simulator SDK, two jobs, `~/dd-pats-ios`; the script
+  waits for existing `xcodebuild` processes. No simulator boot, app launch or UI test run.
+- 28 macOS Swift tests pass: existing NFC/session/chat tests plus day-first/24-hour formatting,
+  real Vision decoding of the production QR path at 90/230/640 px in both navy-on-white and
+  white-on-maroon, persisted UUIDv7 identity replacement, logout races, and authenticated photo
+  upload refresh/body-limit behavior.
+- 1,505 keys in each language; identical sets, no duplicates and no missing literal UI keys.
+  Shared font/artwork copies and property lists checked. Compile success does not establish
+  visual layout or hardware scanning acceptance.
+
+Native design §9 device acceptance (still required):
+
+| Criterion | Remaining device QA |
+|---|---|
+| §9.1 Layout | iPhone 15/16, light/dark × ID/EN, small widths, iPad, keyboard and Dynamic Type |
+| §9.2 Card match | Overlay MICHAEL WIBOWO / TEQUILA / HIPHOP, BREAKBEAT against the owner's `example-front.png`; verify positions within 1% of card width |
+| §9.3 Scanning | Crew scanner at 30 cm and 30% screen brightness in both themes, including the enlarged QR |
+| §9.4 Branding | Installed icon and launch splash show the complete crest without clipping |
+| §9.5 Dates | Date/time wheels and labels on devices set to US locale and 12-hour clock; WIB/city-zone round trip |
+| §9.6 Accessibility | VoiceOver reads card values/status, first invalid field focus, errors and all touch targets ≥44 pt |
+
+Also smoke-test OTP/restore after UUID migration, profile save, gallery/camera crop and permission
+recovery, photo face matching in crew tools, QR refresh/expiry/background, flip with Reduce Motion,
+claims counts and tabs, check-in strips, leaderboard periods, ended draws and Hub navigation.
+No deployed accounts, real NFC tags, uploads, server state or release settings were changed here.

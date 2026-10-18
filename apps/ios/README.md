@@ -18,13 +18,13 @@ until Berlin explicitly authorizes running it.
 
 ## Development origin
 
-Put one HTTPS origin in `~/.config/pats/ios-dev-server-url`, outside Git. The Debug-only
-“Dev server address” phase writes it into the **built** Info.plist before signing. Without
-the file, Debug retains `https://pats-dev.invalid`. The login screen offers development or
-production in Debug. Release uses the canonical production origin, with no development switch.
+Set `PATS_DEV_SERVER_URL` in the ignored `Config/Local.xcconfig` (see `Debug.xcconfig`
+for the Xcode URL-escaping syntax). It is substituted into Info.plist before signing.
+The login screen offers development or production in Debug. Release uses the canonical
+production origin, with no development switch.
 Sessions and pending encode reports are scoped to the server origin.
 
-The two signed media-file routes can use the development origin in Debug, preserving their
+The signed media, receipt and member-photo routes can use the development origin in Debug, preserving their
 encoded path/query exactly, matching the Android client. Release never rewrites signed URLs.
 Fix the deployment's APP_URL for production rather than depending on this development fallback.
 
@@ -37,7 +37,8 @@ scripts/check-localization.sh
 swift test --build-system native --jobs 2
 ```
 
-The importer reads `packages/shared` dictionaries and colors; native-only copy lives in
+The importer reads `packages/shared` dictionaries and colors; It also copies the approved full crest, icon, splash, card artwork and Figtree/Graduate/shared
+card-value fonts, and generates Swift card geometry from `tokens.ts`. Native-only copy lives in
 `scripts/en-native.json` and `scripts/id-native.json`. Both language tables must have identical,
 unique keys. Localization checking also runs during every app build.
 
