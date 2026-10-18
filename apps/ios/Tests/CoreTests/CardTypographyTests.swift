@@ -25,7 +25,8 @@ final class CardTypographyTests: XCTestCase {
             let layout = face.layout("MICHAEL WIBOWO", cardWidth: width, maxWidth: width * KTMGeometry.nameMaxW)
             XCTAssertEqual(layout.lines.count, 1)
             XCTAssertEqual(layout.size, width * 0.0312 / 0.708, accuracy: 0.0001)
-            XCTAssertEqual(layout.baseline, width * 0.0312, accuracy: 0.0001)
+            // Web: top = y - capTop em in a line-height-1 box, baseline 0.5 + (ascent - descent) / 2 below it.
+            XCTAssertEqual(layout.baseline, width * 0.0312 / 0.708 * 0.7315, accuracy: 0.0001)
             XCTAssertEqual(KTMGeometry.valueX * width, 0.0492 * width, accuracy: 0.0001)
         }
     }
@@ -37,7 +38,7 @@ final class CardTypographyTests: XCTestCase {
         XCTAssertLessThan(regular.size, 390 * KTMGeometry.valueCap / CardValueMetrics.capHeight)
         XCTAssertGreaterThan(wrapped.lines.count, 1)
         for layout in [regular, wrapped] {
-            XCTAssertEqual(layout.baseline / layout.size, CardValueMetrics.capHeight, accuracy: 0.0001)
+            XCTAssertEqual(layout.baseline / layout.size, layout.lines.count > 1 ? 0.7515 : 0.7315, accuracy: 0.0001)
             for line in layout.lines {
                 let runs = CTLineGetGlyphRuns(line) as! [CTRun]
                 for run in runs {

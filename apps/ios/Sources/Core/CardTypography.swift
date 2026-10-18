@@ -43,14 +43,18 @@ struct CardTypeface {
             lines.append(CTTypesetterCreateLine(typesetter, CFRange(location: offset, length: count)))
             offset += count
         }
-        return CardValueLayout(lines: lines, size: size, baseline: CTFontGetCapHeight(font(size: size)), lineAdvance: size * 1.04)
+        // Same box as web/print: a CSS line box (1, or 1.04 when wrapped) whose top sits capTop above y,
+        // with the hhea content area centred in it (docs/NATIVE-DESIGN.md section 2.1).
+        let lineHeight: CGFloat = wrap ? 1.04 : 1
+        let baseline = size * ((lineHeight - CardValueMetrics.ascent - CardValueMetrics.descent) / 2 + CardValueMetrics.ascent - CardValueMetrics.capTop)
+        return CardValueLayout(lines: lines, size: size, baseline: baseline, lineAdvance: size * lineHeight)
     }
 }
 enum CardFontError: Error { case missingFont }
 struct CardValueLayout {
     let lines: [CTLine]
     let size: CGFloat
-    /// UIKit drawing starts at the cap top; CoreText has no native Text line-box padding to subtract.
+    /// Distance from the value's y token to the first baseline (0.7315 em on one line, as on web).
     let baseline: CGFloat
     let lineAdvance: CGFloat
     func draw(in context: CGContext) {
