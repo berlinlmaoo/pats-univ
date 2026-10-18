@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.*
+import androidx.compose.ui.autofill.ContentType
 import androidx.compose.ui.unit.dp
 import androidx.core.content.res.ResourcesCompat
 import kotlinx.serialization.json.*
@@ -24,6 +25,7 @@ import kotlinx.serialization.json.*
     val face = remember { ResourcesCompat.getFont(context, R.font.graduate) }
     val spec = LocalDesign.current.obj("varsity").obj(if(small) "small" else "title")
     val fontSize = spec.number("size"); val lineHeight = spec.number("lineHeight")
+    val tracking = spec["tracking"]!!.jsonPrimitive.float
     val stroke = LocalDesign.current["varsityStroke"]!!.jsonPrimitive.float
     Canvas(Modifier.fillMaxWidth().height(lineHeight.dp).semantics { contentDescription = text; heading() }) {
         val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
@@ -32,13 +34,19 @@ import kotlinx.serialization.json.*
         }
         val caps = text.uppercase(java.util.Locale.ROOT)
         val available = size.width - 2 * paint.textSize * stroke
-        paint.textSize *= (available / paint.measureText(caps).coerceAtLeast(1f)).coerceAtMost(1f)
+        paint.textSize *= (available / (paint.measureText(caps) + paint.textSize * tracking * (caps.length-1)).coerceAtLeast(1f)).coerceAtMost(1f)
         val baseline = (size.height - paint.fontMetrics.ascent - paint.fontMetrics.descent) / 2
         drawIntoCanvas {
-            paint.style = android.graphics.Paint.Style.STROKE; paint.strokeWidth = paint.textSize * stroke
-            it.nativeCanvas.drawText(caps, paint.strokeWidth, baseline, paint)
-            paint.style = android.graphics.Paint.Style.FILL
-            it.nativeCanvas.drawText(caps, paint.strokeWidth, baseline, paint)
+            paint.strokeWidth = paint.textSize * stroke
+            val widths = FloatArray(caps.length); paint.getTextWidths(caps,widths)
+            var x = paint.strokeWidth
+            caps.forEachIndexed { index, letter ->
+                paint.style = android.graphics.Paint.Style.STROKE
+                it.nativeCanvas.drawText(letter.toString(), x, baseline, paint)
+                paint.style = android.graphics.Paint.Style.FILL
+                it.nativeCanvas.drawText(letter.toString(), x, baseline, paint)
+                x += widths[index] + paint.textSize * tracking
+            }
         }
     }
 }
@@ -67,7 +75,7 @@ fun Modifier.dashedBorder(color: Color) = drawBehind {
         "UPCOMING", "IN_BATCH", "SENT_TO_VENDOR", "RECEIVED_HQ" -> "accent"
         else -> ""
     }
-    Surface(color = tone(if(family.isEmpty()) "surfaceMuted" else "${family}Subtle"), contentColor = tone(if(family.isEmpty()) "textMuted" else "${family}Text"), shape = MaterialTheme.shapes.small) {
+    Surface(color = tone(if(family.isEmpty()) "surfaceMuted" else "${family}Subtle"), contentColor = tone(if(family.isEmpty()) "textMuted" else if(family == "accent") "accentSubtleText" else "${family}Text"), shape = MaterialTheme.shapes.small) {
         Text(text.uppercase(java.util.Locale.ROOT), Modifier.padding(horizontal = Space.small, vertical = Space.tiny), style = MaterialTheme.typography.labelSmall)
     }
 }
@@ -80,7 +88,7 @@ fun Modifier.dashedBorder(color: Color) = drawBehind {
 @Composable fun Tabs(options: List<Pair<String, String>>, selected: String, counts: Map<String, Int> = emptyMap(), onSelect: (String) -> Unit) {
     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).selectableGroup(), horizontalArrangement = Arrangement.spacedBy(Space.small)) {
         options.forEach { (id, label) ->
-            Column(Modifier.widthIn(min = 72.dp).clickable(role = Role.Tab, onClick = { onSelect(id) }).semantics { this.selected = id == selected }) {
+            Column(Modifier.width(IntrinsicSize.Max).widthIn(min = 72.dp).clickable(role = Role.Tab, onClick = { onSelect(id) }).semantics { this.selected = id == selected }) {
                 Row(Modifier.heightIn(min = Space.control).padding(horizontal = Space.small), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.tiny)) {
                     Text(label.uppercase(java.util.Locale.ROOT), style = MaterialTheme.typography.labelSmall, color = tone(if(id == selected) "text" else "textMuted"))
                     counts[id]?.takeIf { it > 0 }?.let { CountChip(it) }
@@ -102,7 +110,7 @@ fun Modifier.dashedBorder(color: Color) = drawBehind {
     val label = tr("otp.codeLabel")
     Column(verticalArrangement = Arrangement.spacedBy(Space.small)) {
         SectionLabel(label)
-        androidx.compose.foundation.text.BasicTextField(value, onChange, Modifier.fillMaxWidth().semantics { contentDescription = label }, singleLine = true, keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.NumberPassword), textStyle = MaterialTheme.typography.bodyLarge.copy(color = Color.Transparent), cursorBrush = SolidColor(Color.Transparent), decorationBox = { inner ->
+        androidx.compose.foundation.text.BasicTextField(value, onChange, Modifier.fillMaxWidth().semantics { contentDescription = label; contentType = ContentType.SmsOtpCode }, singleLine = true, keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.NumberPassword), textStyle = MaterialTheme.typography.bodyLarge.copy(color = Color.Transparent), cursorBrush = SolidColor(Color.Transparent), decorationBox = { inner ->
             Box {
                 Row(horizontalArrangement = Arrangement.spacedBy(Space.tiny)) {
                     repeat(6) { index -> Box(Modifier.weight(1f).height(Space.control).border(if(index == value.length) 2.dp else 1.dp, if(index == value.length) tone("accent") else tone("borderStrong"), MaterialTheme.shapes.medium), contentAlignment = Alignment.Center) { Text(value.getOrNull(index)?.toString() ?: "", style = MaterialTheme.typography.titleLarge) } }

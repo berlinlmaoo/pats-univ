@@ -72,7 +72,7 @@ class MainActivity : ComponentActivity() {
                         Page {
                             Action(tr("common.back"), secondary = true) { model.incoming = null }
                             Remote(model.api, "/api/c/$token", authenticated = session != null) { data, _ ->
-                                Title(tr("app.cardTitle")); Notice(tr("cardPage." + when(data.text("state")) { "active" -> "active"; "pending" -> "pending"; "revoked" -> "revokedTitle"; "inactive" -> "inactiveTitle"; else -> "notFoundTitle" }))
+                                Title(tr("cardPage.heading")); Badge(tr("cardPage." + when(data.text("state")) { "active" -> "active"; "pending" -> "pending"; "revoked" -> "revokedTitle"; "inactive" -> "inactiveTitle"; else -> "notFoundTitle" }), data.text("state"))
                                 val member = data.obj("member")
                                 if(member.isNotEmpty()) {
                                     KtmCard(member, BuildConfig.API_URL.trimEnd('/') + "/c/" + token)

@@ -54,7 +54,7 @@ class Mutation(private val scope: CoroutineScope) {
     Column {
         SectionLabel(label)
         Box {
-            OutlinedButton({ expanded = true }, Modifier.fillMaxWidth().heightIn(min = Space.control), enabled = options.isNotEmpty()) { Text(options.find { it.first == selected }?.second ?: tr("common.notSet")) }
+            OutlinedButton({ expanded = true }, Modifier.fillMaxWidth().heightIn(min = Space.control), enabled = options.isNotEmpty(), shape = MaterialTheme.shapes.medium) { Text(options.find { it.first == selected }?.second ?: tr("common.notSet")) }
             DropdownMenu(expanded, { expanded = false }) { options.forEach { (id, name) -> DropdownMenuItem(text = { Text(name) }, onClick = { change(id); expanded = false }) } }
         }
     }

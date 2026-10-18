@@ -20,6 +20,8 @@ fun wheelTarget(winner: Int, count: Int) = if (winner >= 0 && count > 0) 1440f +
 
 /** The server supplies the winner; the wheel only presents that saved result. */
 @Composable fun PrizeWheel(entries: List<JsonObject>, winnerId: String, running: Boolean) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val face = remember { androidx.core.content.res.ResourcesCompat.getFont(context, R.font.figtree) }
     val primary = MaterialTheme.colorScheme.primary; val background = MaterialTheme.colorScheme.surfaceVariant
     val winner = entries.indexOfFirst { it.text("id") == winnerId }
     val target = wheelTarget(winner, entries.size)
@@ -35,7 +37,7 @@ fun wheelTarget(winner: Int, count: Int) = if (winner >= 0 && count > 0) 1440f +
                 drawArc(if (index % 2 == 0) primary else background, index * 360f / count, 360f / count, true, corner, Size(diameter, diameter)); drawArc(onPrimary, index * 360f / count, 360f / count, true, corner, Size(diameter, diameter), style = Stroke(2f))
                 entries.getOrNull(index)?.let { entry ->
                     val radians = Math.toRadians((index + .5) * 360 / count)
-                    val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { color = (if (index % 2 == 0) onPrimary else onBackground).toArgb(); textSize = diameter * .052f; textAlign = android.graphics.Paint.Align.CENTER; typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL) }
+                    val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { color = (if (index % 2 == 0) onPrimary else onBackground).toArgb(); textSize = diameter * .052f; textAlign = android.graphics.Paint.Align.CENTER; typeface = face }
                     val point = Offset(center.x + (kotlin.math.cos(radians) * diameter * .31).toFloat(), center.y + (kotlin.math.sin(radians) * diameter * .31).toFloat())
                     rotate(-angle - if (running) 15f else 0f, point) { drawIntoCanvas { canvas -> canvas.nativeCanvas.drawText(entry.text("name").substringBefore(' '), point.x, point.y + paint.textSize / 3, paint) } }
                 }

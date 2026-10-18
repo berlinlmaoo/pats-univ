@@ -26,8 +26,9 @@ import java.time.*
 }
 @Composable fun Who(api: Api, member: JsonObject) {
     Tile {
-        if (member.text("photoUrl").isNotEmpty()) NetworkImage(api, member.text("photoUrl"))
+        if (member.text("photoUrl").isNotEmpty()) MemberPhoto(api, member.text("photoUrl"))
         Text(member.text("fullName"), style = MaterialTheme.typography.titleLarge); Text(member.text("nim")); Text(member.obj("city").text("name", member.text("cityName")))
+        if(member.text("status").isNotBlank()) Badge(tr("common." + member.text("status").lowercase()), member.text("status"))
     }
 }
 @Composable fun NfcAction(reader: CardReader, key: String, busy: Boolean, action: () -> Unit) {

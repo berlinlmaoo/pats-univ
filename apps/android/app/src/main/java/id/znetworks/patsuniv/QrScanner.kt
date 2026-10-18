@@ -10,6 +10,12 @@ import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.unit.dp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -71,7 +77,18 @@ fun decodeQr(bytes: ByteArray, width: Int, height: Int): String? {
         future.addListener({ if (active) runCatching { provider = future.get(); val stream = Preview.Builder().build().also { it.surfaceProvider = preview.surfaceProvider }; camera = provider!!.bindToLifecycle(lifecycle, CameraSelector.DEFAULT_BACK_CAMERA, stream, analysis) }.onFailure { error = true } }, ContextCompat.getMainExecutor(context))
         onDispose { active = false; analysis.clearAnalyzer(); provider?.unbindAll(); executor.shutdown() }
     }
-    AndroidView({ preview }, Modifier.fillMaxWidth().height(Space.qr).clipToBounds())
+    val dark = remember { PatsJson.parseToJsonElement(context.assets.open("colors.json").bufferedReader().use { it.readText() }).let { (it as kotlinx.serialization.json.JsonObject).obj("dark") } }
+    val ink = Color(android.graphics.Color.parseColor(dark.text("bandText")))
+    val scrim = Color(android.graphics.Color.parseColor(dark.text("bg"))).copy(alpha = .65f)
+    Box(Modifier.fillMaxWidth().height(248.dp).clipToBounds()) {
+        AndroidView({ preview }, Modifier.fillMaxSize())
+        Canvas(Modifier.fillMaxSize()) {
+            val edge = size.minDimension * .8f; val x = (size.width-edge)/2; val y = (size.height-edge)/2
+            drawRect(scrim, Offset.Zero, Size(size.width,y)); drawRect(scrim, Offset(0f,y+edge), Size(size.width,y))
+            drawRect(scrim, Offset(0f,y), Size(x,edge)); drawRect(scrim, Offset(x+edge,y), Size(x,edge))
+            drawRect(ink, Offset(x,y), Size(edge,edge), style = Stroke(1.75.dp.toPx()))
+        }
+    }
     Text(tr("app.scanHint"), style = MaterialTheme.typography.bodySmall)
     Action(tr("app.scanTorch"), camera?.cameraInfo?.hasFlashUnit() == true, true) { torch = !torch; camera?.cameraControl?.enableTorch(torch) }
     if (error) Notice(tr("app.scanUnavailableBody"), true)
