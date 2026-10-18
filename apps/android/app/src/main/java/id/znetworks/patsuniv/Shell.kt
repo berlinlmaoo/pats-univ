@@ -2,6 +2,11 @@ package id.znetworks.patsuniv
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -11,7 +16,14 @@ import android.app.Activity
 
 @Composable fun Shell(model: AppModel, session: Session, language: String, setLanguage: (String) -> Unit, offline: Boolean) {
     val admin = hasCapability(session, "city.operations")
-    val home = if (admin) "tools" else "card"
+    var pendingClaims by remember { mutableIntStateOf(0) }
+    LaunchedEffect(session.me.obj("user").text("id")) {
+        if(hasCapability(session, "promoter.manage")) while(true) {
+            pendingClaims = try { model.api.request("GET", "/api/admin/loyalty/claims").rows("claims").count { it.text("status") == "PENDING" } } catch(e: kotlinx.coroutines.CancellationException) { throw e } catch(_: Exception) { 0 }
+            kotlinx.coroutines.delay(15000)
+        }
+    }
+    val home = if (admin) "tools" else "home"
     val activity = LocalContext.current as Activity
     val reader = remember(activity) { AndroidCardReader(activity) }
     var route by rememberSaveable(session.me.obj("user").text("id")) { mutableStateOf(home) }
@@ -19,9 +31,15 @@ import android.app.Activity
     fun go(next: String) { if (next != route) { stack.add(route); route = next } }
     fun back() { route = if (stack.isEmpty()) home else stack.removeAt(stack.lastIndex) }
     LaunchedEffect(model.requestedRoute) { model.requestedRoute?.let { go(it); model.requestedRoute = null } }
-    val tabs = if (admin) listOf("tools" to "app.tabAdmin", "hub" to "app.tabHub", "profile" to "app.tabProfile") else listOf("card" to "app.tabCard", "events" to "app.tabEvents", "wallet" to "app.tabRewards", "hub" to "app.tabHub", "profile" to "app.tabProfile")
+    val tabs = if (admin) listOf("tools" to "app.tabAdmin", "hub" to "app.tabHub", "profile" to "app.tabProfile") else listOf("home" to "native.home", "events" to "app.tabEvents", "card" to "app.tabCard", "hub" to "app.tabHub", "profile" to "app.tabProfile")
     BackHandler(route != home || stack.isNotEmpty()) { back() }
-    Column {
+    Column(Modifier.background(MaterialTheme.colorScheme.background)) {
+        Row(Modifier.fillMaxWidth().background(tone("band")).padding(horizontal = Space.page, vertical = Space.small), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.gap)) {
+            Image(painterResource(R.drawable.official_crest), tr("common.appName"), Modifier.size(40.dp))
+            Text(tr("common.appName").uppercase(), Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, color = tone("bandText"))
+            LanguageToggle(language, true, setLanguage)
+        }
+        Box(Modifier.fillMaxWidth().height(3.dp).background(tone("gold")))
         if (tabs.none { it.first == route }) Row(Modifier.fillMaxWidth().padding(horizontal = Space.page)) { TextButton({ back() }) { Text(tr("common.back")) } }
         Box(Modifier.weight(1f)) {
             key(route) { Page(onRefresh = { try { model.api.reload(); model.offline = false } catch(e: kotlinx.coroutines.CancellationException) { throw e } catch(e: Exception) { model.offline = true; throw e } }) {
@@ -29,9 +47,10 @@ import android.app.Activity
                 val kind = route.substringBefore('/'); val id = route.substringAfter('/', "")
                 val needs = when(kind) { "scan", "manual", "city-events", "city-event", "event-new", "event-edit" -> "checkin.scan"; "handover" -> "card.handover"; "member-cards", "member-card" -> "card.reportLost"; "encode", "encode-run" -> "card.encode"; "reencode" -> "card.requestReencode"; "reward-validation" -> "reward.validate"; "claims-review" -> "promoter.manage"; "operations", "crew" -> "city.operations"; else -> null }
                 // Member-only screens need a member profile; admin-only screens need the capability.
-                val memberOnly = kind in setOf("card", "wallet", "claims", "promoter", "region-change", "roaming", "reservation")
+                val memberOnly = kind in setOf("home", "card", "wallet", "claims", "promoter", "region-change", "roaming", "reservation")
                 val denied = (needs != null && !hasCapability(session, needs)) || (memberOnly && (admin || session.me.obj("member").isEmpty())) || (kind == "tools" && !admin)
                 if (denied) Notice(tr("errors.forbidden"), true) else when(kind) {
+                    "home" -> MemberHome(session, model.api, ::go)
                     "card" -> MemberCard(session, model.api, ::go)
                     "events" -> Events(model.api, ::go, language)
                     "event" -> EventDetail(model.api, id, language, ::go)
@@ -69,7 +88,18 @@ import android.app.Activity
                 }
             } }
         }
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-        Row(Modifier.fillMaxWidth().padding(Space.tiny)) { tabs.forEach { (target, title) -> TextButton({ stack.clear(); route = target }, Modifier.weight(1f).heightIn(min = Space.control), contentPadding = PaddingValues(horizontal = Space.tiny / 2, vertical = Space.small), colors = ButtonDefaults.textButtonColors(contentColor = if (route == target) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)) { Text(tr(title), style = MaterialTheme.typography.labelMedium, maxLines = 1, softWrap = false) } } }
+        Row(Modifier.fillMaxWidth().background(tone("band"))) {
+            tabs.forEach { (target, title) ->
+                val selected = route == target
+                Column(Modifier.weight(1f).clickable { stack.clear(); route = target }.padding(bottom = Space.small), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Box(Modifier.fillMaxWidth().height(3.dp).background(if(selected) tone("gold") else Color.Transparent))
+                    Box(Modifier.padding(top = Space.small, bottom = Space.tiny).size(32.dp).background(if(target == "card") tone("secondary") else Color.Transparent, MaterialTheme.shapes.medium), contentAlignment = Alignment.Center) { PatsIcon(target, tone(if(selected || target == "card") "bandText" else "bandMuted")) }
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.tiny)) {
+                        Text(tr(title).uppercase(), style = MaterialTheme.typography.labelSmall, color = tone(if(selected) "bandText" else "bandMuted"), maxLines = 1, softWrap = false)
+                        if(target == "tools" && pendingClaims > 0) CountChip(pendingClaims)
+                    }
+                }
+            }
+        }
     }
 }

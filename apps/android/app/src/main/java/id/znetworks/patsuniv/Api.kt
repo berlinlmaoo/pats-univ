@@ -16,6 +16,7 @@ import java.net.URI
 class ApiFailure(val code: String, val details: JsonObject = body()) : IOException(code)
 
 class Api(private val store: SessionStore, private val base: String = BuildConfig.API_URL) {
+    val joinUrl get() = base.trimEnd('/') + "/join"
     internal val http = OkHttpClient.Builder().callTimeout(30, TimeUnit.SECONDS).followRedirects(false).apply {
         if (BuildConfig.DEBUG && BuildConfig.DEV_IP.isNotBlank()) dns { host ->
             if (host == URI(base).host) listOf(InetAddress.getByName(BuildConfig.DEV_IP)) else Dns.SYSTEM.lookup(host)
@@ -71,6 +72,19 @@ class Api(private val store: SessionStore, private val base: String = BuildConfi
         val fresh = request("GET", "/api/me")
         store.current?.takeIf { it.me.obj("user").text("id") == original.me.obj("user").text("id") }?.let { store.save(it.copy(me = fresh)) }
     }
+    suspend fun uploadPhoto(bytes: ByteArray, contentType: String) {
+        val token = accessToken()
+        withContext(Dispatchers.IO) {
+            val req = Request.Builder().url(base.trimEnd('/') + "/api/me/photo").header("Authorization", "Bearer " + token).put(bytes.toRequestBody(contentType.toMediaType())).build()
+            http.newCall(req).execute().use { res ->
+                if(!res.isSuccessful) {
+                    val parsed = runCatching { PatsJson.parseToJsonElement(res.body.string()).jsonObject }.getOrDefault(body())
+                    throw ApiFailure(parsed.obj("error").text("code", "INTERNAL"), parsed)
+                }
+            }
+        }
+        reload()
+    }
     suspend fun signOut() {
         val previous = store.current
         store.clear()
@@ -82,7 +96,7 @@ class Api(private val store: SessionStore, private val base: String = BuildConfi
         // The demo server's APP_URL still names the unavailable canonical host. Signatures cover
         // the path/query, so debug can reach that same storage route on the configured dev origin.
         val parsed = URI(target)
-        if (BuildConfig.DEBUG && parsed.host == "patsuniv.znetworks.id" && URI(base).host != parsed.host && parsed.path in setOf("/api/loyalty/receipt-file", "/api/social/media-file")) target = base.trimEnd('/') + parsed.rawPath + "?" + parsed.rawQuery
+        if (BuildConfig.DEBUG && parsed.host == "patsuniv.znetworks.id" && URI(base).host != parsed.host && parsed.path in setOf("/api/loyalty/receipt-file", "/api/social/media-file", "/api/photos/file")) target = base.trimEnd('/') + parsed.rawPath + "?" + parsed.rawQuery
         val request = Request.Builder().url(target).apply { if (bytes != null) put(bytes.toRequestBody(contentType.toMediaType())) }.build()
         try { http.newCall(request).execute().use { response -> if (!response.isSuccessful) throw ApiFailure("MEDIA_INVALID"); response.body.bytes() } }
         catch(e: ApiFailure) { throw e } catch(e: IOException) { throw ApiFailure("NETWORK") }

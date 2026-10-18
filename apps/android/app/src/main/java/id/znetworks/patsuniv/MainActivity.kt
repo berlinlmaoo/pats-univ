@@ -11,6 +11,9 @@ import androidx.activity.viewModels
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.*
+import android.net.Uri
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -32,7 +35,7 @@ class MainActivity : ComponentActivity() {
     private val model: AppModel by viewModels()
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        enableEdgeToEdge(statusBarStyle = androidx.activity.SystemBarStyle.dark(android.graphics.Color.TRANSPARENT), navigationBarStyle = androidx.activity.SystemBarStyle.dark(android.graphics.Color.TRANSPARENT))
         readIntent(intent)
         setContent { App(model) }
     }
@@ -61,8 +64,8 @@ class MainActivity : ComponentActivity() {
     }
     PatsTheme(context, language) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-            Scaffold(containerColor = MaterialTheme.colorScheme.background) { padding ->
-                Box(Modifier.padding(padding)) {
+            Scaffold(containerColor = tone("band")) { padding ->
+                Box(Modifier.padding(padding).fillMaxSize().background(MaterialTheme.colorScheme.background)) {
                     val token = model.incoming
                     if (token != null) {
                         BackHandler { model.incoming = null }
@@ -71,7 +74,11 @@ class MainActivity : ComponentActivity() {
                             Remote(model.api, "/api/c/$token", authenticated = session != null) { data, _ ->
                                 Title(tr("app.cardTitle")); Notice(tr("cardPage." + when(data.text("state")) { "active" -> "active"; "pending" -> "pending"; "revoked" -> "revokedTitle"; "inactive" -> "inactiveTitle"; else -> "notFoundTitle" }))
                                 val member = data.obj("member")
-                                if (member.isNotEmpty()) Tile { Text(member.text("fullName"), style = MaterialTheme.typography.titleLarge); Text(member.text("nim")); Text(member.text("city")); Text(tr("app.song") + ": " + member.text("favoriteSong")); Text(tr("app.genre") + ": " + member.text("favoriteGenre")); if (member.text("quotes").isNotBlank()) Text(member.text("quotes")); if (member.text("joinedAt").isNotBlank()) Text(tr("members.joined") + ": " + runCatching { java.time.Instant.parse(member.text("joinedAt")).atZone(java.time.ZoneId.of("Asia/Jakarta")).format(java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy", java.util.Locale.forLanguageTag(language))) }.getOrDefault(member.text("joinedAt"))) }
+                                if(member.isNotEmpty()) {
+                                    KtmCard(member, BuildConfig.API_URL.trimEnd('/') + "/c/" + token)
+                                    Tile { Detail(tr("cardPage.city"), member.text("city")); Detail(tr("cardPage.memberSince"), dateTime(member.text("joinedAt"), language).substringBefore(" · ")) }
+                                    if(member.text("photoUrl").isNotBlank()) MemberPhoto(model.api, member.text("photoUrl"))
+                                }
                                 if (data.flag("isMine") && session?.me?.obj("member")?.isNotEmpty() == true) Action(tr("app.cardLinkOpen")) { model.incoming = null; model.requestedRoute = "card" }
                                 if (session == null) Action(tr("auth.title"), secondary = true) { model.incoming = null }
                             }
@@ -92,6 +99,7 @@ class MainActivity : ComponentActivity() {
     var errorParams by remember { mutableStateOf<Array<Pair<String, String>>>(emptyArray()) }
     var cooldown by remember { mutableIntStateOf(0) }
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     LaunchedEffect(cooldown) { if (cooldown > 0) { delay(1000); cooldown-- } }
     fun submit(verify: Boolean) {
         busy = true; error = null
@@ -104,7 +112,8 @@ class MainActivity : ComponentActivity() {
         }
     }
     Page {
-        Spacer(Modifier.height(Space.hero)); Brand()
+        Column(Modifier.fillMaxWidth().background(tone("band")).padding(Space.large), verticalArrangement = Arrangement.spacedBy(Space.page)) { Brand(); LanguageToggle(language, true, setLanguage) }
+        Box(Modifier.fillMaxWidth().height(androidx.compose.ui.unit.Dp(3f)).background(tone("gold")))
         Title(tr(if (otp == null) "app.loginTitle" else "otp.title"), tr(if (otp == null) "app.loginSubtitle" else "otp.subtitle", "email" to email))
         if (otp == null) Field(tr("auth.emailLabel"), email, { email = it }, KeyboardType.Email)
         else {
@@ -118,7 +127,7 @@ class MainActivity : ComponentActivity() {
             Action(if (cooldown > 0) tr("otp.resendIn", "seconds" to cooldown.toString()) else tr("otp.resend"), !busy && cooldown == 0, true) { submit(false) }
             Action(tr("otp.changeEmail"), !busy, true) { otp = null; code = ""; error = null }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(Space.small)) { FilterChip(language == "id", { setLanguage("id") }, { Text("Bahasa Indonesia") }); FilterChip(language == "en", { setLanguage("en") }, { Text("English") }) }
+        Action(tr("auth.joinLink"), secondary = true) { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(api.joinUrl))) }
     }
 }
 @Composable fun Profile(session: Session, api: Api, language: String, setLanguage: (String) -> Unit, go: (String) -> Unit = {}) {
@@ -132,6 +141,8 @@ class MainActivity : ComponentActivity() {
         if (member.isNotEmpty()) { Text(member.text("favoriteSong")); Text(member.text("favoriteGenre")); Text(member.text("quotes")) }
     }
     if (member.isNotEmpty()) {
+        ProfileEditor(member, api)
+        KtmCard(member, thumbnail = true, onOpen = { go("card") })
         Remote(api, "/api/loyalty/wallet", refresh = liveVersion(api, "wallet", member.text("id"))) { data, _ -> Text(count(data.number("balance")) + " XP", style = MaterialTheme.typography.titleLarge) }
         if (member.flag("isPromoter")) Notice(tr("phase5.prBadge"))
         Action(tr("phase5.claimTitle"), secondary = true) { go("claims") }
@@ -141,7 +152,7 @@ class MainActivity : ComponentActivity() {
     Action(tr("app.notificationsTitle"), secondary = true) { go("notifications") }
     Action(tr("app.notificationSettingsTitle"), secondary = true) { go("notification-settings") }
     Text(tr("common.language"), style = MaterialTheme.typography.titleMedium)
-    Row(horizontalArrangement = Arrangement.spacedBy(Space.small)) { FilterChip(language == "id", { setLanguage("id") }, { Text("Bahasa Indonesia") }); FilterChip(language == "en", { setLanguage("en") }, { Text("English") }) }
+    LanguageToggle(language, setLanguage = setLanguage)
     Action(tr("common.signOut"), secondary = true) { confirm = true }
     if (member.isNotEmpty()) Decide(tr("phase5.leave"), tr("phase5.leaveConfirm"), !mutation.busy, true) { mutation.run { api.request("POST", "/api/me/leave"); api.signOut() } }
     MutationStatus(mutation)

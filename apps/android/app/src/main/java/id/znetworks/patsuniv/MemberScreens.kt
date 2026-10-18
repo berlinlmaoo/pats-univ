@@ -22,7 +22,7 @@ import java.time.Instant
 
 @Composable fun Qr(value: String) {
     val bitmap = remember(value) {
-        val matrix = MultiFormatWriter().encode(value, BarcodeFormat.QR_CODE, 672, 672)
+        val matrix = com.google.zxing.qrcode.QRCodeWriter().encode(value, BarcodeFormat.QR_CODE, 672, 672, mapOf(com.google.zxing.EncodeHintType.ERROR_CORRECTION to com.google.zxing.qrcode.decoder.ErrorCorrectionLevel.M))
         Bitmap.createBitmap(matrix.width, matrix.height, Bitmap.Config.ARGB_8888).apply {
             val pixels = IntArray(matrix.width * matrix.height) { i -> if (matrix[i % matrix.width, i / matrix.width]) 0xff001836.toInt() else 0xffffffff.toInt() }
             setPixels(pixels, 0, matrix.width, 0, 0, matrix.width, matrix.height)
@@ -35,31 +35,20 @@ import java.time.Instant
     val language = LocalLanguage.current
     val context = LocalContext.current
     DisposableEffect(Unit) { (context as? Activity)?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON); onDispose { (context as? Activity)?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) } }
-    Title(tr("app.greeting", "name" to member.text("fullName").substringBefore(' ')))
-    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary), modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(Space.large), verticalArrangement = Arrangement.spacedBy(Space.gap)) {
-            Text(tr("common.appName"), style = MaterialTheme.typography.bodySmall)
-            Text(member.text("fullName"), style = MaterialTheme.typography.titleLarge)
-            Text(member.text("nim"), style = MaterialTheme.typography.titleMedium)
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.gap)) {
-                Text(member.obj("city").text("name"), Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
-                val joined = runCatching { Instant.parse(member.text("joinedAt")).atZone(java.time.ZoneId.of("Asia/Jakarta")).format(java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy", java.util.Locale.forLanguageTag(language))) }.getOrDefault("")
-                Text(tr("app.memberSince", "date" to joined), Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
-            }
-        }
+    Title(tr("app.cardTitle"))
+    Remote(api, "/api/me/card-token", pollMs = 25_000) { code, reload ->
+        var remaining by remember(code) { mutableIntStateOf(code.number("ttlSeconds")) }
+        LaunchedEffect(code) { val expiry = runCatching { Instant.parse(code.text("expiresAt")).toEpochMilli() - Instant.parse(code.text("serverTime")).toEpochMilli() }.getOrDefault(0); val deadline = android.os.SystemClock.elapsedRealtime() + expiry; while (isActive) { remaining = ((deadline - android.os.SystemClock.elapsedRealtime()) / 1000).toInt().coerceAtLeast(0); delay(1000) } }
+        KtmCard(member, code.text("token").takeIf { remaining > 0 })
+        if(remaining > 0) {
+            LinearProgressIndicator(progress = { (remaining.toFloat() / code.number("ttlSeconds").coerceAtLeast(1)).coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth(), color = tone("gold"), trackColor = tone("surfaceMuted"))
+            Text(tr("app.cardQrRefreshIn", "seconds" to remaining.toString()), style = MaterialTheme.typography.bodySmall)
+            QrEnlarge(code.text("token"))
+        } else { Notice(tr("app.cardQrOffline")); Action(tr("common.retry")) { reload() } }
     }
-    Tile { Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.gap)) {
-        Text(tr("app.physicalCard"), Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-        Text(tr("cardStatusMember." + member.text("cardStatus")), Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
-    } }
-    Tile {
-        Remote(api, "/api/me/card-token", pollMs = 25_000) { code, reload ->
-            var remaining by remember(code) { mutableIntStateOf(code.number("ttlSeconds")) }
-            LaunchedEffect(code) { val expiry = runCatching { Instant.parse(code.text("expiresAt")).toEpochMilli() - Instant.parse(code.text("serverTime")).toEpochMilli() }.getOrDefault(0); val deadline = android.os.SystemClock.elapsedRealtime() + expiry; while (isActive) { remaining = ((deadline - android.os.SystemClock.elapsedRealtime()) / 1000).toInt().coerceAtLeast(0); delay(1000) } }
-            if (remaining > 0) { Qr(code.text("token")); Text(tr("app.cardQrRefreshIn", "seconds" to remaining.toString())); LinearProgressIndicator(progress = { (remaining.toFloat() / code.number("ttlSeconds").coerceAtLeast(1)).coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth()) }
-            else { Notice(tr("app.cardQrOffline")); Action(tr("common.retry")) { reload() } }
-        }
-    }
+    Badge(tr("cardStatusMember." + member.text("cardStatus")), member.text("cardStatus"))
+    Tile { Detail(tr("app.nim"), member.text("nim")); Detail(tr("app.song"), member.text("favoriteSong")); Detail(tr("app.quotes"), member.text("quotes")) }
+
     Remote(api, "/api/me/check-ins") { data, _ ->
         Text(if (data.rows("checkIns").isEmpty()) tr("app.attendanceNone") else tr("app.attendanceCount", "count" to count(data.rows("checkIns").size)))
         Action(tr("app.historyTitle"), secondary = true) { go("history") }
@@ -77,9 +66,10 @@ import java.time.Instant
         val events = (data.rows("upcoming") + data.rows("past")).filter { !scan || it.text("phase") == "open" }
         if (events.isEmpty()) Empty(tr("app.eventsEmptyTitle"), tr("app.eventsEmptyBody", "city" to ""))
         events.forEach { event -> Tile {
+            if(event.text("flyerUrl").isNotBlank()) NetworkImage(api, event.text("flyerUrl"))
             Text(event.text("title"), style = MaterialTheme.typography.titleMedium)
             Text(dateTime(event.text("startsAt"), language, event.obj("city").text("timezone", "Asia/Jakarta")))
-            Text(event.obj("venue").text("name")); Text(tr("eventPhase." + event.text("phase")))
+            Text(event.obj("venue").text("name")); Badge(tr("eventPhase." + event.text("phase")), event.text("phase"))
             if (event.obj("myCheckIn").isNotEmpty()) Notice(tr("app.resultCheckedIn"))
             Action(tr(if (scan) "app.adminScan" else "common.continue"), secondary = true) { go((if (scan) "scan/" else if (admin) "city-event/" else "event/") + event.text("id")) }
         } }
@@ -95,10 +85,10 @@ import java.time.Instant
             Text(dateTime(e.text("startsAt"), language, e.obj("city").text("timezone", "Asia/Jakarta")))
             Text(dateTime(e.text("endsAt"), language, e.obj("city").text("timezone", "Asia/Jakarta")))
             Text(e.obj("venue").text("name")); Text(e.obj("venue").text("address")); Text(e.text("description"))
-            Text(tr("eventPhase." + e.text("phase")))
+            Badge(tr("eventPhase." + e.text("phase")), e.text("phase"))
             if (e.obj("myCheckIn").isNotEmpty()) Notice(tr("app.resultCheckedIn"))
         }
-        Action(tr("social.reserve")) { go("reservation/$id") }
+        Action(tr("social.reserve"), maroon = true) { go("reservation/$id") }
         Action(tr("social.roaming"), secondary = true) { go("roaming/$id") }
         Action(tr("phase5.draw"), secondary = true) { go("draw/$id") }
     }

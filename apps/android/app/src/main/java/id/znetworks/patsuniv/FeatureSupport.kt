@@ -15,6 +15,7 @@ import java.util.Locale
 fun query(value: String) = URLEncoder.encode(value, "UTF-8")
 fun count(value: Int) = NumberFormat.getIntegerInstance(Locale.forLanguageTag("id-ID")).format(value)
 fun money(value: Int) = "Rp " + count(value)
+fun zoneLabel(zone: String) = when(zone) { "Asia/Makassar" -> "WITA"; "Asia/Jayapura" -> "WIT"; else -> "WIB" }
 fun dateTime(value: String, language: String = "id", zone: String = "Asia/Jakarta"): String = runCatching {
     val date = Instant.parse(value).atZone(ZoneId.of(zone))
     val suffix = when(zone) { "Asia/Makassar" -> "WITA"; "Asia/Jayapura" -> "WIT"; else -> "WIB" }
@@ -51,7 +52,7 @@ class Mutation(private val scope: CoroutineScope) {
 @Composable fun Choices(label: String, options: List<Pair<String, String>>, selected: String, change: (String) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Column {
-        Text(label, style = MaterialTheme.typography.bodySmall)
+        SectionLabel(label)
         Box {
             OutlinedButton({ expanded = true }, Modifier.fillMaxWidth().heightIn(min = Space.control), enabled = options.isNotEmpty()) { Text(options.find { it.first == selected }?.second ?: tr("common.notSet")) }
             DropdownMenu(expanded, { expanded = false }) { options.forEach { (id, name) -> DropdownMenuItem(text = { Text(name) }, onClick = { change(id); expanded = false }) } }
@@ -66,3 +67,10 @@ class Mutation(private val scope: CoroutineScope) {
     DisposableEffect(room) { onDispose { room.close() } }
     return version
 }
+
+fun leaderboardPeriod(data: JsonObject, language: String): String = runCatching {
+    val start = Instant.parse(data.text("periodStart")).atZone(ZoneId.of("Asia/Jakarta"))
+    val end = Instant.parse(data.text("periodEnd")).atZone(ZoneId.of("Asia/Jakarta"))
+    val period = if(data.text("mode") == "QUARTERLY") "Q" + ((start.monthValue-1)/3+1) + " " + start.year else start.format(DateTimeFormatter.ofPattern("MMM yyyy",Locale.forLanguageTag(language)))
+    period + " ? reset " + end.format(DateTimeFormatter.ofPattern("d MMM",Locale.forLanguageTag(language)))
+}.getOrDefault("")
