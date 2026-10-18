@@ -19,6 +19,7 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     buildFeatures { compose = true; buildConfig = true }
+    sourceSets["test"].resources.srcDir("../../../tools/card-station/tests/fixtures")
     buildTypes {
         debug { buildConfigField("String", "DEV_IP", "\"${findProperty("patsDevIp") ?: ""}\"") }
         release { buildConfigField("String", "DEV_IP", "\"\"") }

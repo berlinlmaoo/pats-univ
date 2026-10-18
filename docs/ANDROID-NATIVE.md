@@ -10,7 +10,7 @@ endpoint inventory below. Phase 5 business rules supersede the historical wheel 
 |---|---|---|
 | 1 Foundation | Complete | 4 JVM tests and debug APK pass; real demo OTP member/admin login, EN/ID profiles, navigation, logout and card-link error on Pixel_10_Pro |
 | 2 Member screens | Complete | 7 JVM tests and debug APK pass; 19 member routes plus receipt/media and mutation states captured and inspected on Pixel_10_Pro |
-| 3 Admin screens | Pending | |
+| 3 Admin screens | Complete | 15 JVM tests and debug APK pass; regional and HQ screens, native camera, manual check-in, claims, reward handover, event create/edit/open and reservation confirmation inspected on Pixel_10_Pro |
 | 4 Parity | Pending | |
 
 Foundation includes the PATS palette, Inter/Jakarta fonts, shared EN/ID dictionaries, member/admin
@@ -73,6 +73,18 @@ Phase 1 screenshots were captured and visually inspected in `C:/Users/Berlin/Doc
 | Community operations | GET `/api/social/operations`; POST `/api/social/reservation-decision` `{id,status:CONFIRMED\|REJECTED\|CANCELLED}`; POST `/api/social/roaming-decision` `{id,decision:APPROVED\|REJECTED}`; status, conversation, expiry, moderation summaries |
 | Notifications | GET `/api/me/notifications`; POST `/api/me/notifications/read` `{all:true}` |
 | Notification preferences | GET/PATCH `/api/me/notification-prefs` `{events?:boolean,activity?:boolean}` |
+| Admin tools / scan event picker | GET `/api/admin/events` → upcoming/past; server capabilities control each tool |
+| Event attendance / lifecycle | GET `/api/admin/events/:id`, GET `/api/admin/events/:id/attendance`; room `attendance`; POST `/api/admin/events/:id/actions` `{action:publish\|open\|close}` |
+| Regional event editor | GET `/api/admin/event-form`; POST `/api/admin/events`, PATCH `/api/admin/events/:id` with local date/times, title, description, venue, capacity, opening offset and publish; server applies city timezone and overnight end |
+| NFC / camera QR / manual check-in | POST `/api/admin/check-in/preview` `{eventId,method,token,nfcUid?}` or `{eventId,method:MANUAL,memberId}`; POST `/api/admin/check-in` with ticket or manual member/reason; GET `/api/admin/events/:id/members?q=` |
+| Handover | POST `/api/admin/cards/handover/preview`, POST `/api/admin/cards/handover` `{token,nfcUid}`; explicit name confirmation before commit |
+| Card search / lost / re-encode | GET `/api/admin/cards/members?q=`, GET `/api/admin/cards/members/:id`; POST `/api/admin/cards/:id/revoke` `{reason}`, POST `/api/admin/cards/:id/reencode-requests` `{reason}` |
+| HQ encoding batches | GET `/api/hq/batches`; batch progress and any-card lookup; per-install station identifier allows parallel phones of the same model |
+| Phone encoding / approved re-encode | POST `/api/hq/cards/prepare` `{lookup,station,mode,batchId?,grantId?}` → lease; POST `/api/hq/cards/:id/key` `{leaseId,nfcUid}` → transient URL/PWD/PACK; POST `/api/hq/cards/:id/encoded` `{leaseId,nfcUid,protectedNow,chipType}`; POST `/api/hq/cards/:id/release` `{leaseId,failure?}`; retry failed reports without rewriting |
+| Reward validation | POST `/api/admin/loyalty/codes/preview`, POST `/api/admin/loyalty/codes/fulfill` `{eventId,code}`; camera or six-character entry; confirmation before handover |
+| Claim review | GET/POST `/api/admin/loyalty/claims`; POST `{id,decision,guestCount,reservationCount,reason}`; GET `/api/loyalty/claims/:id/receipt?format=json` → private signed image |
+| City / crew operations | GET `/api/admin/loyalty/operations`; POST `/api/admin/loyalty/recaps` with seven counts/revenues, PIC, accountable person and note; POST `/api/admin/loyalty/promoters/:memberId` `{enabled}` |
+| Historical PR records | Read-only reports and payouts from operations; GET `/api/loyalty/receipts/:id?format=json`; new submissions use Claim XP |
 
 Phase 2 debug screenshot navigation uses `qaRoute` intent extras; it cannot authenticate a user or bypass
 server authorization. `qaCapture=true` temporarily permits channel capture in **debug only** for visual QA;
@@ -106,4 +118,15 @@ Language/theme and all admin routes are included in the final parity pass.
   privacy/legal assets and `ANDROID_CERT_SHA256` for verified App Links remain owner tasks.
 - Existing HQ dependencies (final artwork/legal and T9 notification copy) remain unchanged.
 
-The completion marker is intentionally absent until all phases and required emulator checks pass.
+Phase 3 uses CameraX + ZXing for QR and NfcAdapter reader mode behind `CardReader`/`TagIo`.
+The JVM fake executes the shared card-station command fixtures for NTAG213/215/216, tests interruption
+at every command, recovery, password/PACK failures, read-back, locked/unsupported tags and NDEF parsing.
+Static/dynamic lock pages and the capability container are never written. Physical outcomes are not
+simulated as successful server encodes on the emulator. Screenshots are `3-*.png` beside Phase 2 evidence.
+Native claim review opened the actual private camera receipt and adjusted reservations from 2 to 3;
+the server approved it for 75 XP. Native manual check-in, reward issue/preview/fulfillment, reservation
+confirmation/private chat and event create/edit/open all passed against the existing APIs.
+The backend has no event deletion endpoint; close/publish/open are its supported lifecycle. Event
+creation/edit metadata is regional-only on the existing API, so HQ uses the web dashboard for editing.
+
+The completion marker is intentionally absent until the final parity checks pass.

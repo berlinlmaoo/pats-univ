@@ -60,7 +60,7 @@ import java.time.Instant
     var all by remember { mutableStateOf(false) }
     if (!admin) Row(verticalAlignment = Alignment.CenterVertically) { Switch(all, { all = it }); Text(tr("loyalty.national")) }
     Remote(api, if (admin) "/api/admin/events" else "/api/events" + if (all) "?scope=all" else "") { data, reload ->
-        val events = data.rows("upcoming") + data.rows("past")
+        val events = (data.rows("upcoming") + data.rows("past")).filter { !scan || it.text("phase") == "open" }
         if (events.isEmpty()) Empty(tr("app.eventsEmptyTitle"), tr("app.eventsEmptyBody", "city" to ""))
         events.forEach { event -> Tile {
             Text(event.text("title"), style = MaterialTheme.typography.titleMedium)

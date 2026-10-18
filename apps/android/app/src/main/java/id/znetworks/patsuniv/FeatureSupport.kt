@@ -35,7 +35,7 @@ class Mutation(private val scope: CoroutineScope) {
         if (busy) return
         busy = true; failure = null; notice = null
         scope.launch {
-            try { block() } catch(e: CancellationException) { throw e } catch(e: Exception) { failure = errorKey((e as? ApiFailure)?.code ?: "INTERNAL") }
+            try { block() } catch(e: CancellationException) { throw e } catch(e: Exception) { failure = if (e is TagFailure) e.key else errorKey((e as? ApiFailure)?.code ?: "INTERNAL") }
             finally { busy = false }
         }
     }
