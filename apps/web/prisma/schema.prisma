@@ -199,7 +199,7 @@ enum SessionClient {
 /// A login. Members and admins are both users; the role decides what they can reach.
 model User {
   reactions PostReaction[]
-  id                String     @id @default(cuid())
+  id                String     @id @default(uuid(7))
   /// Login identity (lower-case). OTP codes are sent here.
   email             String     @unique
   /// E.164, required: used to route members into the city WhatsApp group.
@@ -248,7 +248,7 @@ model User {
 /// A signed-in device or browser. The app holds a rotating refresh token, the dashboard a
 /// session cookie; both are stored hashed here so HQ can sign anyone out remotely.
 model Session {
-  id         String        @id @default(cuid())
+  id         String        @id @default(uuid(7))
   userId     String
   client     SessionClient
   /// SHA-256 of the refresh token (app) or session cookie (web).
@@ -267,7 +267,7 @@ model Session {
 
 /// One-time 6-digit code (PRODUCT.md §10.6). Only a hash is stored.
 model OtpCode {
-  id         String      @id @default(cuid())
+  id         String      @id @default(uuid(7))
   email      String
   userId     String?
   codeHash   String
@@ -292,7 +292,7 @@ model Member {
   drawEntries DrawEntry[]
   freeDrawCredits FreeDrawCredit[]
   regionChanges RegionChangeRequest[]
-  id            String       @id @default(cuid())
+  id            String       @id @default(uuid(7))
   userId        String       @unique
   /// <city code><yy><5-digit sequence>, e.g. JKT2600042. Never changes.
   nim           String       @unique
@@ -349,7 +349,7 @@ model NimSequence {
 /// A physical NFC card (NTAG213). A member may have several over time; at most one that is not
 /// REVOKED (partial unique index), and at most one DELIVERED.
 model Card {
-  id                 String     @id @default(cuid())
+  id                 String     @id @default(uuid(7))
   memberId           String
   /// Chip UID, recorded by the station at encode time.
   nfcUid             String?    @unique
@@ -405,7 +405,7 @@ model Card {
 /// A city admin asks HQ to let them rewrite a delivered card whose chip still works (damaged
 /// print, corrupted data). Approval gives the requester one encode of that card within 24 hours.
 model ReencodeRequest {
-  id             String         @id @default(cuid())
+  id             String         @id @default(uuid(7))
   cardId         String
   requestedById  String
   reason         String
@@ -427,7 +427,7 @@ model ReencodeRequest {
 
 /// One vendor print run + encode round for one city.
 model CardBatch {
-  id               String          @id @default(cuid())
+  id               String          @id @default(uuid(7))
   cityId           String
   /// Per-city running number: the batch is "JKT-3" on files and screens.
   number           Int
@@ -459,7 +459,7 @@ model CardBatch {
 // ─── Cities, venues, events ───────────────────────────────────────────────────
 
 model City {
-  id               String   @id @default(cuid())
+  id               String   @id @default(uuid(7))
   /// 3 letters, NIM prefix. Locked once a member exists.
   code             String   @unique
   name             String
@@ -491,7 +491,7 @@ model City {
 }
 
 model Venue {
-  id        String   @id @default(cuid())
+  id        String   @id @default(uuid(7))
   cityId    String
   name      String
   address   String?
@@ -513,7 +513,7 @@ model Venue {
 
 model Event {
   xpClaims XpClaim[]
-  id                String      @id @default(cuid())
+  id                String      @id @default(uuid(7))
   cityId            String
   venueId           String?
   title             String
@@ -557,7 +557,7 @@ model Event {
 }
 
 model CheckIn {
-  id               String        @id @default(cuid())
+  id               String        @id @default(uuid(7))
   eventId          String
   memberId         String
   method           CheckInMethod
@@ -590,7 +590,7 @@ model UsedNonce {
 
 /// Append-only. Balance = SUM(delta); leaderboard = SUM(delta > 0) per period.
 model XpLedger {
-  id        String   @id @default(cuid())
+  id        String   @id @default(uuid(7))
   memberId  String
   delta     Int
   expiresAt DateTime?
@@ -608,7 +608,7 @@ model XpLedger {
 }
 
 model LeaderboardSnapshot {
-  id          String           @id @default(cuid())
+  id          String           @id @default(uuid(7))
   scope       LeaderboardScope
   cityId      String?
   periodStart DateTime
@@ -623,7 +623,7 @@ model LeaderboardSnapshot {
 }
 
 model Reward {
-  id          String     @id @default(cuid())
+  id          String     @id @default(uuid(7))
   type        RewardType
   name        String
   description String     @default("")
@@ -644,7 +644,7 @@ model Reward {
 }
 
 model Redemption {
-  id                 String           @id @default(cuid())
+  id                 String           @id @default(uuid(7))
   memberId           String
   rewardId           String
   eventId            String?
@@ -669,7 +669,7 @@ model Redemption {
 // ─── Promoter (PR) ────────────────────────────────────────────────────────────
 
 model PromoterReport {
-  id            String               @id @default(cuid())
+  id            String               @id @default(uuid(7))
   memberId      String
   eventId       String
   cityId        String
@@ -701,7 +701,7 @@ model PromoterReport {
 }
 
 model PromoterPayout {
-  id               String       @id @default(cuid())
+  id               String       @id @default(uuid(7))
   promoterReportId String
   memberId         String
   /// Rupiah, no decimals.
@@ -719,7 +719,7 @@ model PromoterPayout {
 // ─── Social hub ───────────────────────────────────────────────────────────────
 
 model Channel {
-  id         String            @id @default(cuid())
+  id         String            @id @default(uuid(7))
   cityId     String
   name       String
   kind       ChannelKind
@@ -737,7 +737,7 @@ model Channel {
 
 model Post {
   reactions PostReaction[]
-  id        String    @id @default(cuid())
+  id        String    @id @default(uuid(7))
   channelId String
   authorId  String
   body      String    @default("")
@@ -754,7 +754,7 @@ model Post {
 
 /// Live chat in a channel, or a 1:1 conversation (exactly one of channelId / conversationId).
 model Message {
-  id             String    @id @default(cuid())
+  id             String    @id @default(uuid(7))
   channelId      String?
   conversationId String?
   senderId       String
@@ -773,7 +773,7 @@ model Message {
 }
 
 model Conversation {
-  id            String           @id @default(cuid())
+  id            String           @id @default(uuid(7))
   kind          ConversationKind
   cityId        String
   memberId      String
@@ -788,7 +788,7 @@ model Conversation {
 
 /// Screenshot attempts on hub screens (blocked on Android, detected on iOS).
 model ScreenshotEvent {
-  id        String         @id @default(cuid())
+  id        String         @id @default(uuid(7))
   memberId  String
   channelId String?
   platform  DevicePlatform
@@ -803,7 +803,7 @@ model ScreenshotEvent {
 // ─── Reservations & roaming ───────────────────────────────────────────────────
 
 model Reservation {
-  id        String            @id @default(cuid())
+  id        String            @id @default(uuid(7))
   eventId   String
   venueId   String
   memberId  String
@@ -828,7 +828,7 @@ model Reservation {
 }
 
 model RoamingRequest {
-  id              String        @id @default(cuid())
+  id              String        @id @default(uuid(7))
   memberId        String
   eventId         String
   targetCityId    String
@@ -853,7 +853,7 @@ model RoamingRequest {
 // ─── Operations ───────────────────────────────────────────────────────────────
 
 model TrafficRecap {
-  id            String    @id @default(cuid())
+  id            String    @id @default(uuid(7))
   eventId       String    @unique
   cityId        String
   sofaCount     Int       @default(0)
@@ -880,7 +880,7 @@ model TrafficRecap {
 }
 
 model Notification {
-  id     String    @id @default(cuid())
+  id     String    @id @default(uuid(7))
   userId String
   kind   String
   title  String
@@ -895,7 +895,7 @@ model Notification {
 }
 
 model Device {
-  id         String         @id @default(cuid())
+  id         String         @id @default(uuid(7))
   userId     String
   platform   DevicePlatform
   pushToken  String         @unique
@@ -910,7 +910,7 @@ model Device {
 
 /// Scheduled pushes already sent (reminders, follow-ups), so a cron run never sends one twice.
 model PushDispatch {
-  id             String   @id @default(cuid())
+  id             String   @id @default(uuid(7))
   /// "<kind>:<eventId>", e.g. "reminder1d:ckxyz".
   key            String   @unique
   recipientCount Int      @default(0)
@@ -918,7 +918,7 @@ model PushDispatch {
 }
 
 model AuditLog {
-  id         String   @id @default(cuid())
+  id         String   @id @default(uuid(7))
   actorId    String?
   action     String
   targetType String
@@ -953,7 +953,7 @@ model Setting {
 
 /// A stage draw entry. Unique member/event and position make seats impossible to double-book.
 model DrawEntry {
-  id String @id @default(cuid())
+  id String @id @default(uuid(7))
   eventId String
   memberId String
   position Int
@@ -968,7 +968,7 @@ model DrawEntry {
 }
 
 model FreeDrawCredit {
-  id String @id @default(cuid())
+  id String @id @default(uuid(7))
   cityId String
   memberId String
   periodStart DateTime
@@ -985,7 +985,7 @@ model FreeDrawCredit {
 }
 
 model RegionChangeRequest {
-  id String @id @default(cuid())
+  id String @id @default(uuid(7))
   memberId String
   fromCityId String
   toCityId String
@@ -1002,7 +1002,7 @@ model RegionChangeRequest {
 
 /// Post-event claims. Creation and review use distinct transitions; pending claims may be edited.
 model XpClaim {
-  id String @id @default(cuid())
+  id String @id @default(uuid(7))
   memberId String
   eventId String
   formType String
