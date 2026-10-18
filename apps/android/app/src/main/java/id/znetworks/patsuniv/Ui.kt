@@ -74,9 +74,10 @@ private val LocalPageRefresh = staticCompositionLocalOf<PageRefresh?> { null }
         Text(message, Modifier.fillMaxWidth().padding(Space.page).semantics { if(error) liveRegion = LiveRegionMode.Assertive }, color = tone(if(family == "accent") "accentSubtleText" else "${family}Text"))
     }
 }
-@Composable fun Empty(title: String, description: String = tr("app.eventsEmptyBody", "city" to "")) { Tile {
+@Composable fun Empty(title: String, description: String = tr("app.eventsEmptyBody", "city" to ""), action: (@Composable () -> Unit)? = null) { Tile {
     Column(Modifier.size(48.dp).background(tone("band"), MaterialTheme.shapes.small), horizontalAlignment = Alignment.CenterHorizontally) { Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { PatsIcon("inbox", tone("bandText")) }; Box(Modifier.fillMaxWidth().height(3.dp).background(tone("gold"))) }
     Text(title, style = MaterialTheme.typography.titleMedium); Text(description, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    action?.invoke()
 } }
 @Composable fun Brand() {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.page)) {
@@ -88,7 +89,7 @@ private val LocalPageRefresh = staticCompositionLocalOf<PageRefresh?> { null }
     AlertDialog(onDismissRequest = onDismiss, title = { Text(label) }, text = { Text(message) }, confirmButton = { TextButton(onConfirm, colors = ButtonDefaults.textButtonColors(contentColor = tone("dangerText"))) { Text(label) } }, dismissButton = { TextButton(onDismiss) { Text(tr("common.cancel")) } })
 }
 /** Request ownership follows the visible screen; stale responses cannot update another route. */
-@Composable fun Remote(api: Api, path: String, refresh: Int = 0, pollMs: Long = 0, authenticated: Boolean = true, onForbidden: () -> Unit = {}, content: @Composable ColumnScope.(JsonObject, () -> Unit) -> Unit) {
+@Composable fun Remote(api: Api, path: String, refresh: Int = 0, pollMs: Long = 0, authenticated: Boolean = true, onForbidden: () -> Unit = {}, placeholder: (@Composable () -> Unit)? = null, content: @Composable ColumnScope.(JsonObject, () -> Unit) -> Unit) {
     var result by remember(path) { mutableStateOf<JsonObject?>(null) }
     var error by remember(path) { mutableStateOf<String?>(null) }
     var errorParams by remember(path) { mutableStateOf<Array<Pair<String, String>>>(emptyArray()) }
@@ -108,8 +109,9 @@ private val LocalPageRefresh = staticCompositionLocalOf<PageRefresh?> { null }
         } while (pollMs > 0 && isActive)
     }
     Column(verticalArrangement = Arrangement.spacedBy(Space.page)) {
+        if(result == null) placeholder?.invoke()
         if (loading) LoadingSkeleton()
-        error?.let { Notice(tr(it, *errorParams), true); Action(tr("common.retry"), secondary = true) { version++ } }
+        error?.let { Empty(tr(it, *errorParams), tr("native.retryBody")) { Action(tr("common.retry"), secondary = true) { version++ } } }
         result?.let { content(it) { version++ } }
     }
 }

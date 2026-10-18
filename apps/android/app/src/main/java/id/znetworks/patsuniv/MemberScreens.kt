@@ -43,7 +43,7 @@ import java.time.Instant
     val context = LocalContext.current
     DisposableEffect(Unit) { (context as? Activity)?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON); onDispose { (context as? Activity)?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) } }
     Title(tr("app.cardTitle"))
-    Remote(api, "/api/me/card-token", pollMs = 25_000) { code, reload ->
+    Remote(api, "/api/me/card-token", pollMs = 25_000, placeholder = { KtmCard(member) }) { code, reload ->
         var remaining by remember(code) { mutableIntStateOf(code.number("ttlSeconds")) }
         LaunchedEffect(code) { val expiry = runCatching { Instant.parse(code.text("expiresAt")).toEpochMilli() - Instant.parse(code.text("serverTime")).toEpochMilli() }.getOrDefault(0); val deadline = android.os.SystemClock.elapsedRealtime() + expiry; while (isActive) { remaining = ((deadline - android.os.SystemClock.elapsedRealtime()) / 1000).toInt().coerceAtLeast(0); delay(1000) } }
         KtmCard(member, code.text("token").takeIf { remaining > 0 })

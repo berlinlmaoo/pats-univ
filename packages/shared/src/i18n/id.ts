@@ -3,6 +3,7 @@ import type { DictionaryShape } from './types';
 
 export const id: DictionaryShape<typeof en> = {
   native: {
+  "retryBody": "Coba lagi atau minta bantuan crew.",
   "home": "Beranda",
   "cardAccessibility": "KTM PATS University: {name}, minuman favorit {drink}, genre favorit {genre}",
   "enlargeQr": "Perbesar QR",

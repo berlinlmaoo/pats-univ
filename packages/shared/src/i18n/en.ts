@@ -1,5 +1,6 @@
 export const en = {
   native: {
+  "retryBody": "Try again or ask the crew for help.",
   "home": "Home",
   "cardAccessibility": "KTM PATS University: {name}, favorite drink {drink}, favorite genre {genre}",
   "enlargeQr": "Enlarge QR",
