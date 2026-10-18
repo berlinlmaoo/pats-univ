@@ -10,8 +10,8 @@ struct RewardValidationView: View {
         DataPage(title: "loyalty.validateReward", path: "/api/admin/loyalty/operations") { data, _ in
             Choice(label: "loyalty.event", options: data["events"].rows, selection: $eventID).onChange(of: eventID) { _, _ in preview = .null }
             Field(key: "loyalty.code", value: $code).textInputAutocapitalization(.characters).autocorrectionDisabled().onChange(of: code) { _, v in code = String(v.uppercased().filter { $0.isASCII && ($0.isLetter || $0.isNumber) }.prefix(6)); preview = .null }
-            Button(L.t("loyalty.lookup")) { Task { await lookup(code) } }.buttonStyle(PATSButtonStyle()).disabled(mutation.busy || code.count != 6 || eventID.isEmpty)
-            Button(L.t("loyalty.scanCode"), systemImage: "qrcode.viewfinder") { camera = true }.buttonStyle(.bordered).disabled(mutation.busy || eventID.isEmpty)
+            Button(L.t("loyalty.lookup")) { Task { await lookup(code) } }.buttonStyle(PATSButtonStyle(loading: mutation.busy)).disabled(mutation.busy || code.count != 6 || eventID.isEmpty)
+            Button(L.t("loyalty.scanCode"), systemImage: "qrcode.viewfinder") { camera = true }.buttonStyle(PATSButtonStyle(variant: .secondary)).disabled(mutation.busy || eventID.isEmpty)
             MutationState(mutation: mutation)
             if preview.exists {
                 Panel {
@@ -35,10 +35,13 @@ struct RewardValidationView: View {
     }
 }
 struct ClaimsReviewView: View {
+    @State private var section = "pending"
     var body: some View {
         DataPage(title: "phase5.claimReview", path: "/api/admin/loyalty/claims", poll: true) { data, reload in
-            if data["claims"].rows.isEmpty { EmptyState(title: "phase5.claimEmpty", icon: "doc.text") }
-            ForEach(data["claims"].rows) { claim in ClaimReviewCard(claim: claim, reload: reload).id(claim.id + claim["status"].text) }
+            Tabs(options: [("pending", "ktm.pending"), ("history", "ktm.history")], selection: $section, counts: ["pending": data["claims"].rows.filter { $0["status"].text == "PENDING" }.count])
+            let rows = data["claims"].rows.filter { ($0["status"].text == "PENDING") == (section == "pending") }
+            if rows.isEmpty { EmptyState(title: "phase5.claimEmpty", icon: "doc.text") }
+            ForEach(rows) { claim in ClaimReviewCard(claim: claim, reload: reload).id(claim.id + claim["status"].text) }
         }
     }
 }
@@ -128,7 +131,7 @@ struct RecapEditor: View {
         Panel {
             if recap.exists { Text(L.t("loyalty.total") + ": " + L.money(recap["total"].int)).font(Theme.title(20)) }
             if recap["lockedAt"].exists { Notice(text: L.t("loyalty.locked")) }
-            ForEach(counts, id: \.self) { key in Field(key: "loyalty.\(key)", value: binding(key), keyboard: .numberPad).disabled(recap["lockedAt"].exists) }
+            ForEach(counts, id: \.self) { key in Field(key: "loyalty.\(key)", value: binding(key), keyboard: .numberPad, money: key.hasPrefix("revenue")).disabled(recap["lockedAt"].exists) }
             Field(key: "phase5.personInCharge", value: binding("personInCharge")).disabled(recap["lockedAt"].exists)
             Field(key: "phase5.accountablePerson", value: binding("accountablePerson")).disabled(recap["lockedAt"].exists)
             Field(key: "loyalty.note", value: binding("note")).disabled(recap["lockedAt"].exists)
@@ -141,7 +144,7 @@ struct RecapEditor: View {
                         for key in ["personInCharge", "accountablePerson", "note"] { body[key] = .str(binding(key).wrappedValue) }
                         await mutation.send("/api/admin/loyalty/recaps", body: .object(body), after: reload)
                     }
-                }.buttonStyle(PATSButtonStyle()).disabled(mutation.busy || !valid)
+                }.buttonStyle(PATSButtonStyle(loading: mutation.busy)).disabled(mutation.busy || !valid)
             }
         }
     }

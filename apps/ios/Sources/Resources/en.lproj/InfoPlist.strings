@@ -1,3 +1,4 @@
 "NSCameraUsageDescription" = "Scan member QR codes and capture receipts or community photos.";
 "NSMicrophoneUsageDescription" = "Record voice messages and community videos.";
 "NFCReaderUsageDescription" = "Read, hand over and encode PATS membership cards.";
+"NSPhotoLibraryUsageDescription" = "Choose a member photo so venue crew can match your face.";

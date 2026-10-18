@@ -20,7 +20,7 @@ final class ScannerController: UIViewController, AVCaptureMetadataOutputObjectsD
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     override func viewDidLoad() {
         super.viewDidLoad(); view.backgroundColor = .black
-        label.textColor = .white; label.numberOfLines = 0; label.textAlignment = .center; label.text = L.t("app.scanHint")
+        label.font = UIFont(name: "Figtree-Regular", size: 15); label.textColor = .white; label.numberOfLines = 0; label.textAlignment = .center; label.text = L.t("app.scanHint")
         label.translatesAutoresizingMaskIntoConstraints = false; view.addSubview(label)
         NSLayoutConstraint.activate([label.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24), label.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24), label.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -40)])
         torch.setTitle(L.t("app.scanTorch"), for: .normal); torch.setTitleColor(.white, for: .normal)
@@ -65,7 +65,7 @@ struct ScannerSheet: View {
     var body: some View {
         NavigationStack {
             QRScanner { code in dismiss(); scanned(code) }.ignoresSafeArea(edges: .bottom)
-                .navigationTitle(L.t("app.scanHint")).navigationBarTitleDisplayMode(.inline)
+                .navigationTitle(L.t("app.scanHint")).navigationBarTitleDisplayMode(.inline).bandNavigation()
                 .toolbar { ToolbarItem(placement: .topBarTrailing) { Button(L.t("common.close")) { dismiss() } } }
         }
     }
@@ -97,13 +97,13 @@ struct ScanView: View {
                         let scan = try await reader.read()
                         try await identify(.object(["method": .str("NFC"), "token": .str(scan.token), "nfcUid": .str(scan.uid)]))
                     } }
-                }.buttonStyle(PATSButtonStyle()).disabled(mutation.busy)
+                }.buttonStyle(PATSButtonStyle(loading: mutation.busy)).disabled(mutation.busy)
             } else { Notice(text: L.t("native.nfcUnavailable")) }
-            Button(L.t("app.scanHint"), systemImage: "qrcode.viewfinder") { camera = true }.buttonStyle(.bordered).disabled(mutation.busy)
+            Button(L.t("app.scanHint"), systemImage: "qrcode.viewfinder") { camera = true }.buttonStyle(PATSButtonStyle(variant: .secondary)).disabled(mutation.busy)
             NavigationRow(title: "app.scanManual", icon: "person.text.rectangle") { ManualCheckInView(eventID: eventID) }
             MutationState(mutation: mutation)
             if result.exists {
-                Panel { Label(L.t("app.resultCheckedIn"), systemImage: "checkmark.circle").font(Theme.title(20)); Text(result["checkIn"]["member"]["fullName"].text); Text(L.date(result["checkIn"]["checkedInAt"].text)); Text(L.t("app.adminCheckedInCount", ["count": L.count(result["count"].int)])) }
+                Panel { MemberIdentity(member: result["checkIn"]["member"]); Label(L.t("app.resultCheckedIn"), systemImage: "checkmark.circle").font(Theme.title(20)); Text(result["checkIn"]["member"]["fullName"].text); Text(L.date(result["checkIn"]["checkedInAt"].text)); Text(L.t("app.adminCheckedInCount", ["count": L.count(result["count"].int)])) }
             }
             if preview.exists {
                 Panel {
@@ -116,7 +116,7 @@ struct ScanView: View {
                         let manual = subject["method"].text == "MANUAL"
                         let remaining = max(0, Int(ceil((Dates.parse(preview["ticketExpiresAt"].text) ?? .distantPast).timeIntervalSince(time.date))))
                         if !manual { Text(L.t("app.resultExpiresIn", ["seconds": L.count(remaining)])) }
-                        ConfirmAction(label: "app.resultConfirm", message: preview["member"]["fullName"].text + " · " + preview["member"]["nim"].text, disabled: mutation.busy || preview["issue"].exists || (manual ? reason.trimmingCharacters(in: .whitespacesAndNewlines).count < 3 : remaining <= 0)) {
+                        ConfirmAction(label: "app.resultConfirm", message: preview["member"]["fullName"].text + " · " + preview["member"]["nim"].text, maroon: true, disabled: mutation.busy || preview["issue"].exists || (manual ? reason.trimmingCharacters(in: .whitespacesAndNewlines).count < 3 : remaining <= 0)) {
                             await mutation.run {
                                 var body: [String: JSON] = ["eventId": .str(eventID), "method": subject["method"]]
                                 if manual { body["memberId"] = subject["memberId"]; body["reason"] = .str(reason) } else { body["ticket"] = preview["ticket"] }
@@ -141,9 +141,10 @@ struct ScanView: View {
 struct MemberIdentity: View {
     let member: JSON
     var body: some View {
-        if !member["photoUrl"].text.isEmpty { RemoteImage(url: member["photoUrl"].text).frame(height: 80) }
+        MemberPhoto(url: member["photoUrl"].text)
         Text(member["fullName"].text).font(Theme.title(20)); Text(member["nim"].text).monospacedDigit()
         Text(member["city"]["name"].text).foregroundStyle(Theme.muted)
+        if member["status"].exists { Badge(value: member["status"].text) }
     }
 }
 struct ManualCheckInView: View {

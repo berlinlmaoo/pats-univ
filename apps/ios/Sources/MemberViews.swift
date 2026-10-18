@@ -4,42 +4,48 @@ struct MemberCardView: View {
     @EnvironmentObject private var store: AppStore
     @StateObject private var state = Resource()
     @State private var deadline: QRDeadline?
+    @State private var enlarged = false
     @StateObject private var linkReader = NDEFLinkReader()
     @Environment(\.scenePhase) private var phase
     var body: some View {
         Page(title: "app.cardTitle") {
             if store.member.exists {
-                VStack(alignment: .leading, spacing: Theme.gap) {
-                    HStack {
-                        Image("Crest").resizable().scaledToFit().frame(width: 64, height: 64)
-                        Spacer(); Text("PATS\nUNIVERSITY").font(Theme.title(17))
-                    }
-                    if !store.member["photoUrl"].text.isEmpty { RemoteImage(url: store.member["photoUrl"].text).frame(height: 88) }
-                    Text(store.member["fullName"].text).font(Theme.title())
-                    Text(store.member["nim"].text).monospacedDigit()
-                    Text(store.member["city"]["name"].text)
-                    if store.member["isPromoter"].bool { Badge(value: "PR") }
-                    Text(store.member["favoriteSong"].text + " · " + store.member["favoriteGenre"].text)
-                    Text(store.member["quotes"].text).italic()
-                }.padding(Theme.padding).frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color(uiColor: UIColor(hex: Theme.colors["brand"]?["navy"] ?? "#001836")), in: RoundedRectangle(cornerRadius: Theme.radius))
-                    .foregroundStyle(Color.white)
-                Text(L.t("app.physicalCard")).font(Theme.title(17))
-                Badge(value: store.member["cardStatus"].text, member: true)
-                if linkReader.available { Button(L.t("native.tap"), systemImage: "wave.3.right") { linkReader.complete = { store.open($0) }; linkReader.begin() }.buttonStyle(.bordered) }
-                Text(L.t("app.cardQrTitle")).font(Theme.title(20))
                 ResourceState(resource: state) { await refresh() }
                 TimelineView(.periodic(from: .now, by: 1)) { time in
-                    if let deadline, deadline.remaining(at: time.date) > 0 && phase == .active {
-                        VStack(spacing: Theme.gap) {
-                            QRImage(value: deadline.token)
-                            ProgressView(value: min(1, Double(deadline.remaining(at: time.date)) / deadline.ttl)).tint(Theme.accent)
-                            Text(L.t("app.cardQrRefreshIn", ["seconds": L.count(deadline.remaining(at: time.date))])).monospacedDigit()
-                        }.frame(maxWidth: .infinity)
-                    } else { Notice(text: L.t("native.expired")) }
+                    let remaining = deadline?.remaining(at: time.date) ?? 0
+                    let valid = remaining > 0 && phase == .active && state.error == nil
+                    KTMCard(member: store.member, token: valid ? deadline?.token : nil)
+                    if valid, let deadline {
+                        ProgressView(value: min(1, Double(remaining) / deadline.ttl)).tint(Theme.color("gold"))
+                        Text(L.t("app.cardQrRefreshIn", ["seconds": L.count(remaining)])).font(Theme.body(13)).monospacedDigit()
+                        Button(L.t("ktm.enlarge"), systemImage: "qrcode") { enlarged = true }.buttonStyle(PATSButtonStyle(variant: .maroon))
+                    } else if !state.loading { Notice(text: L.t("native.expired")) }
                 }
+                HStack { SectionLabel(key: "app.physicalCard"); Badge(value: store.member["cardStatus"].text, member: true) }
+                Panel {
+                    DetailRow(key: "app.nim", value: store.member["nim"].text)
+                    DetailRow(key: "app.song", value: store.member["favoriteSong"].text)
+                    DetailRow(key: "join.quotes", value: store.member["quotes"].text)
+                    DetailRow(key: "app.city", value: store.member["city"]["name"].text)
+                }
+                if linkReader.available { Button(L.t("native.tap"), systemImage: "wave.3.right") { linkReader.complete = { store.open($0) }; linkReader.begin() }.buttonStyle(PATSButtonStyle(variant: .secondary)) }
                 Text(L.t("app.cardQrBody", ["seconds": String(Int(deadline?.ttl ?? 60))])).font(Theme.body(13)).foregroundStyle(Theme.muted)
             } else { Notice(text: L.t("app.noMemberProfile")) }
+        }
+        .fullScreenCover(isPresented: $enlarged) {
+            ZStack {
+                Color(uiColor: UIColor(hex: Theme.colors["brand"]?["maroon"] ?? "#360c0c")).ignoresSafeArea()
+                VStack(spacing: Theme.padding) {
+                    HStack { Spacer(); Button(L.t("common.close")) { enlarged = false }.frame(minWidth: 44, minHeight: 44) }
+                    Spacer()
+                    TimelineView(.periodic(from: .now, by: 1)) { time in
+                        if let deadline, deadline.remaining(at: time.date) > 0 && phase == .active && state.error == nil {
+                            QRImage(value: deadline.token, onTile: true).padding(24)
+                        } else { Text(L.t("native.expired")) }
+                    }
+                    Spacer()
+                }.padding(Theme.padding).foregroundStyle(Color.white)
+            }
         }
         .task {
             UIApplication.shared.isIdleTimerDisabled = true
@@ -59,6 +65,7 @@ struct MemberCardView: View {
     }
     private func refresh() async {
         await state.load("/api/me/card-token")
+        if state.error != nil { deadline = nil }
         if state.error == nil { deadline = QRDeadline(response: state.data, receivedAt: state.receivedAt, requestStartedAt: state.requestedAt) }
     }
 }
@@ -89,7 +96,7 @@ struct EventPanel: View {
             Text(event["title"].text).font(Theme.title(20))
             Text(L.date(event["startsAt"].text, zone: event["city"]["timezone"].text)).font(Theme.body(14))
             Text(event["venue"]["name"].text + " · " + event["city"]["name"].text).foregroundStyle(Theme.muted)
-            if event["myCheckIn"].exists { Label(L.t("app.eventAttended"), systemImage: "checkmark.circle") }
+            if event["myCheckIn"].exists { Badge(value: "ktm.checkedIn") }
         }
     }
 }
@@ -106,7 +113,11 @@ struct EventDetailView: View {
                 Text(L.t("events.window")).fontWeight(.semibold)
                 Text(L.date(e["checkInOpensAt"].text, zone: e["city"]["timezone"].text))
                 Text(L.date(e["checkInClosesAt"].text, zone: e["city"]["timezone"].text))
-                if e["myCheckIn"].exists { Text(L.t("app.eventCheckedInAt", ["time": L.date(e["myCheckIn"]["checkedInAt"].text)])) }
+                if e["myCheckIn"].exists {
+                    Text(L.t("ktm.checkedInVia", ["time": L.date(e["myCheckIn"]["checkedInAt"].text), "method": L.status(e["myCheckIn"]["method"].text)]))
+                        .padding(Theme.gap).frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Theme.color("band")).foregroundStyle(Theme.color("bandText"))
+                }
             }
             if admin { AdminEventActions(event: e, reload: reload) }
             else {
@@ -114,7 +125,7 @@ struct EventDetailView: View {
                 NavigationRow(title: "social.reserve", icon: "square.grid.3x3") { ReservationView(eventID: eventID) }
                 NavigationRow(title: "social.roaming", icon: "globe.asia.australia") { RoamingView(initialEventID: eventID) }
             }
-            DrawView(eventID: eventID)
+            DrawView(eventID: eventID, ended: e["phase"].text == "ended")
         }
     }
 }
@@ -143,7 +154,7 @@ struct WalletView: View {
                 Text(L.t("loyalty.balance")).foregroundStyle(Theme.muted)
                 Text(L.count(data["balance"].int) + " XP").font(Theme.title(32)).monospacedDigit()
                 if data["milestone"].exists {
-                    ProgressView(value: min(1, max(0, data["milestone"]["progress"].double)))
+                    ProgressView(value: min(1, max(0, data["milestone"]["progress"].double))).tint(Theme.color("gold"))
                     Text(L.t("loyalty.milestone", ["remaining": L.count(data["milestone"]["remaining"].int), "reward": data["milestone"]["reward"]["name"].text]))
                 }
             }
@@ -195,6 +206,7 @@ struct WalletView: View {
 }
 struct DrawView: View {
     let eventID: String
+    var ended = false
     @EnvironmentObject private var store: AppStore
     @StateObject private var state = Resource()
     @StateObject private var live = RealtimeRoom()
@@ -207,27 +219,20 @@ struct DrawView: View {
             if state.data.exists {
                 let d = state.data
                 Text(d["prize"].text.isEmpty ? L.t("phase5.notConfigured") : d["prize"].text).fontWeight(.semibold)
-                Text(L.t("phase5.drawHint")).font(Theme.body(13)).foregroundStyle(Theme.muted)
+                if ended && !d["winnerEntryId"].exists { Text(L.t("ktm.noDrawResult")) }
+                if !ended { Text(L.t("phase5.drawHint")).font(Theme.body(13)).foregroundStyle(Theme.muted)
                 Text("\(L.count(d["entries"].rows.count)) / \(L.count(d["capacity"].int)) · \(L.count(d["costXp"].int)) XP")
                 if d["peakStartsAt"].exists { Text(L.date(d["peakStartsAt"].text) + " — " + L.date(d["peakEndsAt"].text)).font(Theme.body(13)) }
                 if d["freeCredit"].exists { Notice(text: L.t("phase5.drawFree")) }
-                PrizeWheel(entries: d["entries"].rows, capacity: d["capacity"].int, winnerID: d["winnerEntryId"].text)
-                ForEach(0..<max(0, min(20, d["capacity"].int)), id: \.self) { position in
-                    let row = d["entries"].rows.first { $0["position"].int == position + 1 }
-                    HStack {
-                        Text("\(position + 1)").monospacedDigit().frame(width: 28)
-                        Text(row?["name"].text ?? "—").fontWeight(row?["id"] == d["winnerEntryId"] ? .bold : .regular)
-                        Spacer()
-                        if let row, row.id == d["winnerEntryId"].text { Image(systemName: "trophy.fill") }
-                    }.padding(Theme.gap).background(Theme.color("surfaceMuted"), in: RoundedRectangle(cornerRadius: 12))
                 }
+                if !ended { DrawSlots(entries: d["entries"].rows, capacity: d["capacity"].int, winnerID: d["winnerEntryId"].text) }
                 if let winner = d["entries"].rows.first(where: { $0.id == d["winnerEntryId"].text }) {
                     Text(L.t("phase5.drawWinner", ["name": winner["name"].text])).font(Theme.title(20))
                 }
                 TimelineView(.periodic(from: .now, by: 1)) { time in
                     let inWindow = (Dates.parse(d["peakStartsAt"].text) ?? .distantFuture) <= time.date && (Dates.parse(d["peakEndsAt"].text) ?? .distantPast) >= time.date
-                    if !d["startedAt"].exists {
-                        ConfirmAction(label: store.can("draw.manage") ? "phase5.drawRun" : "phase5.drawEnter", message: L.t(store.can("draw.manage") ? "phase5.drawConfirm" : "phase5.drawHint"), disabled: mutation.busy || !d["prize"].exists || (store.can("draw.manage") ? d["entries"].rows.count != d["capacity"].int : (!inWindow || d["ownEntryId"].exists || d["entries"].rows.count >= d["capacity"].int))) {
+                    if !ended && !d["startedAt"].exists {
+                        ConfirmAction(label: store.can("draw.manage") ? "phase5.drawRun" : "phase5.drawEnter", message: L.t(store.can("draw.manage") ? "phase5.drawConfirm" : "phase5.drawHint"), maroon: true, disabled: mutation.busy || !d["prize"].exists || (store.can("draw.manage") ? d["entries"].rows.count != d["capacity"].int : (!inWindow || d["ownEntryId"].exists || d["entries"].rows.count >= d["capacity"].int))) {
                             var body: [String: JSON] = ["eventId": .str(eventID)]
                             if store.can("draw.manage") { body["action"] = .str("run") }
                             await mutation.send(store.can("draw.manage") ? "/api/admin/draw" : "/api/loyalty/spin", body: .object(body), after: load)
@@ -248,16 +253,21 @@ struct DrawView: View {
 struct LeaderboardView: View {
     @State private var city = ""
     @State private var event = ""
-    @State private var month = ""
+    @State private var monthDate = Date()
+    @State private var scope = "city"
+    @EnvironmentObject private var store: AppStore
     @State private var filter = ""
     var body: some View {
-        DataPage(title: "loyalty.leaderboard", path: query("/api/loyalty/leaderboard", ["cityId": city, "eventId": event, "month": filter])) { data, _ in
-            Choice(label: "loyalty.city", options: [.object(["id": .str(""), "name": .str(L.t("loyalty.national"))])] + data["cities"].rows, selection: $city)
+        DataPage(title: "loyalty.leaderboard", path: query("/api/loyalty/leaderboard", ["cityId": scope == "national" ? "" : (city.isEmpty ? store.member["city"].id : city), "eventId": event, "month": filter])) { data, _ in
+            Tabs(options: [("city", "loyalty.city"), ("national", "loyalty.national")], selection: $scope)
+            if scope == "city" { Choice(label: "loyalty.city", options: data["cities"].rows, selection: $city) }
             Badge(value: data["mode"].text)
-            if data["periodStart"].exists { Text(L.date(data["periodStart"].text) + " — " + L.date(data["periodEnd"].text)).font(Theme.body(13)) }
+            if data["periodStart"].exists { Text(L.activePeriod(mode: data["mode"].text, start: data["periodStart"].text, end: data["periodEnd"].text)).font(Theme.body(13)).foregroundStyle(Theme.color("goldText")) }
             if ["MONTHLY", "QUARTERLY"].contains(data["mode"].text) {
-                Field(key: "loyalty.month", value: $month).textInputAutocapitalization(.never)
-                Button(L.t("loyalty.apply")) { filter = month }.disabled(!month.isEmpty && month.range(of: #"^\d{4}-(0[1-9]|1[0-2])$"#, options: .regularExpression) == nil)
+                DateTimeField(key: "loyalty.month", value: $monthDate)
+                Button(L.t("loyalty.apply")) {
+                    let f = DateFormatter(); f.locale = Locale(identifier: "en_GB"); f.timeZone = TimeZone(identifier: "Asia/Jakarta"); f.dateFormat = "yyyy-MM"; filter = f.string(from: monthDate)
+                }
             }
             if data["mode"].text == "EVENT" { Choice(label: "loyalty.event", options: data["events"].rows, selection: $event) }
             if data["self"].exists {
@@ -265,7 +275,13 @@ struct LeaderboardView: View {
             }
             if data["entries"].rows.isEmpty { EmptyState(title: "loyalty.emptyRank", message: "loyalty.emptyRankBody", icon: "trophy") }
             ForEach(Array(data["entries"].rows.enumerated()), id: \.offset) { _, row in
-                Panel { Text("\(L.count(row["rank"].int)) · \(row["name"].text)").fontWeight(.semibold); Text(row["city"].text + " · " + L.count(row["xp"].int) + " XP").foregroundStyle(Theme.muted) }
+                Panel {
+                    HStack {
+                        RankChip(rank: row["rank"].int)
+                        VStack(alignment: .leading) { Text(row["name"].text).fontWeight(.bold); Text(row["city"].text).font(Theme.body(13)).foregroundStyle(Theme.muted) }
+                        Spacer(); Text(L.count(row["xp"].int) + " XP").fontWeight(.heavy).monospacedDigit()
+                    }
+                }
             }
         }
     }
@@ -281,7 +297,7 @@ struct RegionChangeView: View {
             Choice(label: "app.city", options: data["cities"].rows, selection: $city)
             Field(key: "phase5.reason", value: $reason)
             Button(L.t("common.save")) { Task { await mutation.send("/api/me/region-change", body: .object(["cityId": .str(city), "reason": .str(reason)]), after: reload) } }
-                .buttonStyle(PATSButtonStyle()).disabled(city.isEmpty || reason.trimmingCharacters(in: .whitespacesAndNewlines).count < 3 || mutation.busy || data["requests"].rows.contains { $0["status"].text == "PENDING" })
+                .buttonStyle(PATSButtonStyle(loading: mutation.busy)).disabled(city.isEmpty || reason.trimmingCharacters(in: .whitespacesAndNewlines).count < 3 || mutation.busy || data["requests"].rows.contains { $0["status"].text == "PENDING" })
             MutationState(mutation: mutation)
             if data["requests"].rows.isEmpty { EmptyState(title: "phase5.regionEmpty") }
             ForEach(data["requests"].rows) { row in Panel { Text(row["toCity"]["name"].text).fontWeight(.semibold); Badge(value: row["status"].text); Text(row["decisionNote"].text) } }
@@ -300,7 +316,7 @@ struct ProfileXPView: View {
             if state.data.exists {
                 Text(L.count(state.data["balance"].int) + " XP").font(Theme.title(32)).monospacedDigit()
                 if state.data["milestone"].exists {
-                    ProgressView(value: min(1, max(0, state.data["milestone"]["progress"].double)))
+                    ProgressView(value: min(1, max(0, state.data["milestone"]["progress"].double))).tint(Theme.color("gold"))
                     Text(state.data["milestone"]["reward"]["name"].text).font(Theme.body(13))
                 }
             }
@@ -342,7 +358,7 @@ struct NotificationSettingsView: View {
             }
             MutationState(mutation: mutation)
             Notice(text: L.t("app.pushUnavailable"))
-            Button(L.t("native.push")) { Task { await PushRegistration.request() } }.buttonStyle(.bordered)
+            Button(L.t("native.push")) { Task { await PushRegistration.request() } }.buttonStyle(PATSButtonStyle(variant: .secondary))
         }
     }
 }

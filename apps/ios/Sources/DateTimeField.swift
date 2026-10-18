@@ -25,7 +25,7 @@ struct DateTimeField: View {
                     .navigationTitle("").navigationBarTitleDisplayMode(.inline)
                     .toolbar {
                         ToolbarItem(placement: .principal) { VarsityText(text: label) }
-                        ToolbarItem(placement: .topBarTrailing) { Button(L.t("common.done")) { presented = false }.frame(minWidth: 44, minHeight: 44) }
+                        ToolbarItem(placement: .topBarTrailing) { Button(L.t("common.close")) { presented = false }.frame(minWidth: 44, minHeight: 44) }
                     }.bandNavigation()
             }.presentationDetents([.medium])
         }

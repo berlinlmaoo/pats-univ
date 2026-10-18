@@ -100,9 +100,9 @@ struct CaptureControls: View {
                         else { Task { await voice.start(seconds: maxSeconds) { receive($0) } } }
                     }
                 }
-            }.buttonStyle(.bordered).disabled(busy || uploading)
+            }.buttonStyle(PATSButtonStyle(variant: .secondary)).disabled(busy || uploading)
             if voice.recording { TimelineView(.periodic(from: .now, by: 1)) { _ in Label(L.t("native.record"), systemImage: "record.circle").foregroundStyle(Theme.danger) } }
-            if uploading { ProgressView(L.t("loyalty.uploading")) }
+            if uploading { Text(L.t("loyalty.uploading")).font(Theme.body(13)).accessibilityAddTraits(.updatesFrequently) }
         }
         .sheet(item: $mode) { mode in CameraCapture(mode: mode, maxSeconds: maxSeconds) { result in self.mode = nil; receive(result) }.ignoresSafeArea() }
         .onDisappear { voice.cancel() }
@@ -148,7 +148,7 @@ struct MediaPlayback: View {
         Group {
             if kind == "IMAGE" { RemoteImage(url: url).frame(maxHeight: 300) }
             else if let player {
-                VideoPlayer(player: player).frame(height: kind == "VOICE" ? 72 : 248).clipShape(RoundedRectangle(cornerRadius: 12))
+                VideoPlayer(player: player).frame(height: kind == "VOICE" ? 72 : 248).clipShape(RoundedRectangle(cornerRadius: Theme.controlRadius))
             }
         }.task(id: url) { if kind != "IMAGE", let u = Config.mediaURL(url) { player?.pause(); player = AVPlayer(url: u) } }
             .onDisappear { player?.pause(); player = nil }
@@ -163,11 +163,12 @@ struct PrivateReceiptButton: View {
         VStack {
             Button(L.t("loyalty.viewReceipt")) {
                 Task { await mutation.run { url = try await APIClient.shared.call("GET", path)["url"].text } }
-            }.buttonStyle(.bordered).disabled(mutation.busy)
+            }.buttonStyle(PATSButtonStyle(variant: .secondary)).disabled(mutation.busy)
             MutationState(mutation: mutation)
         }.sheet(isPresented: Binding(get: { url != nil }, set: { if !$0 { url = nil } })) {
             NavigationStack {
                 ScrollView { RemoteImage(url: url ?? "").padding() }.background(Theme.bg)
+                    .navigationTitle(L.t("loyalty.viewReceipt")).navigationBarTitleDisplayMode(.inline).bandNavigation()
                     .toolbar { ToolbarItem(placement: .topBarTrailing) { Button(L.t("common.close")) { url = nil } } }
             }
         }

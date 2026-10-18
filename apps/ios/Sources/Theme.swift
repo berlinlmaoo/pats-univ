@@ -171,15 +171,24 @@ struct Field: View {
     @Binding var value: String
     var keyboard: UIKeyboardType = .default
     var money = false
+    var focus: FocusState<String?>.Binding?
+    var focusKey: String?
     @FocusState private var focused: Bool
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             SectionLabel(key: key)
-            TextField(L.t(key), text: displayValue, axis: keyboard == .default ? .vertical : .horizontal)
-                .keyboardType(keyboard).padding(Theme.gap).frame(minHeight: Theme.control).focused($focused)
+            input.keyboardType(keyboard).padding(Theme.gap).frame(minHeight: Theme.control)
                 .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.controlRadius))
-                .overlay(RoundedRectangle(cornerRadius: Theme.controlRadius).stroke(Theme.color(focused ? "accent" : "borderStrong"), lineWidth: focused ? 2 : 1))
+                .overlay(RoundedRectangle(cornerRadius: Theme.controlRadius).stroke(Theme.color(isFocused ? "accent" : "borderStrong"), lineWidth: isFocused ? 2 : 1))
                 .accessibilityLabel(L.t(key))
+        }
+    }
+    private var isFocused: Bool { focused || (focusKey != nil && focus?.wrappedValue == focusKey) }
+    @ViewBuilder private var input: some View {
+        if let focus {
+            TextField(L.t(key), text: displayValue, axis: keyboard == .default ? .vertical : .horizontal).focused(focus, equals: focusKey)
+        } else {
+            TextField(L.t(key), text: displayValue, axis: keyboard == .default ? .vertical : .horizontal).focused($focused)
         }
     }
     private var displayValue: Binding<String> {

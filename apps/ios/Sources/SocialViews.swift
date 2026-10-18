@@ -3,19 +3,29 @@ import SwiftUI
 struct SocialHubView: View {
     @EnvironmentObject private var store: AppStore
     @State private var city = ""
+    @State private var section = "TIMELINE"
+    @State private var selectedChannel = ""
     var body: some View {
         DataPage(title: "social.title", path: "/api/social/hub") { data, _ in
-            Panel {
-                NavigationRow(title: store.admin ? "social.operations" : "social.reservations", icon: "list.bullet.rectangle") { SocialOperationsView() }
-                if !store.admin { NavigationRow(title: "social.roaming", icon: "globe.asia.australia") { RoamingView() } }
-            }
-            let selected = data["cities"].rows.contains { $0.id == city } ? city : (data["homeCityId"].text.isEmpty ? data["cities"].rows.first?.id ?? "" : data["homeCityId"].text)
-            Choice(label: "social.city", options: data["cities"].rows, selection: $city)
-            if store.admin, !selected.isEmpty { NavigationRow(title: "social.newChannel", icon: "plus.bubble") { ChannelEditor(cityID: selected) } }
-            let channels = data["channels"].rows.filter { $0["cityId"].text == selected }
-            if channels.isEmpty { EmptyState(title: "social.noChannels", message: "social.noChannelsBody", icon: "bubble.left.and.bubble.right") }
-            ForEach(channels) { channel in
-                Panel { NavigationRow(title: channel["name"].text, subtitle: L.status(channel["kind"].text), icon: "bubble.left") { ChannelView(room: Room(kind: "channel", id: channel.id)) } }
+            Tabs(options: [("TIMELINE", "social.timeline"), ("CHAT", "social.chat"), ("RESERVATIONS", "social.reservations")], selection: $section)
+            if section == "RESERVATIONS" {
+                Panel {
+                    NavigationRow(title: store.admin ? "social.operations" : "social.reservations", icon: "list.bullet.rectangle") { SocialOperationsView() }
+                    if !store.admin { NavigationRow(title: "social.roaming", icon: "globe.asia.australia") { RoamingView() } }
+                }
+            } else {
+                let selected = data["cities"].rows.contains { $0.id == city } ? city : (data["homeCityId"].text.isEmpty ? data["cities"].rows.first?.id ?? "" : data["homeCityId"].text)
+                Choice(label: "social.city", options: data["cities"].rows, selection: $city)
+                if store.admin, !selected.isEmpty { NavigationRow(title: "social.newChannel", icon: "plus.bubble") { ChannelEditor(cityID: selected) } }
+                let channels = data["channels"].rows.filter { $0["cityId"].text == selected && $0["kind"].text == section }
+                if channels.isEmpty { EmptyState(title: "social.noChannels", message: "social.noChannelsBody", icon: "bubble.left.and.bubble.right") }
+                else { Text(L.t("ktm.chooseChannel")).foregroundStyle(Theme.muted) }
+                ForEach(channels) { channel in
+                    Panel {
+                        NavigationRow(title: channel["name"].text, subtitle: L.status(channel["kind"].text), icon: "bubble.left") { ChannelView(room: Room(kind: "channel", id: channel.id)) }
+                            .simultaneousGesture(TapGesture().onEnded { selectedChannel = channel.id })
+                    }.overlay(RoundedRectangle(cornerRadius: Theme.radius).stroke(selectedChannel == channel.id ? Theme.color("accent") : .clear, lineWidth: 2))
+                }
             }
         }
     }
@@ -60,7 +70,7 @@ struct ChannelView: View {
                         if timeline {
                             Button(L.t(item["reacted"].bool ? "phase5.reacted" : "phase5.react") + " · " + L.count(item["reactionCount"].int), systemImage: "heart") {
                                 Task { await mutate("react", .object(["postId": .str(item.id), "active": .bool(!item["reacted"].bool)])) }
-                            }.buttonStyle(.bordered).disabled(mutation.busy)
+                            }.buttonStyle(PATSButtonStyle(variant: .secondary)).disabled(mutation.busy)
                         }
                         if store.admin && channel.exists {
                             if timeline {
@@ -77,7 +87,7 @@ struct ChannelView: View {
                         }
                     }
                 }
-                if !nextCursor.isEmpty { Button(L.t("native.loadMore")) { Task { await more() } }.buttonStyle(.bordered).disabled(mutation.busy) }
+                if !nextCursor.isEmpty { Button(L.t("native.loadMore")) { Task { await more() } }.buttonStyle(PATSButtonStyle(variant: .secondary)).disabled(mutation.busy) }
                 MutationState(mutation: mutation)
                 if canPost && hub.data.exists {
                     Panel {
@@ -96,7 +106,7 @@ struct ChannelView: View {
                             Button(L.t("social.removeAttachment")) { attachment = .null }
                         }
                         Button(L.t(timeline ? "social.post" : "social.send")) { Task { await send() } }
-                            .buttonStyle(PATSButtonStyle()).disabled(mutation.busy || bodyText.count > 4000 || (bodyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !attachment.exists))
+                            .buttonStyle(PATSButtonStyle(loading: mutation.busy)).disabled(mutation.busy || bodyText.count > 4000 || (bodyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !attachment.exists))
                     }
                 }
             }
@@ -177,7 +187,7 @@ struct ChannelEditor: View {
     var body: some View {
         Page(title: channel.exists ? "common.edit" : "social.newChannel") {
             Field(key: "social.channelName", value: $name)
-            Picker(L.t("social.kind"), selection: $kind) { Text(L.status("CHAT")).tag("CHAT"); Text(L.status("TIMELINE")).tag("TIMELINE") }.pickerStyle(.segmented)
+            Tabs(options: [("CHAT", "social.chat"), ("TIMELINE", "social.timeline")], selection: $kind)
             Picker(L.t("social.visibility"), selection: $visibility) { Text(L.status("MEMBERS")).tag("MEMBERS"); Text(L.status("ADMINS_ONLY")).tag("ADMINS_ONLY") }
             Picker(L.t("social.posting"), selection: $posting) {
                 Text(L.t("common.notSet")).tag("default"); Text(L.t("common.yes")).tag("yes"); Text(L.t("common.no")).tag("no")
@@ -190,7 +200,7 @@ struct ChannelEditor: View {
                     if channel.exists { body["id"] = .str(channel.id) }
                     _ = try await APIClient.shared.call("POST", "/api/social/channels", .object(body)); dismiss()
                 } }
-            }.buttonStyle(PATSButtonStyle()).disabled(mutation.busy || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || name.count > 80)
+            }.buttonStyle(PATSButtonStyle(loading: mutation.busy)).disabled(mutation.busy || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || name.count > 80)
         }.onAppear {
             if channel.exists { name = channel["name"].text; kind = channel["kind"].text; visibility = channel["visibility"].text; archived = channel["archived"].bool; posting = channel["memberPosting"].exists ? (channel["memberPosting"].bool ? "yes" : "no") : "default" }
         }
@@ -208,7 +218,7 @@ struct RoamingView: View {
             Notice(text: L.t("social.roamingHint"))
             Choice(label: "social.event", options: data["upcoming"].rows.filter { $0["city"].id != store.member["city"].id }, selection: $eventID)
             Picker(L.t("social.kind"), selection: $kind) { Text(L.status("ATTENDANCE")).tag("ATTENDANCE"); Text(L.status("SOCIAL_HUB")).tag("SOCIAL_HUB") }
-            Button(L.t("social.requestRoaming")) { Task { await mutation.send("/api/social/roaming", body: .object(["eventId": .str(eventID), "type": .str(kind)])) } }.buttonStyle(PATSButtonStyle()).disabled(eventID.isEmpty || mutation.busy)
+            Button(L.t("social.requestRoaming")) { Task { await mutation.send("/api/social/roaming", body: .object(["eventId": .str(eventID), "type": .str(kind)])) } }.buttonStyle(PATSButtonStyle(loading: mutation.busy)).disabled(eventID.isEmpty || mutation.busy)
             MutationState(mutation: mutation)
             NavigationRow(title: "social.review", icon: "list.bullet") { SocialOperationsView() }
         }.onAppear { if eventID.isEmpty { eventID = initialEventID } }
@@ -254,14 +264,14 @@ struct FloorPlan: View {
                 Theme.color("surfaceMuted")
                 ForEach(Array(slots.enumerated()), id: \.offset) { _, s in
                     let code = s["code"].text
-                    Button(code) { selection = code }
+                    Button(code) { selection = code }.buttonStyle(.plain)
                         .font(Theme.body(11)).foregroundStyle(selection == code ? Theme.color("primaryText") : Theme.text)
                         .frame(width: geometry.size.width * CGFloat(s["w"].int)/12 - 2, height: geometry.size.height * CGFloat(s["h"].int)/12 - 2)
-                        .background(taken.contains(code) ? Theme.border : selection == code ? Theme.color("primary") : Theme.color("accentSubtle"), in: RoundedRectangle(cornerRadius: 8))
+                        .background(taken.contains(code) ? Theme.border : selection == code ? Theme.color("primary") : Theme.color("accentSubtle"), in: RoundedRectangle(cornerRadius: Theme.controlRadius))
                         .offset(x: geometry.size.width * CGFloat(s["x"].int)/12, y: geometry.size.height * CGFloat(s["y"].int)/12)
                         .disabled(taken.contains(code)).accessibilityLabel(code + ", " + L.status(s["kind"].text) + ", " + s["pax"].text)
                 }
-            }.clipShape(RoundedRectangle(cornerRadius: 12))
+            }.clipShape(RoundedRectangle(cornerRadius: Theme.controlRadius))
         }.aspectRatio(1, contentMode: .fit).accessibilityHidden(true)
     }
 }

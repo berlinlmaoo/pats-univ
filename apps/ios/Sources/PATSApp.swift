@@ -8,6 +8,8 @@ import SwiftUI
     var body: some Scene {
         WindowGroup {
             RootView().environmentObject(store)
+                .dynamicTypeSize(.xSmall ... .xxxLarge)
+                .buttonStyle(PATSButtonStyle(variant: .secondary))
                 .font(Theme.body()).foregroundStyle(Theme.text).tint(Theme.accent)
                 .preferredColorScheme(theme == "dark" ? .dark : theme == "light" ? .light : nil)
                 .environment(\.locale, Locale(identifier: store.locale))
@@ -33,8 +35,8 @@ struct RootView: View {
     @EnvironmentObject private var store: AppStore
     var body: some View {
         Group {
-            if store.loading { ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity).background(Theme.bg) }
-            else if store.signedIn { MainShell() }
+            if store.loading { Skeleton().padding().frame(maxWidth: .infinity, maxHeight: .infinity).background(Theme.bg) }
+            else if store.signedIn { MainShell().id(store.user.id) }
             else { NavigationStack { LoginView() } }
         }
         .sheet(item: $store.link) { link in
@@ -55,24 +57,29 @@ struct LoginView: View {
     @State private var error: String?
     @AppStorage("server") private var server = "development"
     var body: some View {
-        Page(title: "app.loginTitle") {
-            HStack {
-                Image("Crest").resizable().scaledToFit().frame(width: 72, height: 72).accessibilityLabel("PATS University")
-                Spacer()
-                Button(store.locale == "id" ? "English" : "Bahasa Indonesia") { store.setLocale(store.locale == "id" ? "en" : "id") }.buttonStyle(.bordered)
-            }
-            Text(L.t(otp.exists ? "otp.title" : "app.loginTitle")).font(Theme.title(32)).padding(.top, 32)
+        Page(title: otp.exists ? "otp.title" : "auth.signInHeading") {
+            VStack(spacing: Theme.padding) {
+                HStack {
+                    Image("Crest").resizable().scaledToFit().frame(width: 72, height: 72).accessibilityLabel("PATS University")
+                    Spacer()
+                    Button(store.locale == "id" ? "EN" : "ID") { store.setLocale(store.locale == "id" ? "en" : "id") }
+                        .buttonStyle(.plain).font(Theme.label).frame(minWidth: 44, minHeight: 44)
+                        .background(Color.white.opacity(0.1), in: RoundedRectangle(cornerRadius: Theme.controlRadius))
+                }
+                Image("BrandLockup").resizable().scaledToFit().frame(height: 88).accessibilityHidden(true)
+            }.padding(Theme.padding).foregroundStyle(Theme.color("bandText")).background(Theme.color("band"))
+                .overlay(alignment: .bottom) { Theme.color("gold").frame(height: 3) }
             Text(L.t(otp.exists ? "otp.subtitle" : "app.loginSubtitle", ["email": email])).foregroundStyle(Theme.muted)
             if let error { Notice(text: error, error: true) }
             if otp.exists {
                 if !otp["demoCode"].text.isEmpty { Notice(text: L.t("otp.demoCode", ["code": otp["demoCode"].text])) }
                 TextField(L.t("otp.codeLabel"), text: $code).textContentType(.oneTimeCode).keyboardType(.numberPad)
-                    .font(.system(size: 32, weight: .semibold, design: .monospaced)).padding().background(Theme.surface, in: RoundedRectangle(cornerRadius: 12))
+                    .font(Theme.title(32)).monospacedDigit().padding().background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.controlRadius))
                     .onChange(of: code) { _, value in
                         code = String(value.filter(\.isNumber).prefix(6))
                         if code.count == 6 && !busy { Task { await verify() } }
                     }
-                Button(L.t("otp.verify")) { Task { await verify() } }.buttonStyle(PATSButtonStyle()).disabled(busy || code.count != 6)
+                Button(L.t("otp.verify")) { Task { await verify() } }.buttonStyle(PATSButtonStyle(loading: busy)).disabled(busy || code.count != 6)
                 TimelineView(.periodic(from: .now, by: 1)) { time in
                     let remaining = max(0, Int(ceil(resendAt.timeIntervalSince(time.date))))
                     Button(remaining > 0 ? L.t("otp.resendIn", ["seconds": String(remaining)]) : L.t("otp.resend")) { Task { await request() } }.disabled(busy || remaining > 0)
@@ -80,14 +87,11 @@ struct LoginView: View {
                 Button(L.t("common.back")) { otp = .null; code = ""; error = nil }
             } else {
                 Field(key: "auth.emailLabel", value: $email, keyboard: .emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled()
-                Button(L.t("auth.sendCode")) { Task { await request() } }.buttonStyle(PATSButtonStyle()).disabled(busy)
+                Button(L.t("auth.sendCode")) { Task { await request() } }.buttonStyle(PATSButtonStyle(loading: busy)).disabled(busy)
                 Link(L.t("auth.joinLink"), destination: Config.url("/join"))
             }
-            if busy { ProgressView().frame(maxWidth: .infinity) }
             #if PATS_DEV_SERVER
-            Picker(L.t("native.server"), selection: $server) {
-                Text(L.t("native.development")).tag("development"); Text(L.t("native.production")).tag("production")
-            }.pickerStyle(.segmented).disabled(busy)
+            Tabs(options: [("development", "native.development"), ("production", "native.production")], selection: $server).disabled(busy)
                 .onChange(of: server) { _, _ in otp = .null; code = ""; error = nil; Task { await APIClient.shared.clear() } }
             #endif
         }
@@ -114,17 +118,67 @@ struct LoginView: View {
 }
 struct MainShell: View {
     @EnvironmentObject private var store: AppStore
+    @StateObject private var claims = Resource()
+    @Environment(\.scenePhase) private var phase
+    private var items: [(String, String, String)] {
+        store.admin ? [("tools", "app.tabAdmin", "square.grid.2x2"), ("profile", "native.profile", "person.crop.circle")] :
+            [("home", "ktm.home", "house"), ("events", "app.tabEvents", "calendar"), ("card", "ktm.title", "person.text.rectangle"), ("hub", "app.tabHub", "bubble.left.and.bubble.right"), ("profile", "native.profile", "person.crop.circle")]
+    }
     var body: some View {
-        TabView {
-            if store.admin {
-                NavigationStack { AdminToolsView() }.tabItem { Label(L.t("app.tabAdmin"), systemImage: "square.grid.2x2") }
-            } else {
-                NavigationStack { MemberCardView() }.tabItem { Label(L.t("app.tabCard"), systemImage: "person.text.rectangle") }
-                NavigationStack { EventsView() }.tabItem { Label(L.t("app.tabEvents"), systemImage: "calendar") }
-                NavigationStack { SocialHubView() }.tabItem { Label(L.t("app.tabHub"), systemImage: "bubble.left.and.bubble.right") }
-                NavigationStack { WalletView() }.tabItem { Label(L.t("app.tabRewards"), systemImage: "gift") }
+        TabView(selection: $store.tab) {
+            if store.admin { NavigationStack { AdminToolsView() }.tag("tools") }
+            else {
+                NavigationStack { MemberHomeView() }.tag("home")
+                NavigationStack { EventsView() }.tag("events")
+                NavigationStack { MemberCardView() }.tag("card")
+                NavigationStack { SocialHubView() }.tag("hub")
             }
-            NavigationStack { ProfileView() }.tabItem { Label(L.t("native.profile"), systemImage: "person.crop.circle") }
+            NavigationStack { ProfileView() }.tag("profile")
+        }.toolbar(.hidden, for: .tabBar)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                HStack(alignment: .top, spacing: 0) {
+                    ForEach(items, id: \.0) { value, key, icon in
+                        Button { store.tab = value } label: {
+                            VStack(spacing: 4) {
+                                Rectangle().fill(store.tab == value ? Theme.color("gold") : Color.clear).frame(height: 3)
+                                ZStack(alignment: .topTrailing) {
+                                    Image(systemName: icon).font(.system(size: 20)).frame(width: 40, height: 30)
+                                        .background(value == "card" ? Theme.color("secondary") : .clear, in: RoundedRectangle(cornerRadius: Theme.controlRadius))
+                                    if value == "tools", pending > 0 { CountChip(count: pending).offset(x: 10, y: -4) }
+                                }
+                                Text(L.t(key).uppercased()).font(Theme.body(11).weight(.bold)).tracking(0.44).lineLimit(1).minimumScaleFactor(0.7)
+                            }.padding(.bottom, 8).frame(maxWidth: .infinity, minHeight: 60)
+                                .foregroundStyle(Theme.color(store.tab == value ? "bandText" : "bandMuted"))
+                        }.buttonStyle(.plain).accessibilityLabel(L.t(key)).accessibilityAddTraits(store.tab == value ? .isSelected : [])
+                    }
+                }.background(Theme.color("band").ignoresSafeArea(edges: .bottom))
+            }
+            .onAppear { if store.admin && store.tab == "home" { store.tab = "tools" } }
+            .task {
+                guard store.can("promoter.manage") else { return }
+                while !Task.isCancelled {
+                    if phase == .active { await claims.load("/api/admin/loyalty/claims") }
+                    do { try await Task.sleep(for: .seconds(30)) } catch { break }
+                }
+            }
+    }
+    private var pending: Int { claims.data["claims"].rows.filter { $0["status"].text == "PENDING" }.count }
+}
+struct MemberHomeView: View {
+    @EnvironmentObject private var store: AppStore
+    var body: some View {
+        DataPage(title: "ktm.home", path: "/api/events") { data, _ in
+            if store.offline { Notice(text: L.t("native.offline")) }
+            if let event = data["upcoming"].rows.first {
+                NavigationLink { EventDetailView(eventID: event.id) } label: { EventPanel(event: event) }.buttonStyle(.plain)
+            } else { EmptyState(title: "app.eventsEmptyTitle", message: "native.emptyBody", icon: "calendar") }
+            ProfileXPView(memberID: store.member.id)
+            Button(L.t("ktm.show")) { store.tab = "card" }.buttonStyle(PATSButtonStyle(variant: .maroon))
+            Panel {
+                CardHeading(key: "loyalty.title")
+                NavigationRow(title: "app.tabRewards", icon: "gift") { WalletView() }
+                NavigationRow(title: "app.notificationsTitle", icon: "bell") { NotificationsView() }
+            }
         }
     }
 }
@@ -137,6 +191,7 @@ struct ProfileView: View {
     var body: some View {
         Page(title: "native.profile") {
             if store.offline { Notice(text: L.t("native.offline")) }
+            if store.member.exists { PhotoEditor() }
             Panel {
                 Text(store.user["name"].text).font(Theme.title())
                 Text(store.user["email"].text).foregroundStyle(Theme.muted)
@@ -144,6 +199,7 @@ struct ProfileView: View {
                 Text(store.user["phone"].text).foregroundStyle(Theme.muted)
                 Text(store.member.exists ? store.member["city"]["name"].text : store.user["city"]["name"].text)
                 if store.member.exists {
+                    DetailRow(key: "join.favoriteDrink", value: store.member["favoriteDrink"].text)
                     Text(L.t("app.song") + ": " + store.member["favoriteSong"].text)
                     Text(L.t("app.genre") + ": " + store.member["favoriteGenre"].text)
                     Text(store.member["quotes"].text).italic()
@@ -151,15 +207,20 @@ struct ProfileView: View {
                 }
                 Badge(value: store.user["role"].text)
             }
-            if store.member.exists { ProfileXPView(memberID: store.member.id) }
+            if store.member.exists {
+                Button { store.tab = "card" } label: { KTMCard(member: store.member, interactive: false) }.buttonStyle(.plain).accessibilityLabel(L.t("ktm.show"))
+                NavigationRow(title: "ktm.editProfile", icon: "pencil") { ProfileEditor(member: store.member) }
+                ProfileXPView(memberID: store.member.id)
+                NavigationRow(title: "app.tabRewards", icon: "gift") { WalletView() }
+            }
             MutationState(mutation: preference)
-            Picker(L.t("common.language"), selection: Binding(get: { store.locale }, set: { value in
+            SectionLabel(key: "common.language")
+            Tabs(options: [("id", "Bahasa Indonesia"), ("en", "English")], selection: Binding(get: { store.locale }, set: { value in
                 store.setLocale(value)
                 Task { await preference.send("/api/me", body: .object(["locale": .str(value)]), method: "PATCH", after: { await store.reload() }) }
-            })) { Text("Bahasa Indonesia").tag("id"); Text("English").tag("en") }.pickerStyle(.segmented)
-            Picker(L.t("native.theme"), selection: $theme) {
-                Text(L.t("native.system")).tag("system"); Text(L.t("native.light")).tag("light"); Text(L.t("native.dark")).tag("dark")
-            }.pickerStyle(.segmented)
+            }))
+            SectionLabel(key: "native.theme")
+            Tabs(options: [("system", "native.system"), ("light", "native.light"), ("dark", "native.dark")], selection: $theme)
             Panel {
                 NavigationRow(title: "app.notificationsTitle", icon: "bell") { NotificationsView() }
                 if store.member.exists {
@@ -208,13 +269,14 @@ struct PublicCardView: View {
                 if resource.data["state"].text == "revoked" { Notice(text: L.t("cardPage.revokedBody")) }
                 if resource.data["state"].text == "inactive" { Notice(text: L.t("cardPage.inactiveBody")) }
                 if resource.data["member"].exists {
-                    Panel {
-                        Text(resource.data["member"]["fullName"].text).font(Theme.title())
-                        Text(resource.data["member"]["nim"].text).monospacedDigit()
-                        Text(resource.data["member"]["city"].text)
-                        Text(resource.data["member"]["favoriteGenre"].text)
-                        Text(resource.data["member"]["favoriteSong"].text)
-                        Text(resource.data["member"]["quotes"].text)
+                    let member = resource.data["member"]
+                    KTMCard(member: member, token: Config.url("/c/\(token)").absoluteString)
+                    HStack(alignment: .top) {
+                        MemberPhoto(url: member["photoUrl"].text)
+                        VStack(alignment: .leading, spacing: Theme.gap) {
+                            DetailRow(key: "app.city", value: member["city"].text)
+                            DetailRow(key: "ktm.memberSince", value: L.date(member["joinedAt"].text))
+                        }
                     }
                 }
                 if resource.data["isMine"].bool && store.member.exists { NavigationRow(title: "app.cardLinkOpen", icon: "person.text.rectangle") { MemberCardView() } }

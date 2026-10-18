@@ -43,7 +43,7 @@ struct Room: Equatable { var kind: String; var id: String }
         defer { busy = false }
         do { try await operation() }
         catch is CancellationError { }
-        catch { self.error = error.localizedDescription }
+        catch { self.error = error.localizedDescription; UIAccessibility.post(notification: .announcement, argument: error.localizedDescription) }
     }
     func send(_ path: String, body: JSON, method: String = "POST", after: () async -> Void = {}) async {
         await run { _ = try await APIClient.shared.call(method, path, body); message = L.t("native.saved"); await after() }
@@ -61,12 +61,13 @@ struct ConfirmAction: View {
     var label: String
     var message: String
     var destructive = false
+    var maroon = false
     var disabled = false
     var action: () async -> Void
     @State private var confirm = false
     var body: some View {
         Button(L.t(label), role: destructive ? .destructive : nil) { confirm = true }
-            .buttonStyle(PATSButtonStyle(variant: destructive ? .danger : .secondary)).disabled(disabled)
+            .buttonStyle(PATSButtonStyle(variant: destructive ? .danger : maroon ? .maroon : .secondary)).disabled(disabled)
             .alert(L.t(label), isPresented: $confirm) {
                 Button(L.t("common.cancel"), role: .cancel) {}
                 Button(L.t(label), role: destructive ? .destructive : nil) { Task { await action() } }

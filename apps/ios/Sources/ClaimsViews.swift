@@ -4,6 +4,7 @@ struct ClaimsView: View {
     @EnvironmentObject private var store: AppStore
     @State private var eventID = ""
     @State private var form = "MEMBER"
+    @State private var section = "pending"
     @State private var editing = ""
     @State private var guests = "0"
     @State private var reservations = "0"
@@ -16,7 +17,7 @@ struct ClaimsView: View {
             Choice(label: "loyalty.event", options: data["events"].rows, selection: $eventID)
                 .onChange(of: eventID) { _, _ in if editing.isEmpty || data["claims"].rows.first(where: { $0.id == editing })?["eventId"].text != eventID { clear() } }
             if data["isPromoter"].bool {
-                Picker(L.t("phase5.claimForm"), selection: $form) { Text(L.t("phase5.claimMember")).tag("MEMBER"); Text(L.t("phase5.claimPr")).tag("PR") }.pickerStyle(.segmented)
+                Tabs(options: [("MEMBER", "phase5.claimMember"), ("PR", "phase5.claimPr")], selection: $form)
                     .onChange(of: form) { _, _ in if data["claims"].rows.first(where: { $0.id == editing })?["formType"].text != form { clear() } }
             }
             let existing = data["claims"].rows.first { $0["eventId"].text == eventID && $0["formType"].text == form }
@@ -35,13 +36,15 @@ struct ClaimsView: View {
                                 clear(); await reload(); mutation.message = L.t("phase5.claimPending")
                             }
                         }
-                    }.buttonStyle(PATSButtonStyle()).disabled(mutation.busy || !validCounts)
+                    }.buttonStyle(PATSButtonStyle(loading: mutation.busy)).disabled(mutation.busy || !validCounts)
                     if !editing.isEmpty { Button(L.t("common.cancel")) { clear() } }
                 }
             }
             MutationState(mutation: mutation)
-            if data["claims"].rows.isEmpty { EmptyState(title: "phase5.claimEmpty") }
-            ForEach(data["claims"].rows) { claim in
+            Tabs(options: [("pending", "ktm.pending"), ("history", "ktm.history")], selection: $section, counts: ["pending": data["claims"].rows.filter { $0["status"].text == "PENDING" }.count])
+            let rows = data["claims"].rows.filter { ($0["status"].text == "PENDING") == (section == "pending") }
+            if rows.isEmpty { EmptyState(title: "phase5.claimEmpty") }
+            ForEach(rows) { claim in
                 Panel {
                     ClaimSummary(claim: claim)
                     if !claim["receiptUrl"].text.isEmpty { PrivateReceiptButton(path: "/api/loyalty/claims/\(claim.id)/receipt?format=json") }
@@ -49,7 +52,7 @@ struct ClaimsView: View {
                         Button(L.t("common.edit")) {
                             editing = claim.id; eventID = claim["eventId"].text; form = claim["formType"].text
                             guests = claim["guestCount"].text; reservations = claim["reservationCount"].text; receipt = claim["receiptUrl"].text; notes = claim["notes"].text
-                        }.buttonStyle(.bordered)
+                        }.buttonStyle(PATSButtonStyle(variant: .secondary))
                     }
                 }
             }

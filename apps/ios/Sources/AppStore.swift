@@ -8,6 +8,7 @@ import UserNotifications
     @Published var signedIn = false
     @Published var link: AppLink?
     @Published var locale = L.locale
+    @Published var tab = "home"
     var user: JSON { me["user"] }
     var member: JSON { me["member"] }
     var admin: Bool { user["capabilities"].rows.contains { $0.text == "checkin.scan" } }
@@ -26,7 +27,7 @@ import UserNotifications
         setLocale(user["locale"].text)
     }
     func reload() async {
-        do { me = try await APIClient.shared.call("GET", "/api/me"); try await APIClient.shared.updateMe(me); signedIn = true; offline = false }
+        do { me = try await APIClient.shared.refreshMe(); signedIn = true; offline = false }
         catch { offline = true; signedIn = await APIClient.shared.signedIn; if !signedIn { me = .null; link = nil } }
     }
     func signOut() async { await APIClient.shared.logout(); me = .null; signedIn = false; offline = false; link = nil }
@@ -69,8 +70,8 @@ struct ResourceState: View {
     @ObservedObject var resource: Resource
     var retry: () async -> Void
     var body: some View {
-        if resource.loading && !resource.data.exists { ProgressView().frame(maxWidth: .infinity).padding() }
-        if let error = resource.error { Notice(text: error, error: true); Button(L.t("common.retry")) { Task { await retry() } }.buttonStyle(.bordered) }
+        if resource.loading && !resource.data.exists { Skeleton() }
+        if let error = resource.error { EmptyState(title: "ktm.loadFailed", message: error, icon: "exclamationmark.circle"); Button(L.t("common.retry")) { Task { await retry() } }.buttonStyle(PATSButtonStyle(variant: .secondary)) }
     }
 }
 

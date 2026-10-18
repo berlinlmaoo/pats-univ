@@ -13,7 +13,7 @@ struct HandoverView: View {
                     preview = .null; scan = nil
                     let value = try await reader.read(); scan = value
                     preview = try await APIClient.shared.call("POST", "/api/admin/cards/handover/preview", .object(["token": .str(value.token), "nfcUid": .str(value.uid)]))
-                } } }.buttonStyle(PATSButtonStyle()).disabled(mutation.busy)
+                } } }.buttonStyle(PATSButtonStyle(loading: mutation.busy)).disabled(mutation.busy)
             } else { Notice(text: L.t("native.nfcUnavailable")) }
             MutationState(mutation: mutation)
             if preview.exists {
@@ -231,7 +231,7 @@ private struct EncodeStationContent: View {
         MutationState(mutation: mutation)
         if station.pending != nil {
             Notice(text: L.t("native.retryReport"))
-            Button(L.t("app.encodeReportAgain")) { Task { await station.retryReport() } }.buttonStyle(PATSButtonStyle()).disabled(station.mutation.busy)
+            Button(L.t("app.encodeReportAgain")) { Task { await station.retryReport() } }.buttonStyle(PATSButtonStyle(loading: mutation.busy)).disabled(station.mutation.busy)
         } else if station.claim.exists {
             Panel {
                 MemberIdentity(member: station.claim["member"])
@@ -246,8 +246,8 @@ private struct EncodeStationContent: View {
             Notice(text: L.t(station.done ? "app.encodeDone" : "app.encodeIdentify"))
             if !station.reader.available { Notice(text: L.t("native.nfcUnavailable")) }
             Field(key: "app.encodeNim", value: $lookup)
-            Button(L.t("app.encodeScanQr")) { camera = true }.buttonStyle(.bordered).disabled(station.mutation.busy)
-            Button(L.t("app.encodeFind")) { Task { await station.prepare(lookup: lookup, batchID: batchID, grantID: grantID, reencode: reencode) } }.buttonStyle(PATSButtonStyle()).disabled(station.mutation.busy || lookup.trimmingCharacters(in: .whitespacesAndNewlines).count < 3)
+            Button(L.t("app.encodeScanQr")) { camera = true }.buttonStyle(PATSButtonStyle(variant: .secondary)).disabled(station.mutation.busy)
+            Button(L.t("app.encodeFind")) { Task { await station.prepare(lookup: lookup, batchID: batchID, grantID: grantID, reencode: reencode) } }.buttonStyle(PATSButtonStyle(loading: mutation.busy)).disabled(station.mutation.busy || lookup.trimmingCharacters(in: .whitespacesAndNewlines).count < 3)
         }
     }
 }

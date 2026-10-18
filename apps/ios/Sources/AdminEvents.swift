@@ -67,9 +67,9 @@ struct EventEditor: View {
             if meta.data.exists {
                 Text(meta.data["city"]["name"].text + " · " + zone.identifier).foregroundStyle(Theme.muted)
                 Field(key: "events.eventTitle", value: $title)
-                DatePicker(L.t("events.date"), selection: $date, displayedComponents: .date).environment(\.timeZone, zone)
-                DatePicker(L.t("events.startTime"), selection: $start, displayedComponents: .hourAndMinute).environment(\.timeZone, zone)
-                DatePicker(L.t("events.endTime"), selection: $end, displayedComponents: .hourAndMinute).environment(\.timeZone, zone)
+                DateTimeField(key: "events.date", value: $date, time: false, zone: zone)
+                DateTimeField(key: "events.startTime", value: $start, time: true, zone: zone)
+                DateTimeField(key: "events.endTime", value: $end, time: true, zone: zone)
                 Text(L.t("events.endHint")).font(Theme.body(13)).foregroundStyle(Theme.muted)
                 Choice(label: "events.venue", options: meta.data["venues"].rows, selection: $venue, allowEmpty: true)
                 Field(key: "events.description", value: $description)
@@ -77,7 +77,7 @@ struct EventEditor: View {
                 Field(key: "events.opensBefore", value: $before, keyboard: .numberPad)
                 Toggle(L.t("events.publish"), isOn: $publish)
                 MutationState(mutation: mutation)
-                Button(L.t(eventID.isEmpty ? "events.create" : "common.save")) { Task { await save() } }.buttonStyle(PATSButtonStyle()).disabled(mutation.busy || !valid)
+                Button(L.t(eventID.isEmpty ? "events.create" : "common.save")) { Task { await save() } }.buttonStyle(PATSButtonStyle(loading: mutation.busy)).disabled(mutation.busy || !valid)
             }
         }.task { await load() }
     }
