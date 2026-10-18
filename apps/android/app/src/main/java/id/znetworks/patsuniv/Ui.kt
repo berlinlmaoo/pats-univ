@@ -11,6 +11,14 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.semantics.*
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.graphics.Color
 import kotlinx.coroutines.*
 import kotlinx.serialization.json.JsonObject
 
@@ -38,35 +46,45 @@ private val LocalPageRefresh = staticCompositionLocalOf<PageRefresh?> { null }
     }
 }
 @Composable fun Title(text: String, subtitle: String = "") {
-    Column(verticalArrangement = Arrangement.spacedBy(Space.small)) {
-        Text(text, style = MaterialTheme.typography.headlineMedium)
-        if (subtitle.isNotBlank()) Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Column(Modifier.fillMaxWidth().background(tone("band"), MaterialTheme.shapes.medium).padding(Space.page), verticalArrangement = Arrangement.spacedBy(Space.small)) {
+        VarsityText(text, tone("bandText"))
+        Box(Modifier.fillMaxWidth().height(3.dp).background(tone("gold")))
+        if (subtitle.isNotBlank()) Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = tone("bandMuted"))
     }
 }
 @Composable fun Tile(content: @Composable ColumnScope.() -> Unit) {
-    OutlinedCard(Modifier.fillMaxWidth()) { Column(Modifier.padding(Space.page), verticalArrangement = Arrangement.spacedBy(Space.gap), content = content) }
+    Card(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), elevation = CardDefaults.cardElevation(1.dp)) { Column(Modifier.padding(Space.page), verticalArrangement = Arrangement.spacedBy(Space.gap), content = content) }
 }
-@Composable fun Action(label: String, enabled: Boolean = true, secondary: Boolean = false, onClick: () -> Unit) {
-    if (secondary) OutlinedButton(onClick, Modifier.fillMaxWidth().heightIn(min = Space.control), enabled = enabled, shape = MaterialTheme.shapes.medium) { Text(label) }
-    else Button(onClick, Modifier.fillMaxWidth().heightIn(min = Space.control), enabled = enabled, shape = MaterialTheme.shapes.medium) { Text(label) }
+@Composable fun Action(label: String, enabled: Boolean = true, secondary: Boolean = false, maroon: Boolean = false, danger: Boolean = false, onClick: () -> Unit) {
+    val interactions = remember { MutableInteractionSource() }; val pressed by interactions.collectIsPressedAsState()
+    val fill = when { !enabled -> Color.Transparent; danger -> tone("dangerSolid"); maroon -> tone("secondary"); secondary -> tone("surface"); else -> tone("primary") }
+    val ink = when { !enabled -> tone("textMuted"); danger -> tone("onSolid"); maroon -> tone("secondaryText"); secondary -> tone("text"); else -> tone("primaryText") }
+    val edge = tone("borderStrong")
+    Button(onClick, Modifier.fillMaxWidth().heightIn(min = Space.control).scale(if (pressed) .98f else 1f).then(if (!enabled) Modifier.dashedBorder(edge) else Modifier), enabled = enabled, shape = MaterialTheme.shapes.medium, interactionSource = interactions, border = if (secondary && enabled) BorderStroke(1.dp, edge) else null, colors = ButtonDefaults.buttonColors(containerColor = fill, contentColor = ink, disabledContainerColor = Color.Transparent, disabledContentColor = ink)) { Text(label, fontWeight = FontWeight.Bold) }
 }
 @Composable fun Field(label: String, value: String, onChange: (String) -> Unit, keyboard: KeyboardType = KeyboardType.Text, multiline: Boolean = false) {
-    OutlinedTextField(value, onChange, Modifier.fillMaxWidth(), label = { Text(label) }, keyboardOptions = KeyboardOptions(keyboardType = keyboard), singleLine = !multiline, minLines = if (multiline) 3 else 1, shape = MaterialTheme.shapes.medium)
+    Column(verticalArrangement = Arrangement.spacedBy(Space.small)) {
+        SectionLabel(label)
+        OutlinedTextField(value, onChange, Modifier.fillMaxWidth().heightIn(min = Space.control).semantics { contentDescription = label }, keyboardOptions = KeyboardOptions(keyboardType = keyboard), singleLine = !multiline, minLines = if (multiline) 3 else 1, shape = MaterialTheme.shapes.medium, colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = tone("accent"), unfocusedBorderColor = tone("borderStrong")))
+    }
 }
 @Composable fun Notice(message: String, error: Boolean = false) {
     Surface(color = if (error) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.surfaceVariant, shape = MaterialTheme.shapes.medium) {
         Text(message, Modifier.fillMaxWidth().padding(Space.page), color = if (error) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
-@Composable fun Empty(title: String, description: String = tr("app.eventsEmptyBody", "city" to "")) { Tile { Text(title, style = MaterialTheme.typography.titleMedium); Text(description, color = MaterialTheme.colorScheme.onSurfaceVariant) } }
+@Composable fun Empty(title: String, description: String = tr("app.eventsEmptyBody", "city" to "")) { Tile {
+    Column(Modifier.size(48.dp).background(tone("band"), MaterialTheme.shapes.small), horizontalAlignment = Alignment.CenterHorizontally) { Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { PatsIcon("inbox", tone("bandText")) }; Box(Modifier.fillMaxWidth().height(3.dp).background(tone("gold"))) }
+    Text(title, style = MaterialTheme.typography.titleMedium); Text(description, color = MaterialTheme.colorScheme.onSurfaceVariant)
+} }
 @Composable fun Brand() {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.gap)) {
-        Image(painterResource(R.drawable.crest), tr("common.appName"), Modifier.size(64.dp))
-        Text(tr("common.appName"), style = MaterialTheme.typography.titleLarge)
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.page)) {
+        Image(painterResource(R.drawable.official_crest), tr("common.appName"), Modifier.size(72.dp))
+        Image(painterResource(R.drawable.lockup_cream), null, Modifier.width(160.dp).height(80.dp))
     }
 }
 @Composable fun Confirm(label: String, message: String, onDismiss: () -> Unit, onConfirm: () -> Unit) {
-    AlertDialog(onDismissRequest = onDismiss, title = { Text(label) }, text = { Text(message) }, confirmButton = { TextButton(onConfirm) { Text(label) } }, dismissButton = { TextButton(onDismiss) { Text(tr("common.cancel")) } })
+    AlertDialog(onDismissRequest = onDismiss, title = { Text(label) }, text = { Text(message) }, confirmButton = { TextButton(onConfirm, colors = ButtonDefaults.textButtonColors(contentColor = tone("dangerText"))) { Text(label) } }, dismissButton = { TextButton(onDismiss) { Text(tr("common.cancel")) } })
 }
 /** Request ownership follows the visible screen; stale responses cannot update another route. */
 @Composable fun Remote(api: Api, path: String, refresh: Int = 0, pollMs: Long = 0, authenticated: Boolean = true, onForbidden: () -> Unit = {}, content: @Composable ColumnScope.(JsonObject, () -> Unit) -> Unit) {
@@ -89,7 +107,7 @@ private val LocalPageRefresh = staticCompositionLocalOf<PageRefresh?> { null }
         } while (pollMs > 0 && isActive)
     }
     Column(verticalArrangement = Arrangement.spacedBy(Space.page)) {
-        if (loading) { CircularProgressIndicator(); Text(tr("common.loading")) }
+        if (loading) LoadingSkeleton()
         error?.let { Notice(tr(it, *errorParams), true); Action(tr("common.retry"), secondary = true) { version++ } }
         result?.let { content(it) { version++ } }
     }

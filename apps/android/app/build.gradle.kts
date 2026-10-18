@@ -33,11 +33,17 @@ android {
     }
     buildFeatures { compose = true; buildConfig = true }
     sourceSets["test"].resources.srcDir("../../../tools/card-station/tests/fixtures")
+    sourceSets["main"].res.srcDir(layout.buildDirectory.dir("generated/patsRes").get().asFile)
     buildTypes {
         debug { buildConfigField("String", "DEV_IP", "\"$devIp\"") }
         release { buildConfigField("String", "DEV_IP", "\"\"") }
     }
 }
+val syncPatsDesign by tasks.registering(Exec::class) {
+    workingDir(rootProject.projectDir)
+    commandLine("node", "scripts/sync-shared.mjs")
+}
+tasks.named("preBuild") { dependsOn(syncPatsDesign) }
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)

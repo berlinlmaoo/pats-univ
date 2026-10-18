@@ -6,5 +6,7 @@
         <item name="android:windowBackground">@color/pats_background</item>
         <item name="android:windowLightStatusBar">false</item>
         <item name="android:windowLightNavigationBar">false</item>
+        <item name="android:windowSplashScreenBackground">@color/pats_band</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_crest</item>
     </style>
 </resources>

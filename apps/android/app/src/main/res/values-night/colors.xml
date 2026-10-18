@@ -1,5 +1,7 @@
 <resources>
-    <color name="pats_primary">#a9c3eb</color>
+    <color name="pats_primary">#fcead8</color>
     <color name="pats_on_primary">#001836</color>
-    <color name="pats_background">#0a1220</color>
+    <color name="pats_background">#020b19</color>
+    <color name="pats_band">#000f24</color>
+    <color name="pats_navy">#001836</color>
 </resources>

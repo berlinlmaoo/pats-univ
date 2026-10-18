@@ -1,0 +1,150 @@
+{
+  "ktm": {
+    "ratio": 1.5454545454545454,
+    "valueX": 0.0523,
+    "valueCap": 0.0317,
+    "nameY": 0.398,
+    "drinkY": 0.615,
+    "genreY": 0.831,
+    "nameMaxW": 0.65,
+    "valueMaxW": 0.6,
+    "tile": {
+      "x": 0.682,
+      "y": 0.512,
+      "w": 0.275,
+      "h": 0.425
+    },
+    "qr": {
+      "x": 0.705,
+      "y": 0.549,
+      "w": 0.23
+    },
+    "radius": 0.037
+  },
+  "varsity": {
+    "hero": {
+      "size": 40,
+      "lineHeight": 44,
+      "tracking": 0.02
+    },
+    "title": {
+      "size": 28,
+      "lineHeight": 34,
+      "tracking": 0.02
+    },
+    "small": {
+      "size": 18,
+      "lineHeight": 22,
+      "tracking": 0.02
+    }
+  },
+  "type": {
+    "display": {
+      "size": 32,
+      "lineHeight": 38,
+      "weight": 800,
+      "tracking": -0.015,
+      "family": "display"
+    },
+    "title1": {
+      "size": 26,
+      "lineHeight": 32,
+      "weight": 800,
+      "tracking": -0.01,
+      "family": "display"
+    },
+    "title2": {
+      "size": 20,
+      "lineHeight": 26,
+      "weight": 800,
+      "tracking": -0.005,
+      "family": "display"
+    },
+    "title3": {
+      "size": 17,
+      "lineHeight": 22,
+      "weight": 700,
+      "tracking": 0,
+      "family": "body"
+    },
+    "bodyLg": {
+      "size": 16,
+      "lineHeight": 24,
+      "weight": 400,
+      "tracking": 0,
+      "family": "body"
+    },
+    "body": {
+      "size": 15,
+      "lineHeight": 22,
+      "weight": 400,
+      "tracking": 0,
+      "family": "body"
+    },
+    "bodySm": {
+      "size": 14,
+      "lineHeight": 20,
+      "weight": 400,
+      "tracking": 0,
+      "family": "body"
+    },
+    "caption": {
+      "size": 13,
+      "lineHeight": 18,
+      "weight": 400,
+      "tracking": 0,
+      "family": "body"
+    },
+    "label": {
+      "size": 11,
+      "lineHeight": 16,
+      "weight": 800,
+      "tracking": 0.06,
+      "family": "body"
+    }
+  },
+  "radius": {
+    "sm": 4,
+    "control": 6,
+    "card": 10,
+    "pill": 9999
+  },
+  "space": {
+    "0": 0,
+    "1": 4,
+    "2": 8,
+    "3": 12,
+    "4": 16,
+    "5": 20,
+    "6": 24,
+    "8": 32,
+    "10": 40,
+    "12": 48,
+    "16": 64,
+    "0.5": 2,
+    "1.5": 6,
+    "2.5": 10
+  },
+  "size": {
+    "controlSm": 32,
+    "controlMd": 40,
+    "controlLg": 48,
+    "touch": 44,
+    "badge": 24,
+    "dot": 6,
+    "icon": 20,
+    "iconSm": 16,
+    "avatar": 40,
+    "avatarLg": 64,
+    "qr": 224,
+    "scanFrame": 248,
+    "logoMark": 28,
+    "crest": 40,
+    "tabBar": 66,
+    "sidebar": 248,
+    "contentMax": 1120,
+    "formMax": 440
+  },
+  "cardValueTracking": -0.04,
+  "varsityStroke": 0.045
+}

@@ -1,4 +1,23 @@
 export const en = {
+  native: {
+  "home": "Home",
+  "cardAccessibility": "KTM PATS University: {name}, favorite drink {drink}, favorite genre {genre}",
+  "enlargeQr": "Enlarge QR",
+  "photoPrompt": "Add a photo so the crew can match your face at the door.",
+  "photoCamera": "Take photo",
+  "photoLibrary": "Choose from library",
+  "photoCrop": "Crop photo",
+  "photoHint": "Drag to frame your face. Use the slider to zoom.",
+  "photoPermission": "Allow camera access in settings, then try again.",
+  "pending": "Pending",
+  "history": "History",
+  "selectChannel": "Choose a channel to read messages",
+  "profileEdit": "Edit profile",
+  "saved": "Profile saved",
+  "reset": "reset {date}",
+  "nextEvent": "Next event",
+  "endedDraw": "The event has ended. See the saved draw result below."
+},
   ops: {
     datePlaceholder: 'dd/mm/yyyy',
     pickDate: 'Pick a date',
