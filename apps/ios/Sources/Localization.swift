@@ -24,8 +24,24 @@ enum L {
         f.timeZone = TimeZone(identifier: zone) ?? TimeZone(identifier: "Asia/Jakarta")!
         var calendar = Calendar(identifier: .gregorian); calendar.timeZone = f.timeZone
         f.dateFormat = calendar.component(.year, from: date) == calendar.component(.year, from: Date()) ? "d MMM · HH.mm" : "d MMM yyyy · HH.mm"
-        let abbreviation = ["Asia/Jakarta": "WIB", "Asia/Pontianak": "WIB", "Asia/Makassar": "WITA", "Asia/Jayapura": "WIT"][zone] ?? f.timeZone.abbreviation(for: date) ?? ""
-        return f.string(from: date) + " " + abbreviation
+        return f.string(from: date) + " " + zoneName(zone, at: date)
+    }
+    static func zoneName(_ zone: String, at date: Date) -> String {
+        ["Asia/Jakarta": "WIB", "Asia/Pontianak": "WIB", "Asia/Makassar": "WITA", "Asia/Jayapura": "WIT"][zone] ?? TimeZone(identifier: zone)?.abbreviation(for: date) ?? "WIB"
+    }
+    static func inputDate(_ date: Date, time: Bool = false, zone: TimeZone = TimeZone(identifier: "Asia/Jakarta")!) -> String {
+        let f = DateFormatter(); f.locale = Locale(identifier: "en_GB"); f.calendar = Calendar(identifier: .gregorian)
+        f.timeZone = zone; f.dateFormat = time ? "HH.mm" : "dd/MM/yyyy"
+        return f.string(from: date)
+    }
+    static func activePeriod(mode: String, start: String, end: String) -> String {
+        guard let date = Dates.parse(start), let reset = Dates.parse(end) else { return "" }
+        var calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(identifier: "Asia/Jakarta")!
+        let f = DateFormatter(); f.locale = Locale(identifier: locale == "en" ? "en_GB" : "id_ID"); f.timeZone = calendar.timeZone
+        f.dateFormat = "MMM yyyy"
+        let period = mode == "QUARTERLY" ? "Q\((calendar.component(.month, from: date) - 1) / 3 + 1) \(calendar.component(.year, from: date))" : f.string(from: date)
+        f.dateFormat = "d MMM"
+        return t("ktm.periodReset", ["period": period, "date": f.string(from: reset)])
     }
     static func status(_ raw: String) -> String {
         let publicKeys = ["active": "cardPage.active", "pending": "cardPage.pending", "revoked": "cardPage.revokedTitle", "inactive": "cardPage.inactiveTitle", "paid": "phase5.paid", "unpaid": "phase5.unpaid"]

@@ -52,7 +52,7 @@ struct Room: Equatable { var kind: String; var id: String }
 struct MutationState: View {
     @ObservedObject var mutation: Mutation
     var body: some View {
-        if mutation.busy { ProgressView().frame(maxWidth: .infinity) }
+        if mutation.busy { Text(L.t("common.loading")).font(Theme.body(13)).accessibilityAddTraits(.updatesFrequently) }
         if let error = mutation.error { Notice(text: error, error: true) }
         if let message = mutation.message { Notice(text: message) }
     }
@@ -66,10 +66,10 @@ struct ConfirmAction: View {
     @State private var confirm = false
     var body: some View {
         Button(L.t(label), role: destructive ? .destructive : nil) { confirm = true }
-            .buttonStyle(.bordered).frame(minHeight: 44).disabled(disabled)
+            .buttonStyle(PATSButtonStyle(variant: destructive ? .danger : .secondary)).disabled(disabled)
             .alert(L.t(label), isPresented: $confirm) {
                 Button(L.t("common.cancel"), role: .cancel) {}
-                Button(L.t("native.confirm"), role: destructive ? .destructive : nil) { Task { await action() } }
+                Button(L.t(label), role: destructive ? .destructive : nil) { Task { await action() } }
             } message: { Text(message) }
     }
 }
@@ -107,25 +107,23 @@ struct NavigationRow<Destination: View>: View {
         }.buttonStyle(.plain)
     }
 }
+/// All modules are united into one path. No per-module antialiasing or visible seams.
 struct QRImage: View {
     let value: String
+    var onTile = false
     var body: some View {
-        Group {
-            if let image = qr {
-                Image(uiImage: image).interpolation(.none).resizable().scaledToFit()
-                    .padding(16).background(Color.white).accessibilityLabel(L.t("app.cardQrA11y"))
-            }
-        }.frame(width: Theme.qr, height: Theme.qr)
-    }
-    private var qr: UIImage? {
-        let filter = CIFilter.qrCodeGenerator(); filter.message = Data(value.utf8); filter.correctionLevel = "M"
-        guard let output = filter.outputImage else { return nil }
-        let color = CIFilter.falseColor(); color.inputImage = output
-        color.color0 = CIColor(red: 0, green: 24.0/255, blue: 54.0/255); color.color1 = CIColor.white
-        guard let result = color.outputImage, let cg = CIContext().createCGImage(result, from: result.extent) else { return nil }
-        return UIImage(cgImage: cg)
+        QRModules(value: value).fill(onTile ? Color.white : Color(uiColor: UIColor(hex: "#001836")))
+            .padding(onTile ? 0 : 16).background(onTile ? Color.clear : Color.white)
+            .aspectRatio(1, contentMode: .fit)
+            .frame(maxWidth: onTile ? nil : Theme.qr, maxHeight: onTile ? nil : Theme.qr)
+            .accessibilityLabel(L.t("app.cardQrA11y"))
     }
 }
+struct QRModules: Shape {
+    let value: String
+    func path(in rect: CGRect) -> Path { Path(QRCode.path(value, in: rect)) }
+}
+
 struct RemoteImage: View {
     var url: String
     var body: some View {
@@ -133,8 +131,8 @@ struct RemoteImage: View {
             switch phase {
             case .success(let image): image.resizable().scaledToFit()
             case .failure: Image(systemName: "photo").foregroundStyle(Theme.muted).frame(height: 80)
-            default: ProgressView().frame(height: 80)
+            default: Skeleton().frame(height: 160).clipped()
             }
-        }.frame(maxWidth: .infinity).clipShape(RoundedRectangle(cornerRadius: 12))
+        }.frame(maxWidth: .infinity).clipShape(RoundedRectangle(cornerRadius: Theme.controlRadius))
     }
 }
