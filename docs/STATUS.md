@@ -1,5 +1,8 @@
 # Status
 
+Native Android (18 Oct 2026): foundation and member phases complete on `feat/android-native`;
+admin/NFC and final parity in progress. Build, emulator evidence and iOS API map: [ANDROID-NATIVE.md](ANDROID-NATIVE.md).
+
 | Fase | Status | Catatan |
 |---|---|---|
 | 0 — Skeleton, auth, registrasi web | **Selesai** (16 Okt 2026) | Rincian, cara demo, dan yang belum: [PHASE0-REPORT.md](PHASE0-REPORT.md) |

@@ -26,11 +26,11 @@ import kotlinx.serialization.json.JsonObject
     OutlinedCard(Modifier.fillMaxWidth()) { Column(Modifier.padding(Space.page), verticalArrangement = Arrangement.spacedBy(Space.gap), content = content) }
 }
 @Composable fun Action(label: String, enabled: Boolean = true, secondary: Boolean = false, onClick: () -> Unit) {
-    if (secondary) OutlinedButton(onClick, Modifier.fillMaxWidth().heightIn(min = Space.control), enabled = enabled) { Text(label) }
-    else Button(onClick, Modifier.fillMaxWidth().heightIn(min = Space.control), enabled = enabled) { Text(label) }
+    if (secondary) OutlinedButton(onClick, Modifier.fillMaxWidth().heightIn(min = Space.control), enabled = enabled, shape = MaterialTheme.shapes.medium) { Text(label) }
+    else Button(onClick, Modifier.fillMaxWidth().heightIn(min = Space.control), enabled = enabled, shape = MaterialTheme.shapes.medium) { Text(label) }
 }
 @Composable fun Field(label: String, value: String, onChange: (String) -> Unit, keyboard: KeyboardType = KeyboardType.Text, multiline: Boolean = false) {
-    OutlinedTextField(value, onChange, Modifier.fillMaxWidth(), label = { Text(label) }, keyboardOptions = KeyboardOptions(keyboardType = keyboard), singleLine = !multiline, minLines = if (multiline) 3 else 1)
+    OutlinedTextField(value, onChange, Modifier.fillMaxWidth(), label = { Text(label) }, keyboardOptions = KeyboardOptions(keyboardType = keyboard), singleLine = !multiline, minLines = if (multiline) 3 else 1, shape = MaterialTheme.shapes.medium)
 }
 @Composable fun Notice(message: String, error: Boolean = false) {
     Surface(color = if (error) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.surfaceVariant, shape = MaterialTheme.shapes.medium) {

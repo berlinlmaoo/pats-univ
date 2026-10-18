@@ -24,6 +24,8 @@ class AppModel(application: Application) : AndroidViewModel(application) {
     val store = SessionStore(File(application.noBackupFilesDir, "session"), KeystoreSessionCipher())
     val api = Api(store)
     var incoming by mutableStateOf<String?>(null)
+    var requestedRoute by mutableStateOf<String?>(null)
+    var qaCapture by mutableStateOf(false)
 }
 class MainActivity : ComponentActivity() {
     private val model: AppModel by viewModels()
@@ -34,7 +36,10 @@ class MainActivity : ComponentActivity() {
         setContent { App(model) }
     }
     override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); setIntent(intent); readIntent(intent) }
-    private fun readIntent(intent: Intent) { cardToken(intent.dataString.orEmpty())?.let { model.incoming = it } }
+    private fun readIntent(intent: Intent) {
+        cardToken(intent.dataString.orEmpty())?.let { model.incoming = it }
+        if (BuildConfig.DEBUG && intent.hasExtra("qaRoute")) { model.incoming = null; model.requestedRoute = intent.getStringExtra("qaRoute"); model.qaCapture = intent.getBooleanExtra("qaCapture", false) }
+    }
 }
 @Composable fun App(model: AppModel) {
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -70,22 +75,7 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     } else if (session == null) Login(model.api, language, ::setLanguage)
-                    else Column {
-                        val member = session!!.me.obj("member")
-                        val admin = session!!.me.obj("user")["capabilities"]?.jsonArray?.any { it.jsonPrimitive.content == "city.operations" } == true
-                        Row(Modifier.fillMaxWidth().padding(horizontal = Space.page), horizontalArrangement = Arrangement.spacedBy(Space.small)) {
-                            FilterChip(route != "profile", { route = if (admin) "tools" else "card" }, { Text(tr(if (admin) "app.tabAdmin" else "app.tabCard")) })
-                            FilterChip(route == "profile", { route = "profile" }, { Text(tr("app.tabProfile")) })
-                        }
-                        Page {
-                            if (offline) Notice(tr("errors.network"))
-                            when (route) {
-                                "profile" -> Profile(session!!, model.api, language, ::setLanguage)
-                                "card" -> { Brand(); Title(tr("app.cardTitle")); Tile { Text(member.text("fullName"), style = MaterialTheme.typography.titleLarge); Text(member.text("nim")); Text(member.obj("city").text("name")); Text(tr("cardStatus." + member.text("cardStatus"))) } }
-                                else -> { Brand(); Title(tr("app.adminTitle"), tr("app.adminSubtitle", "city" to session!!.me.obj("user").obj("city").text("name"))); Tile { Text(session!!.me.obj("user").text("name")); Text(tr("role." + session!!.me.obj("user").text("role"))) } }
-                            }
-                        }
-                    }
+                    else Shell(model, session!!, language, ::setLanguage, offline)
                 }
             }
         }
@@ -128,18 +118,30 @@ class MainActivity : ComponentActivity() {
         Row(horizontalArrangement = Arrangement.spacedBy(Space.small)) { FilterChip(language == "id", { setLanguage("id") }, { Text("Bahasa Indonesia") }); FilterChip(language == "en", { setLanguage("en") }, { Text("English") }) }
     }
 }
-@Composable fun Profile(session: Session, api: Api, language: String, setLanguage: (String) -> Unit) {
+@Composable fun Profile(session: Session, api: Api, language: String, setLanguage: (String) -> Unit, go: (String) -> Unit = {}) {
     val user = session.me.obj("user"); val member = session.me.obj("member")
     var confirm by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val mutation = rememberMutation()
     Title(member.text("fullName", user.text("name")), member.text("nim", tr("role." + user.text("role"))))
     Tile {
         Text(user.text("email")); Text(user.text("phone")); Text(member.obj("city").text("name", user.obj("city").text("name")))
         if (member.isNotEmpty()) { Text(member.text("favoriteSong")); Text(member.text("favoriteGenre")); Text(member.text("quotes")) }
     }
+    if (member.isNotEmpty()) {
+        Remote(api, "/api/loyalty/wallet", refresh = liveVersion(api, "wallet", member.text("id"))) { data, _ -> Text(count(data.number("balance")) + " XP", style = MaterialTheme.typography.titleLarge) }
+        if (member.flag("isPromoter")) Notice(tr("phase5.prBadge"))
+        Action(tr("phase5.claimTitle"), secondary = true) { go("claims") }
+        Action(tr("phase5.regionChange"), secondary = true) { go("region-change") }
+        Action(tr("app.historyTitle"), secondary = true) { go("history") }
+    }
+    Action(tr("app.notificationsTitle"), secondary = true) { go("notifications") }
+    Action(tr("app.notificationSettingsTitle"), secondary = true) { go("notification-settings") }
     Text(tr("common.language"), style = MaterialTheme.typography.titleMedium)
     Row(horizontalArrangement = Arrangement.spacedBy(Space.small)) { FilterChip(language == "id", { setLanguage("id") }, { Text("Bahasa Indonesia") }); FilterChip(language == "en", { setLanguage("en") }, { Text("English") }) }
     Action(tr("common.signOut"), secondary = true) { confirm = true }
+    if (member.isNotEmpty()) Decide(tr("phase5.leave"), tr("phase5.leaveConfirm"), !mutation.busy, true) { mutation.run { api.request("POST", "/api/me/leave"); api.signOut() } }
+    MutationStatus(mutation)
     if (confirm) Confirm(tr("common.signOut"), tr("app.signOutBody"), { confirm = false }) { confirm = false; scope.launch { api.signOut() } }
     Text(tr("app.version", "version" to BuildConfig.VERSION_NAME), style = MaterialTheme.typography.bodySmall)
 }

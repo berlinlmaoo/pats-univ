@@ -12,6 +12,24 @@ export function tapNode(node) {
   adb('shell', 'input', 'tap', String((box[0] + box[2]) / 2), String((box[1] + box[3]) / 2));
 }
 export async function tap(text) { tapNode(nodes(dump()).findLast(n => n.text === text)); await sleep(400); }
+export async function scrollTo(text) {
+  for (let i = 0; i < 6; i++) {
+    if (nodes(dump()).some(node => node.text === text)) return;
+    adb('shell', 'input', 'swipe', '650', '2200', '650', '700', '400'); await sleep(300);
+  }
+  throw Error('Text not found while scrolling: ' + text);
+}
+export async function fill(label, value) {
+  const list = nodes(dump());
+  const labelIndex = list.findIndex(node => node.text === label);
+  let field;
+  for (let i = labelIndex; i >= 0; i--) if (list[i].class === 'android.widget.EditText') { field = list[i]; break; }
+  tapNode(field); await sleep(500);
+  adb('shell', 'input', 'keyevent', '123');
+  for (let i = 0; i < field.text.length; i++) adb('shell', 'input', 'keyevent', '67');
+  if (value) adb('shell', 'input', 'text', value.replaceAll(' ', '%s'));
+  await sleep(300); adb('shell', 'input', 'keyevent', '4'); await sleep(400);
+}
 export function screenshot(name) {
   const dir = 'C:/Users/Berlin/Documents/Dev/pats-shots'; fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(`${dir}/${name}.png`, execFileSync(adbPath, ['-s', serial, 'exec-out', 'screencap', '-p'], { maxBuffer: 20 * 1024 * 1024 }));

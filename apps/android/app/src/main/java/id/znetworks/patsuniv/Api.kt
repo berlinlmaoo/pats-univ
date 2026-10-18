@@ -76,4 +76,15 @@ class Api(private val store: SessionStore, private val base: String = BuildConfi
         store.clear()
         previous?.let { runCatching { request("POST", "/api/auth/logout", body("refreshToken" to it.tokens.refreshToken), false) } }
     }
+    /** Signed media requests never carry bearer credentials, even when storage has another origin. */
+    suspend fun media(url: String, bytes: ByteArray? = null, contentType: String = "image/jpeg"): ByteArray = withContext(Dispatchers.IO) {
+        var target = if (url.startsWith("/")) base.trimEnd('/') + url else url
+        // The demo server's APP_URL still names the unavailable canonical host. Signatures cover
+        // the path/query, so debug can reach that same storage route on the configured dev origin.
+        val parsed = URI(target)
+        if (BuildConfig.DEBUG && parsed.host == "patsuniv.znetworks.id" && URI(base).host != parsed.host && parsed.path in setOf("/api/loyalty/receipt-file", "/api/social/media-file")) target = base.trimEnd('/') + parsed.rawPath + "?" + parsed.rawQuery
+        val request = Request.Builder().url(target).apply { if (bytes != null) put(bytes.toRequestBody(contentType.toMediaType())) }.build()
+        try { http.newCall(request).execute().use { response -> if (!response.isSuccessful) throw ApiFailure("MEDIA_INVALID"); response.body.bytes() } }
+        catch(e: ApiFailure) { throw e } catch(e: IOException) { throw ApiFailure("NETWORK") }
+    }
 }

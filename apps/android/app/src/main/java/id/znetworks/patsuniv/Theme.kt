@@ -35,6 +35,7 @@ class Copy(context: Context, language: String) {
         primary = c("primary"), onPrimary = c("primaryText"), primaryContainer = c("accentSubtle"), onPrimaryContainer = c("accentSubtleText"), secondary = c("secondary"), onSecondary = c("secondaryText"), secondaryContainer = c("accentSubtle"), onSecondaryContainer = c("accentSubtleText"), surfaceTint = c("primary"),
         background = c("bg"), onBackground = c("text"), surface = c("surface"), onSurface = c("text"),
         surfaceVariant = c("surfaceMuted"), onSurfaceVariant = c("textMuted"), outline = c("borderStrong"), outlineVariant = c("border"),
+        surfaceContainerLowest = c("surface"), surfaceContainerLow = c("bg"), surfaceContainer = c("surfaceMuted"), surfaceContainerHigh = c("surfaceHover"), surfaceContainerHighest = c("border"), inverseSurface = c("primary"), inverseOnSurface = c("primaryText"),
         error = c("dangerText"), errorContainer = c("dangerSubtle"), onErrorContainer = c("dangerText")
     )
     val inter = remember { FontFamily(Font(R.font.inter)) }

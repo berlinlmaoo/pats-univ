@@ -9,7 +9,7 @@ endpoint inventory below. Phase 5 business rules supersede the historical wheel 
 | Phase | Status | Validation |
 |---|---|---|
 | 1 Foundation | Complete | 4 JVM tests and debug APK pass; real demo OTP member/admin login, EN/ID profiles, navigation, logout and card-link error on Pixel_10_Pro |
-| 2 Member screens | Pending | |
+| 2 Member screens | Complete | 7 JVM tests and debug APK pass; 19 member routes plus receipt/media and mutation states captured and inspected on Pixel_10_Pro |
 | 3 Admin screens | Pending | |
 | 4 Parity | Pending | |
 
@@ -31,7 +31,10 @@ Gradle heap is limited to 3 GB, workers to two. Default API is the requested Tai
 override with `-PpatsApiUrl=https://...`. `node scripts/sync-shared.mjs` imports the shared dictionaries
 and palette. Existing crest assets are reused. No backend/database changes, accounts or pushes.
 
-Use only `Pixel_10_Pro` and explicitly pass its serial to every ADB command. It was identified as
+Use only `Pixel_10_Pro` and explicitly pass its serial to every ADB command. Owner changed the setup
+during Phase 2: use a visible window and host GPU, with
+`emulator -avd Pixel_10_Pro -gpu host -no-audio -no-snapshot-save -no-boot-anim`.
+The restarted emulator log confirms NVIDIA GeForce RTX 5070. It was identified as
 `emulator-5554`; `emulator-5556` belongs to Pixel_7 and is not touched. Windows resolves the dev host
 but the emulator did not, even with `-dns-server 100.100.100.100`. Its direct Tailscale IP route works.
 For this emulator build, `'-PpatsDevIp=100.125.230.1'` supplies a **debug-only DNS override** for the
@@ -49,6 +52,47 @@ Phase 1 screenshots were captured and visually inspected in `C:/Users/Berlin/Doc
 | Profile / role navigation | GET `/api/me`, PATCH `/api/me` `{locale}`; use server `user.capabilities`, including legacy LOCAL_ADMIN alias |
 | Public card link | GET `/api/c/:token`, with bearer token when signed in; active/pending/revoked/inactive state, restricted public member data |
 | Realtime | GET `/api/social/token` → `{token,url}`; Socket.IO websocket auth `{token}`; `join {kind,id}`, `message`, `changed`, `access_lost` |
+| Card + rotating QR | GET `/api/me/card-token` → `token,expiresAt,ttlSeconds,serverTime`; correct TTL using server time, hide expired QR; keep screen awake |
+| Events + event detail | GET `/api/events` (home city), GET `/api/events?scope=all`, GET `/api/events/:id`, GET `/api/events/:id/flyer` |
+| Attendance history | GET `/api/me/check-ins` |
+| Rewards / wallet | GET `/api/loyalty/wallet`; POST `/api/loyalty/redeem` `{eventId,rewardId}`; venue-filtered catalogue; live wallet room; codes + QR + countdown; ledger, expiry, milestone |
+| Leaderboard | GET `/api/loyalty/leaderboard?cityId=&month=&eventId=`; server mode/period, city/national, own position |
+| Claim XP / promoter | GET `/api/loyalty/claims`; POST/PATCH `/api/loyalty/claims` `{eventId,formType,guestCount,reservationCount,receiptUrl,notes,id?}`; MEMBER/PR forms, pending-only edits |
+| Receipt capture | POST `/api/loyalty/receipt-upload` `{contentType}` → `{key,uploadUrl}`; PUT JPEG bytes to signed uploadUrl; max 5 MB; CameraX preview/capture |
+| Live prize draw / wheel | GET `/api/loyalty/draw?eventId=`; POST `/api/loyalty/spin` `{eventId}`; server result and five name slots; room `draw`; quarterly free credit; no legacy weighted spin |
+| Region request | GET/POST `/api/me/region-change`, POST body `{cityId,reason}`; request status and HQ note |
+| Leave membership | POST `/api/me/leave`, confirm then clear session |
+| Social hub | GET `/api/social/hub`; allowed cities and channels, server posting/media rules |
+| Channel / reservation chat | GET `/api/social/feed?kind=channel\|conversation&id=&cursor=`; pagination; POST `/api/social/messages` or socket `message` with `{channelId\|conversationId,body,mediaKey?,mediaType?}` |
+| Timeline / reactions | POST `/api/social/posts` `{channelId,body,mediaKey?}` (HQ only), POST `/api/social/react` `{postId,active}` |
+| Social capture/playback | POST `/api/social/upload` `{room:{kind,id},contentType}` → `{key,url,maxBytes}`; PUT bytes; signed `mediaUrl` playback; JPEG, AAC/M4A voice, MP4 video |
+| Social channel management | POST `/api/social/channels` `{id?,cityId,name,kind,visibility,memberPosting,archived}` |
+| Social moderation | POST `/api/social/moderate`: `pin {id,pinned}`, `deletePost {id}`, `deleteMessage {id}`, `mute {cityId,userId,muted}` |
+| Reservation floor plan | GET `/api/social/slots?eventId=`; POST `/api/social/reserve` `{eventId,slotCode,pax,note}` → conversationId; grid plus accessible slot selector |
+| Roaming request | POST `/api/social/roaming` `{eventId,type:ATTENDANCE\|SOCIAL_HUB}` |
+| Community operations | GET `/api/social/operations`; POST `/api/social/reservation-decision` `{id,status:CONFIRMED\|REJECTED\|CANCELLED}`; POST `/api/social/roaming-decision` `{id,decision:APPROVED\|REJECTED}`; status, conversation, expiry, moderation summaries |
+| Notifications | GET `/api/me/notifications`; POST `/api/me/notifications/read` `{all:true}` |
+| Notification preferences | GET/PATCH `/api/me/notification-prefs` `{events?:boolean,activity?:boolean}` |
+
+Phase 2 debug screenshot navigation uses `qaRoute` intent extras; it cannot authenticate a user or bypass
+server authorization. `qaCapture=true` temporarily permits channel capture in **debug only** for visual QA;
+normal runs and release protect channels with FLAG_SECURE. Scripts use actual UI OTP login. Local API
+fixture sessions and UI XML are in ignored `.qa/`; screenshots are outside Git.
+
+The demo server returns signed receipt/social URLs on `patsuniv.znetworks.id`, which does not resolve
+on this PC. Debug media fetch/upload preserves the signed path/query and uses the configured dev origin.
+Release does not rewrite URLs. The owner should set the deployment's APP_URL to its reachable origin.
+Demo fixtures are named `Android QA · …` and created through existing APIs; no seed/reset/schema change.
+
+Phase 2 interaction checks passed through native controls: real JPEG receipt capture + private PUT,
+create/edit pending member claim, reward issue with QR/countdown, one draw entry (250 XP debit from
+server), reservation → private conversation, text messages with socket acknowledgement, AAC voice and
+MP4 video capture/upload/send. Another demo account's message appeared immediately through the actual
+Socket.IO connection, before the 15-second REST fallback. Server feed confirms VOICE and VIDEO items.
+Screenshots `2-*.png` include empty/populated/loading-permission states; receipt preview overflow and
+signed media origin failures were fixed and retested. Video output paths survive activity recreation.
+The iOS-only `/api/social/screenshot` reporting endpoint is not called on Android; Android uses prevention.
+Language/theme and all admin routes are included in the final parity pass.
 
 ## Owner tasks and limits
 
