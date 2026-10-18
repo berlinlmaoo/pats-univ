@@ -75,7 +75,7 @@ import kotlinx.serialization.json.*
         if (recap.isNotEmpty()) Text(tr("loyalty.total") + ": " + money(recap.number("total")))
         val locked = recap.text("lockedAt").isNotBlank()
         if (locked) Notice(tr("loyalty.locked"))
-        fields.forEach { key -> Field(tr("loyalty.$key"), values.getValue(key), { if (!locked) values[key] = it }, KeyboardType.Number) }
+        fields.forEach { key -> Field(tr("loyalty.$key"), values.getValue(key), { if (!locked) values[key] = it }, KeyboardType.Number, moneyInput = key.startsWith("revenue")) }
         listOf("personInCharge", "accountablePerson").forEach { key -> Field(tr("phase5.$key"), values.getValue(key), { if (!locked) values[key] = it.take(120) }) }
         Field(tr("loyalty.note"), values.getValue("note"), { if (!locked) values["note"] = it.take(2000) }, multiline = true)
         MutationStatus(mutation)

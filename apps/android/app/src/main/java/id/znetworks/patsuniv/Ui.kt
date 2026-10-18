@@ -62,10 +62,18 @@ private val LocalPageRefresh = staticCompositionLocalOf<PageRefresh?> { null }
     val edge = tone("borderStrong")
     Button(onClick, Modifier.fillMaxWidth().heightIn(min = Space.control).scale(if (pressed) .98f else 1f).then(if (!enabled) Modifier.dashedBorder(edge) else Modifier), enabled = enabled, shape = MaterialTheme.shapes.medium, interactionSource = interactions, border = if (secondary && enabled) BorderStroke(1.dp, edge) else null, colors = ButtonDefaults.buttonColors(containerColor = fill, contentColor = ink, disabledContainerColor = Color.Transparent, disabledContentColor = ink)) { Text(label, fontWeight = FontWeight.Bold) }
 }
-@Composable fun Field(label: String, value: String, onChange: (String) -> Unit, keyboard: KeyboardType = KeyboardType.Text, multiline: Boolean = false) {
+private val RupiahInput = androidx.compose.ui.text.input.VisualTransformation { input ->
+    val formatted = if(input.text.isEmpty()) "" else "Rp " + input.text.reversed().chunked(3).joinToString(".").reversed()
+    val digits = formatted.indices.filter { formatted[it].isDigit() }
+    androidx.compose.ui.text.input.TransformedText(androidx.compose.ui.text.AnnotatedString(formatted), object : androidx.compose.ui.text.input.OffsetMapping {
+        override fun originalToTransformed(offset: Int) = if(formatted.isEmpty()) 0 else if(offset == 0) 3 else (digits.getOrNull(offset-1)?.plus(1) ?: formatted.length)
+        override fun transformedToOriginal(offset: Int) = formatted.take(offset.coerceIn(0,formatted.length)).count(Char::isDigit).coerceAtMost(input.length)
+    })
+}
+@Composable fun Field(label: String, value: String, onChange: (String) -> Unit, keyboard: KeyboardType = KeyboardType.Text, multiline: Boolean = false, moneyInput: Boolean = false) {
     Column(verticalArrangement = Arrangement.spacedBy(Space.small)) {
         SectionLabel(label)
-        OutlinedTextField(value, onChange, Modifier.fillMaxWidth().heightIn(min = Space.control).semantics { contentDescription = label }, keyboardOptions = KeyboardOptions(keyboardType = keyboard), singleLine = !multiline, minLines = if (multiline) 3 else 1, shape = MaterialTheme.shapes.medium, colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = tone("accent"), unfocusedBorderColor = tone("borderStrong")))
+        OutlinedTextField(value, { onChange(if(moneyInput) it.filter(Char::isDigit) else it) }, Modifier.fillMaxWidth().heightIn(min = Space.control).semantics { contentDescription = label }, keyboardOptions = KeyboardOptions(keyboardType = keyboard), singleLine = !multiline, minLines = if (multiline) 3 else 1, shape = MaterialTheme.shapes.medium, visualTransformation = if(moneyInput) RupiahInput else androidx.compose.ui.text.input.VisualTransformation.None, colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = tone("accent"), unfocusedBorderColor = tone("borderStrong")))
     }
 }
 @Composable fun Notice(message: String, error: Boolean = false, kind: String = "info") {
