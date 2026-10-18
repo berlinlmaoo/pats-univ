@@ -103,6 +103,6 @@ struct Badge: View {
     var body: some View {
         Text(member ? L.t("cardStatusMember.\(value)") : L.status(value)).font(Theme.body(13))
             .padding(.horizontal, 10).padding(.vertical, 5)
-            .background(Theme.color("\(tone)Subtle"), in: Capsule()).foregroundStyle(Theme.color("\(tone)SubtleText"))
+            .background(Theme.color("\(tone)Subtle"), in: Capsule()).foregroundStyle(Theme.color(tone == "accent" ? "accentSubtleText" : "\(tone)Text"))
     }
 }

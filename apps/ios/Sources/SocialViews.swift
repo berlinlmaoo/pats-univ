@@ -49,7 +49,7 @@ struct ChannelView: View {
                 if room.kind == "channel" { Notice(text: L.t("social.secureHint")) }
                 if screenshotTaken { Notice(text: L.t("native.captured")) }
                 if store.admin && channel.exists { NavigationRow(title: "common.edit", icon: "pencil") { ChannelEditor(cityID: channel["cityId"].text, channel: channel) } }
-                if items.isEmpty && !feed.loading { EmptyState(title: "social.emptyTitle", message: "social.emptyBody", icon: "bubble.left") }
+                if items.isEmpty && !feed.loading && feed.error == nil { EmptyState(title: "social.emptyTitle", message: "social.emptyBody", icon: "bubble.left") }
                 ForEach(ordered) { item in
                     Panel {
                         HStack { Text(item["author"]["name"].text).fontWeight(.semibold); if item["pinned"].bool { Image(systemName: "pin") } }

@@ -60,7 +60,9 @@ struct MiFareIO: TagIO {
     }
     nonisolated func tagReaderSessionDidBecomeActive(_ session: NFCTagReaderSession) {}
     nonisolated func tagReaderSession(_ session: NFCTagReaderSession, didInvalidateWithError error: Error) {
-        Task { @MainActor in guard session === self.session else { return }; self.finish(error: error) }
+        // Closing the system NFC sheet is a cancel, not an error to show.
+        let canceled = (error as? NFCReaderError)?.code == .readerSessionInvalidationErrorUserCanceled
+        Task { @MainActor in guard session === self.session else { return }; self.finish(error: canceled ? CancellationError() : error) }
     }
     nonisolated func tagReaderSession(_ session: NFCTagReaderSession, didDetect tags: [NFCTag]) {
         Task { @MainActor in
