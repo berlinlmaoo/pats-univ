@@ -59,7 +59,7 @@ import java.time.*
         val isManual = subject?.text("method") == "MANUAL"
         if (isManual) { Field(tr("app.manualReason"), reason, { reason = it.take(200) }, multiline = true); Text(tr("app.manualReasonHint"), style = MaterialTheme.typography.bodySmall) }
         else Text(tr("app.resultExpiresIn", "seconds" to remaining.toString()))
-        Action(tr("app.resultConfirm"), !mutation.busy && issue.isEmpty() && if (isManual) reason.trim().length >= 3 else remaining > 0 && p.text("ticket").isNotEmpty()) {
+        Action(tr("app.resultConfirm"), !mutation.busy && issue.isEmpty() && if (isManual) reason.trim().length >= 3 else remaining > 0 && p.text("ticket").isNotEmpty(), maroon = true) {
             mutation.run { result = api.request("POST", "/api/admin/check-in", if (isManual) body("eventId" to eventId, "method" to "MANUAL", "memberId" to subject!!.text("memberId"), "reason" to reason.trim()) else body("eventId" to eventId, "method" to subject!!.text("method"), "ticket" to p.text("ticket"))) }
         }
         Action(tr("app.scanAgain"), !mutation.busy, true) { preview = null; subject = null; scanCycle++ }

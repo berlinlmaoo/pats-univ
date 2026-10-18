@@ -95,8 +95,10 @@ import java.time.Instant
             Badge(tr("eventPhase." + e.text("phase")), e.text("phase"))
             if(e.obj("myCheckIn").isNotEmpty()) CheckInStrip(e.obj("myCheckIn"), language, e.obj("city").text("timezone", "Asia/Jakarta"))
         }
-        Action(tr("social.reserve"), maroon = true) { go("reservation/$id") }
-        Action(tr("social.roaming"), secondary = true) { go("roaming/$id") }
+        if(e.text("phase") != "ended") {
+            Action(tr("social.reserve"), maroon = true) { go("reservation/$id") }
+            Action(tr("social.roaming"), secondary = true) { go("roaming/$id") }
+        }
         Action(tr("phase5.draw"), secondary = true) { go("draw/$id") }
     }
 }

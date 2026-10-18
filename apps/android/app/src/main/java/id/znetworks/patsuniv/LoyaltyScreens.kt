@@ -63,13 +63,20 @@ import java.time.Instant
     }
 }
 @Composable fun Draw(session: Session, api: Api, id: String, language: String) {
-    Title(tr("phase5.draw"), tr("phase5.drawHint"))
     val mutation = rememberMutation(); MutationStatus(mutation)
     val live = liveVersion(api, "draw", id)
     Remote(api, "/api/loyalty/draw?eventId=${query(id)}", refresh = live, pollMs = 15000) { d, reload ->
         Remote(api, "/api/events/$id") { eventState, _ ->
         val ended = eventState.obj("event").text("phase") == "ended"
-        Tile {
+        Title(tr("phase5.draw"), tr(if(ended) "native.endedDraw" else "phase5.drawHint"))
+        if(ended) {
+            Tile {
+                CardHeading(d.text("prize", tr("phase5.notConfigured")))
+                val winner = d.rows("entries").find { it.text("id") == d.text("winnerEntryId") }
+                Notice(if(winner == null) tr("ops.drawNotRunBody") else tr("phase5.drawWinner", "name" to winner.text("name")))
+                d.rows("entries").forEach { entry -> Text(entry.text("name"), style = MaterialTheme.typography.bodyMedium) }
+            }
+        } else Tile {
             Text(d.text("prize", tr("phase5.notConfigured")), style = MaterialTheme.typography.titleLarge)
             if (d.text("peakStartsAt").isNotBlank()) Text(dateTime(d.text("peakStartsAt"), language) + " — " + dateTime(d.text("peakEndsAt"), language))
             Text("${count(d.rows("entries").size)} / ${count(d.number("capacity"))} · ${count(d.number("costXp"))} XP")
@@ -81,7 +88,7 @@ import java.time.Instant
             d.rows("entries").forEach { entry -> Text("${count(entry.number("position"))}. ${entry.text("name")}", style = MaterialTheme.typography.titleMedium) }
             d.rows("entries").find { it.text("id") == d.text("winnerEntryId") }?.let { Notice(tr("phase5.drawWinner", "name" to it.text("name"))) }
             val admin = hasCapability(session, "draw.manage")
-            if (!ended && d.text("startedAt").isEmpty()) Decide(tr(if (admin) "phase5.drawRun" else "phase5.drawEnter"), tr(if (admin) "phase5.drawConfirm" else "phase5.drawHint"), !mutation.busy && if (admin) d.text("prize").isNotBlank() && d.rows("entries").size == d.number("capacity") else canEnterDraw(d)) {
+            if (!ended && d.text("startedAt").isEmpty()) Decide(tr(if (admin) "phase5.drawRun" else "phase5.drawEnter"), tr(if (admin) "phase5.drawConfirm" else "phase5.drawHint"), !mutation.busy && if (admin) d.text("prize").isNotBlank() && d.rows("entries").size == d.number("capacity") else canEnterDraw(d), maroon = true) {
                 mutation.run { api.request("POST", if (admin) "/api/admin/draw" else "/api/loyalty/spin", if (admin) body("eventId" to id, "action" to "run") else body("eventId" to id)); reload() }
             }
         }
