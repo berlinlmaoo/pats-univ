@@ -56,7 +56,7 @@ are ignored. Never copy a built Info.plist into Git.
 | Event prize draw | GET `/api/loyalty/draw?eventId=`; POST `/api/loyalty/spin`; POST `/api/admin/draw` `{eventId,action:"run"}`; draw room, server winner and free credit |
 | Region requests | GET/POST `/api/me/region-change`; pending request and HQ decision note |
 | Membership exit | POST `/api/me/leave`; centred alert, then local session removal |
-| Hub / channel / private conversation | GET `/api/social/hub`, `/api/social/feed?kind=&id=&cursor=`; POST `/api/social/messages`, `/api/social/posts`; socket message acknowledgement |
+| Hub / channel / private conversation | GET `/api/social/hub`, `/api/social/feed?kind=&id=&cursor=`; POST `/api/social/messages` (`clientId` per draft, reused on retry, same as Android), `/api/social/posts`; socket message acknowledgement |
 | Community camera, video, voice / playback | POST `/api/social/upload` `{room,contentType}`; bounded signed PUT; native JPEG, AAC/M4A and MP4 capture and AVPlayer |
 | Channel editor / moderation / reactions | POST `/api/social/channels`, `/api/social/moderate`, `/api/social/react`; HQ timeline posting, server policy and archived state |
 | Screenshot reporting | POST `/api/social/screenshot` `{channelId,platform:"IOS"}`; hide captured channel, screenshot notification observer |

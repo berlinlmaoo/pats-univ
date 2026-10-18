@@ -32,6 +32,7 @@ struct ChannelView: View {
     @State private var nextCursor = ""
     @State private var bodyText = ""
     @State private var attachment: JSON = .null
+    @State private var sendKey = DraftSendKey()
     @State private var captured = UIScreen.main.isCaptured
     @State private var lost = false
     @State private var screenshotTaken = false
@@ -109,6 +110,9 @@ struct ChannelView: View {
         }
         .refreshable { await hub.load("/api/social/hub"); await reload() }
         .onDisappear { live.stop(); items = []; attachment = .null }
+        .onChange(of: bodyText) { _, _ in sendKey.update(text: bodyText, attachment: attachment["mediaKey"].text) }
+        .onChange(of: attachment) { _, _ in sendKey.update(text: bodyText, attachment: attachment["mediaKey"].text) }
+        .onChange(of: room) { _, _ in sendKey.reset() }
         .onChange(of: phase) { _, p in if p == .active { connect() } else { live.stop() } }
         .onReceive(NotificationCenter.default.publisher(for: UIScreen.capturedDidChangeNotification)) { _ in captured = UIScreen.main.isCaptured }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.userDidTakeScreenshotNotification)) { _ in
@@ -149,9 +153,13 @@ struct ChannelView: View {
             var body = attachment.object
             body["body"] = .str(bodyText); body[room.kind == "channel" ? "channelId" : "conversationId"] = .str(room.id)
             if timeline { _ = try await APIClient.shared.call("POST", "/api/social/posts", .object(body)) }
-            else if live.connected { try await live.send(.object(body)) }
-            else { _ = try await APIClient.shared.call("POST", "/api/social/messages", .object(body)) }
-            bodyText = ""; attachment = .null; await reload()
+            else {
+                // Same key for every retry of this draft; the server returns the first message.
+                body["clientId"] = .str(sendKey.value)
+                if live.connected { try await live.send(.object(body)) }
+                else { _ = try await APIClient.shared.call("POST", "/api/social/messages", .object(body)) }
+            }
+            bodyText = ""; attachment = .null; sendKey.reset(); await reload()
         }
     }
 }
