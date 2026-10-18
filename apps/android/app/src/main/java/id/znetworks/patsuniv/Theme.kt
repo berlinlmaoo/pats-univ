@@ -16,6 +16,7 @@ import kotlinx.serialization.json.*
 
 object Space { val tiny = 4.dp; val small = 8.dp; val gap = 12.dp; val page = 16.dp; val large = 24.dp; val hero = 40.dp; val control = 48.dp; val qr = 224.dp }
 val LocalCopy = staticCompositionLocalOf<(String, Map<String, String>) -> String> { { key, _ -> key } }
+val LocalLanguage = staticCompositionLocalOf { "id" }
 @Composable fun tr(key: String, vararg args: Pair<String, String>) = LocalCopy.current(key, args.toMap())
 class Copy(context: Context, language: String) {
     private val dictionary = PatsJson.parseToJsonElement(context.assets.open("$language.json").bufferedReader().use { it.readText() }).jsonObject
@@ -28,6 +29,7 @@ class Copy(context: Context, language: String) {
     }
 }
 @Composable fun PatsTheme(context: Context, language: String, content: @Composable () -> Unit) {
+    SideEffect { java.util.Locale.setDefault(java.util.Locale.forLanguageTag(language)) }
     val dark = isSystemInDarkTheme()
     val colors = remember(dark) { PatsJson.parseToJsonElement(context.assets.open("colors.json").bufferedReader().use { it.readText() }).jsonObject.obj(if (dark) "dark" else "light") }
     fun c(key: String) = Color(android.graphics.Color.parseColor(colors.text(key)))
@@ -48,10 +50,13 @@ class Copy(context: Context, language: String) {
         bodyLarge = TextStyle(fontFamily = inter, fontSize = 16.sp, lineHeight = 24.sp),
         bodyMedium = TextStyle(fontFamily = inter, fontSize = 15.sp, lineHeight = 22.sp),
         bodySmall = TextStyle(fontFamily = inter, fontSize = 13.sp, lineHeight = 18.sp),
-        labelLarge = TextStyle(fontFamily = inter, fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.SemiBold)
+        labelLarge = TextStyle(fontFamily = inter, fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.SemiBold),
+        labelMedium = TextStyle(fontFamily = inter, fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium),
+        labelSmall = TextStyle(fontFamily = inter, fontSize = 11.sp, lineHeight = 16.sp, fontWeight = FontWeight.SemiBold)
     )
     val copy = remember(language) { Copy(context, language) }
-    CompositionLocalProvider(LocalCopy provides { key, args -> copy.get(key, args) }) {
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    CompositionLocalProvider(LocalLanguage provides language, LocalCopy provides { key, args -> copy.get(key, args) }, androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(density.density, density.fontScale.coerceAtMost(1.4f))) {
         MaterialTheme(colorScheme = scheme, typography = typography, shapes = Shapes(medium = RoundedCornerShape(12.dp), large = RoundedCornerShape(20.dp)), content = content)
     }
 }

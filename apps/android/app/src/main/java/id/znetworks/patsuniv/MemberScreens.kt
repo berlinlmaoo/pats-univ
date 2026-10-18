@@ -32,18 +32,26 @@ import java.time.Instant
 }
 @Composable fun MemberCard(session: Session, api: Api, go: (String) -> Unit) {
     val member = session.me.obj("member")
+    val language = LocalLanguage.current
     val context = LocalContext.current
     DisposableEffect(Unit) { (context as? Activity)?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON); onDispose { (context as? Activity)?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) } }
-    Brand()
+    Title(tr("app.greeting", "name" to member.text("fullName").substringBefore(' ')))
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary), modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(Space.large), verticalArrangement = Arrangement.spacedBy(Space.gap)) {
-            Text(tr("app.cardTitle"), style = MaterialTheme.typography.bodySmall)
-            Text(member.text("fullName"), style = MaterialTheme.typography.headlineMedium)
+            Text(tr("common.appName"), style = MaterialTheme.typography.bodySmall)
+            Text(member.text("fullName"), style = MaterialTheme.typography.titleLarge)
             Text(member.text("nim"), style = MaterialTheme.typography.titleMedium)
-            Text(member.obj("city").text("name")); Text(member.text("favoriteSong")); Text(member.text("favoriteGenre")); if (member.text("quotes").isNotBlank()) Text(member.text("quotes"))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.gap)) {
+                Text(member.obj("city").text("name"), Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+                val joined = runCatching { Instant.parse(member.text("joinedAt")).atZone(java.time.ZoneId.of("Asia/Jakarta")).format(java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy", java.util.Locale.forLanguageTag(language))) }.getOrDefault("")
+                Text(tr("app.memberSince", "date" to joined), Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+            }
         }
     }
-    Text(tr("app.physicalCard"), style = MaterialTheme.typography.titleMedium); Notice(tr("cardStatus." + member.text("cardStatus")))
+    Tile { Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.gap)) {
+        Text(tr("app.physicalCard"), Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+        Text(tr("cardStatusMember." + member.text("cardStatus")), Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+    } }
     Tile {
         Remote(api, "/api/me/card-token", pollMs = 25_000) { code, reload ->
             var remaining by remember(code) { mutableIntStateOf(code.number("ttlSeconds")) }
@@ -52,8 +60,14 @@ import java.time.Instant
             else { Notice(tr("app.cardQrOffline")); Action(tr("common.retry")) { reload() } }
         }
     }
-    Action(tr("app.historyTitle"), secondary = true) { go("history") }
-    Action(tr("app.notificationsTitle"), secondary = true) { go("notifications") }
+    Remote(api, "/api/me/check-ins") { data, _ ->
+        Text(if (data.rows("checkIns").isEmpty()) tr("app.attendanceNone") else tr("app.attendanceCount", "count" to count(data.rows("checkIns").size)))
+        Action(tr("app.historyTitle"), secondary = true) { go("history") }
+    }
+    Remote(api, "/api/me/notifications") { data, _ ->
+        Text(if (data.number("unread") > 0) tr("app.notificationsUnread", "count" to count(data.number("unread"))) else tr("app.notificationsNone"))
+        Action(tr("app.notificationsTitle"), secondary = true) { go("notifications") }
+    }
 }
 @Composable fun Events(api: Api, go: (String) -> Unit, language: String, admin: Boolean = false, scan: Boolean = false) {
     Title(tr(if (admin) "app.adminEvents" else "app.tabEvents"))
@@ -104,8 +118,8 @@ import java.time.Instant
         if (data.rows("notifications").isEmpty()) Empty(tr("app.notificationsEmptyTitle"), tr("app.notificationsEmptyBody"))
         data.rows("notifications").forEach { n -> Tile {
             Text(n.text("title"), style = MaterialTheme.typography.titleMedium); Text(n.text("body")); Text(dateTime(n.text("sentAt"), language), style = MaterialTheme.typography.bodySmall)
-            val eventId = n.obj("data").text("eventId")
-            if (eventId.isNotBlank()) Action(tr("app.tabEvents"), secondary = true) { go("event/$eventId") }
+            if (n.text("readAt").isBlank()) Text(tr("app.notificationUnread"), style = MaterialTheme.typography.bodySmall)
+            notificationRoute(n.obj("data"))?.let { route -> Action(tr("common.continue"), secondary = true) { go(route) } }
         } }
     }
 }

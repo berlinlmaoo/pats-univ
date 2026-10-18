@@ -102,6 +102,7 @@ import java.time.Instant
     val live = liveVersion(api, "wallet", session.me.obj("member").text("id"))
     fun clear() { editing = null; guests = "0"; reservations = "0"; notes = ""; receipt = "" }
     Remote(api, "/api/loyalty/claims", refresh = live) { data, reload ->
+        LaunchedEffect(data.flag("isPromoter")) { if (!data.flag("isPromoter") && form == "PR") { form = "MEMBER"; clear() } }
         val event = data.rows("events").find { it.text("id") == eventId } ?: data.rows("events").firstOrNull()
         if (event == null) Notice(tr("loyalty.noPastEvents")) else {
             Choices(tr("loyalty.event"), data.rows("events").map { it.text("id") to it.text("title") }, event.text("id")) { eventId = it; clear() }

@@ -26,6 +26,7 @@ class AppModel(application: Application) : AndroidViewModel(application) {
     var incoming by mutableStateOf<String?>(null)
     var requestedRoute by mutableStateOf<String?>(null)
     var qaCapture by mutableStateOf(false)
+    var offline by mutableStateOf(false)
 }
 class MainActivity : ComponentActivity() {
     private val model: AppModel by viewModels()
@@ -47,12 +48,11 @@ class MainActivity : ComponentActivity() {
     var language by rememberSaveable { mutableStateOf(prefs.getString("language", "id") ?: "id") }
     val session by model.store.session.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
-    var offline by remember { mutableStateOf(false) }
     var route by rememberSaveable { mutableStateOf("profile") }
     LaunchedEffect(session?.me?.obj("user")?.text("id")) {
         route = if (session?.me?.obj("member")?.isNotEmpty() == true) "card" else "tools"
         if (session != null) {
-            try { model.api.reload(); offline = false } catch (e: CancellationException) { throw e } catch (_: Exception) { offline = true }
+            try { model.api.reload(); model.offline = false } catch (e: CancellationException) { throw e } catch (_: Exception) { model.offline = true }
         }
     }
     fun setLanguage(next: String) {
@@ -71,11 +71,13 @@ class MainActivity : ComponentActivity() {
                             Remote(model.api, "/api/c/$token", authenticated = session != null) { data, _ ->
                                 Title(tr("app.cardTitle")); Notice(tr("cardPage." + when(data.text("state")) { "active" -> "active"; "pending" -> "pending"; "revoked" -> "revokedTitle"; "inactive" -> "inactiveTitle"; else -> "notFoundTitle" }))
                                 val member = data.obj("member")
-                                if (member.isNotEmpty()) Tile { Text(member.text("fullName"), style = MaterialTheme.typography.titleLarge); Text(member.text("nim")); Text(member.text("city")); Text(member.text("favoriteSong")); Text(member.text("favoriteGenre")); Text(member.text("quotes")) }
+                                if (member.isNotEmpty()) Tile { Text(member.text("fullName"), style = MaterialTheme.typography.titleLarge); Text(member.text("nim")); Text(member.text("city")); Text(tr("app.song") + ": " + member.text("favoriteSong")); Text(tr("app.genre") + ": " + member.text("favoriteGenre")); if (member.text("quotes").isNotBlank()) Text(member.text("quotes")); if (member.text("joinedAt").isNotBlank()) Text(tr("members.joined") + ": " + runCatching { java.time.Instant.parse(member.text("joinedAt")).atZone(java.time.ZoneId.of("Asia/Jakarta")).format(java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy", java.util.Locale.forLanguageTag(language))) }.getOrDefault(member.text("joinedAt"))) }
+                                if (data.flag("isMine") && session?.me?.obj("member")?.isNotEmpty() == true) Action(tr("app.cardLinkOpen")) { model.incoming = null; model.requestedRoute = "card" }
+                                if (session == null) Action(tr("auth.title"), secondary = true) { model.incoming = null }
                             }
                         }
                     } else if (session == null) Login(model.api, language, ::setLanguage)
-                    else Shell(model, session!!, language, ::setLanguage, offline)
+                    else Shell(model, session!!, language, ::setLanguage, model.offline)
                 }
             }
         }
@@ -87,6 +89,7 @@ class MainActivity : ComponentActivity() {
     var otp by remember { mutableStateOf<JsonObject?>(null) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    var errorParams by remember { mutableStateOf<Array<Pair<String, String>>>(emptyArray()) }
     var cooldown by remember { mutableIntStateOf(0) }
     val scope = rememberCoroutineScope()
     LaunchedEffect(cooldown) { if (cooldown > 0) { delay(1000); cooldown-- } }
@@ -96,7 +99,7 @@ class MainActivity : ComponentActivity() {
             try {
                 if (verify) api.signIn(email, code)
                 else { otp = api.request("POST", "/api/auth/otp/request", body("email" to email.trim(), "locale" to language, "audience" to "app"), false); cooldown = otp!!.number("resendAfter") }
-            } catch (e: CancellationException) { throw e } catch (e: Exception) { error = errorKey((e as? ApiFailure)?.code ?: "NETWORK") }
+            } catch (e: CancellationException) { throw e } catch (e: Exception) { error = errorKey((e as? ApiFailure)?.code ?: "NETWORK"); errorParams = errorArgs(e) }
             finally { busy = false }
         }
     }
@@ -109,7 +112,7 @@ class MainActivity : ComponentActivity() {
             if (demo.isNotBlank()) Notice(tr("otp.demoCode", "code" to demo))
             Field(tr("otp.codeLabel"), code, { value -> code = value.filter(Char::isDigit).take(6) }, KeyboardType.NumberPassword)
         }
-        error?.let { Notice(tr(it), true) }
+        error?.let { Notice(tr(it, *errorParams), true) }
         Action(tr(if (busy) "common.loading" else if (otp == null) "auth.sendCode" else "otp.verify"), !busy && if (otp == null) validEmail(email) else validOtp(code)) { submit(otp != null) }
         if (otp != null) {
             Action(if (cooldown > 0) tr("otp.resendIn", "seconds" to cooldown.toString()) else tr("otp.resend"), !busy && cooldown == 0, true) { submit(false) }

@@ -1,0 +1,10 @@
+<resources>
+    <style name="PatsTheme" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:colorAccent">@color/pats_primary</item>
+        <item name="android:colorPrimary">@color/pats_primary</item>
+        <item name="android:textColorPrimaryInverse">@color/pats_on_primary</item>
+        <item name="android:windowBackground">@color/pats_background</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+    </style>
+</resources>

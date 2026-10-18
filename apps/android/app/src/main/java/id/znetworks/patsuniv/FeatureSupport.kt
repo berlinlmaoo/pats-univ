@@ -30,18 +30,19 @@ fun hasCapability(session: Session, capability: String) = session.me.obj("user")
 class Mutation(private val scope: CoroutineScope) {
     var busy by mutableStateOf(false); private set
     var failure by mutableStateOf<String?>(null); private set
+    var failureArgs by mutableStateOf<Array<Pair<String, String>>>(emptyArray()); private set
     var notice by mutableStateOf<String?>(null)
     fun run(block: suspend () -> Unit) {
         if (busy) return
         busy = true; failure = null; notice = null
         scope.launch {
-            try { block() } catch(e: CancellationException) { throw e } catch(e: Exception) { failure = if (e is TagFailure) e.key else errorKey((e as? ApiFailure)?.code ?: "INTERNAL") }
+            try { block() } catch(e: CancellationException) { throw e } catch(e: Exception) { failure = if (e is TagFailure) e.key else errorKey((e as? ApiFailure)?.code ?: "INTERNAL"); failureArgs = errorArgs(e) }
             finally { busy = false }
         }
     }
 }
 @Composable fun rememberMutation(): Mutation { val scope = rememberCoroutineScope(); return remember(scope) { Mutation(scope) } }
-@Composable fun MutationStatus(state: Mutation) { state.failure?.let { Notice(tr(it), true) }; state.notice?.let { Notice(tr(it)) }; if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth()) }
+@Composable fun MutationStatus(state: Mutation) { state.failure?.let { Notice(tr(it, *state.failureArgs), true) }; state.notice?.let { Notice(tr(it)) }; if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth()) }
 @Composable fun Decide(label: String, message: String, enabled: Boolean = true, secondary: Boolean = false, action: () -> Unit) {
     var open by remember { mutableStateOf(false) }
     Action(label, enabled, secondary) { open = true }

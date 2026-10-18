@@ -57,7 +57,8 @@ import kotlinx.serialization.json.*
     val timeline = channel?.text("kind") == "TIMELINE"
     if (admin && channel != null) { Action(tr("common.edit"), secondary = true) { edit = !edit }; if (edit) ChannelEditor(api, channel.text("cityId"), channel) { edit = false; version++ } }
     var extra by remember { mutableStateOf<List<JsonObject>>(emptyList()) }; var moreCursor by remember { mutableStateOf<String?>(null) }
-    Remote(api, "/api/social/feed?kind=$kind&id=${query(id)}", refresh = version, pollMs = 15000) { data, reload ->
+    LaunchedEffect(version) { extra = emptyList(); moreCursor = null }
+    Remote(api, "/api/social/feed?kind=$kind&id=${query(id)}", refresh = version, pollMs = 15000, onForbidden = { lost = true }) { data, reload ->
         val items = (data.rows("items") + extra).distinctBy { it.text("id") }.sortedWith(compareByDescending<JsonObject> { timeline && it.flag("pinned") }.thenBy { if (timeline) "" else it.text("createdAt") }.thenByDescending { if (timeline) it.text("createdAt") else "" })
         if (items.isEmpty()) Empty(tr("social.emptyTitle"), tr("social.emptyBody"))
         items.forEach { item -> Tile {
@@ -98,7 +99,7 @@ import kotlinx.serialization.json.*
     }
 }
 @Composable fun ChannelEditor(api: Api, cityId: String, channel: JsonObject? = null, saved: () -> Unit) {
-    var name by remember(channel) { mutableStateOf(channel?.text("name").orEmpty()) }; var kind by remember { mutableStateOf(channel?.text("kind") ?: "CHAT") }; var visibility by remember { mutableStateOf(channel?.text("visibility") ?: "MEMBERS") }; var posting by remember { mutableStateOf(if (channel?.get("memberPosting") is JsonPrimitive) channel.flag("memberPosting").toString() else "default") }
+    var name by remember(channel) { mutableStateOf(channel?.text("name").orEmpty()) }; var kind by remember { mutableStateOf(channel?.text("kind") ?: "CHAT") }; var visibility by remember { mutableStateOf(channel?.text("visibility") ?: "MEMBERS") }; var posting by remember { mutableStateOf(if (channel?.get("memberPosting") is JsonPrimitive && channel["memberPosting"] != JsonNull) channel.flag("memberPosting").toString() else "default") }
     val mutation = rememberMutation()
     Tile {
         Field(tr("social.channelName"), name, { name = it.take(80) })
@@ -133,7 +134,7 @@ import kotlinx.serialization.json.*
             BoxWithConstraints(Modifier.fillMaxWidth().aspectRatio(1f).background(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.shapes.large)) {
                 val unit = maxWidth / 12
                 slots.forEach { s -> val selected = slot == s.text("code"); val unavailable = s.text("code") in taken
-                    Surface(Modifier.offset(unit * s.number("x"), unit * s.number("y")).size(unit * s.number("w"), unit * s.number("h")).padding(Space.tiny).clickable(enabled = !unavailable) { slot = s.text("code"); pax = "1" }, color = if (selected) MaterialTheme.colorScheme.primary else if (unavailable) MaterialTheme.colorScheme.outlineVariant else MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.small) { Box(contentAlignment = Alignment.Center) { Text(s.text("code")) } }
+                    Surface(Modifier.offset(unit * s.number("x"), unit * s.number("y")).size(unit * s.number("w"), unit * s.number("h")).padding(Space.tiny / 2).clickable(enabled = !unavailable) { slot = s.text("code"); pax = "1" }, color = if (selected) MaterialTheme.colorScheme.primary else if (unavailable) MaterialTheme.colorScheme.outlineVariant else MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.small) { Box(contentAlignment = Alignment.Center) { Text(s.text("code"), style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false) } }
                 }
             }
             Choices(tr("social.slot"), slots.filter { it.text("code") !in taken }.map { it.text("code") to (it.text("code") + " · " + tr("social." + it.text("kind")) + " · " + count(it.number("pax"))) }, slot) { slot = it }

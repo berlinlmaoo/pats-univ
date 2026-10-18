@@ -1,0 +1,5 @@
+<resources>
+    <color name="pats_primary">#001836</color>
+    <color name="pats_on_primary">#ffffff</color>
+    <color name="pats_background">#fdf6ed</color>
+</resources>

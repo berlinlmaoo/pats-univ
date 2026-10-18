@@ -39,11 +39,11 @@ fun validCardLookup(value: String) = cardToken(value) != null || Regex("^[A-Za-z
     LaunchedEffect(initialLookup) { if (initialLookup.isNotBlank() && claim == null) identify(initialLookup) }
     val held = claim
     if (held == null) {
-        if (grantId.isEmpty()) Row { Switch(reencode, { reencode = it }); Text(tr("app.encodeReencode")) }
+        if (grantId.isEmpty()) Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.gap)) { Switch(reencode, { reencode = it }); Text(tr("app.encodeReencode")) }
         Field(tr("app.encodeNim"), lookup, { lookup = it })
         Action(tr("app.encodeFind"), validCardLookup(lookup) && !mutation.busy) { identify(lookup) }
         Action(tr("app.encodeScanQr"), !mutation.busy, true) { scanning = !scanning }
-        if (scanning) QrScanner { if (validCardLookup(it)) identify(it) else mutation.run { throw ApiFailure("CARD_INVALID") } }
+        if (scanning) QrScanner { if (validCardLookup(it)) identify(it) else { scanning = false; mutation.run { throw ApiFailure("CARD_INVALID") } } }
         if (reader.support() != NfcSupport.READY) Notice(tr(if (reader.support() == NfcSupport.UNSUPPORTED) "nfc.unsupportedBody" else "nfc.disabledBody"))
     } else {
         Who(api, held.obj("member"))

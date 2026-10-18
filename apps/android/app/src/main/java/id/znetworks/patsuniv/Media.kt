@@ -43,6 +43,7 @@ import java.io.File
 @Composable fun PhotoCapture(labelKey: String = "loyalty.takeReceipt", onPhoto: (ByteArray) -> Unit) {
     val context = LocalContext.current
     var open by remember { mutableStateOf(false) }; var granted by remember { mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) }; var failed by remember { mutableStateOf(false) }
+    androidx.lifecycle.compose.LifecycleResumeEffect(context) { granted = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED; onPauseOrDispose { } }
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted = it }
     Action(tr(labelKey), secondary = true) { open = !open; if (open && !granted) permission.launch(Manifest.permission.CAMERA) }
     if (open) {
@@ -121,17 +122,39 @@ private class VideoContract(private val seconds: Int) : ActivityResultContract<U
     if (type == "IMAGE") NetworkImage(api, url) else {
         val context = LocalContext.current
         var player by remember(url) { mutableStateOf<MediaPlayer?>(null) }; var playing by remember { mutableStateOf(false) }; var failed by remember { mutableStateOf(false) }
+        var cached by remember(url) { mutableStateOf<File?>(null) }
         val mutation = rememberMutation()
         Action(tr(if (playing) "social.stop" else if (type == "VIDEO") "social.video" else "social.play"), !mutation.busy, true) {
-            if (playing) { player?.stop(); player?.release(); player = null; playing = false }
+            if (playing) { player?.stop(); player?.release(); player = null; playing = false; cached?.delete(); cached = null }
             else mutation.run {
                 val bytes = api.media(url); val file = File.createTempFile("play", if (type == "VIDEO") ".mp4" else ".m4a", context.cacheDir).apply { writeBytes(bytes) }
-                if (type == "VIDEO") { val uri = FileProvider.getUriForFile(context, "${context.packageName}.files", file); runCatching { context.startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri, "video/mp4").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)) }.onFailure { failed = true } }
-                else runCatching { player = MediaPlayer().apply { setDataSource(file.absolutePath); setOnCompletionListener { playing = false; release(); player = null; file.delete() }; prepare(); start() }; playing = true }.onFailure { failed = true; file.delete() }
+                cached = file
+                if (type == "VIDEO") playing = true
+                else runCatching { player = MediaPlayer().apply { setDataSource(file.absolutePath); setOnCompletionListener { playing = false; release(); player = null; file.delete(); cached = null }; prepare(); start() }; playing = true }.onFailure { failed = true; file.delete(); cached = null }
             }
+        }
+        if (type == "VIDEO" && playing && cached != null) key(cached!!.absolutePath) {
+            val file = cached!!
+            AndroidView(factory = { android.view.TextureView(it).apply {
+                surfaceTextureListener = object : android.view.TextureView.SurfaceTextureListener {
+                    override fun onSurfaceTextureAvailable(texture: android.graphics.SurfaceTexture, width: Int, height: Int) {
+                        val surface = android.view.Surface(texture)
+                        player = MediaPlayer().apply {
+                            setSurface(surface); surface.release(); setDataSource(file.absolutePath)
+                            setOnPreparedListener { it.start() }
+                            setOnCompletionListener { playing = false; release(); player = null; file.delete(); cached = null }
+                            setOnErrorListener { _, _, _ -> failed = true; playing = false; player?.release(); player = null; file.delete(); cached = null; true }
+                            prepareAsync()
+                        }
+                    }
+                    override fun onSurfaceTextureSizeChanged(texture: android.graphics.SurfaceTexture, width: Int, height: Int) { }
+                    override fun onSurfaceTextureDestroyed(texture: android.graphics.SurfaceTexture): Boolean { player?.release(); player = null; return true }
+                    override fun onSurfaceTextureUpdated(texture: android.graphics.SurfaceTexture) { }
+                }
+            } }, modifier = Modifier.fillMaxWidth().height(Space.qr).clipToBounds())
         }
         MutationStatus(mutation)
         if (failed) Notice(tr("errors.generic"), true)
-        DisposableEffect(url) { onDispose { player?.release() } }
+        DisposableEffect(url) { onDispose { player?.release(); cached?.delete() } }
     }
 }

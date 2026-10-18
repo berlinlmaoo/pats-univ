@@ -36,7 +36,7 @@ import kotlinx.serialization.json.*
         Field(tr("loyalty.code"), code, { code = it.uppercase().take(6); preview = null })
         Action(tr("loyalty.lookup"), !mutation.busy && event != null && Regex("^[A-Z0-9]{6}$").matches(code)) { lookup(code) }
         Action(tr("loyalty.scanCode"), !mutation.busy && event != null, true) { camera = !camera }
-        if (camera) QrScanner { if (Regex("^[A-Z0-9]{6}$").matches(it)) lookup(it) }
+        if (camera) QrScanner { if (Regex("^[A-Z0-9]{6}$").matches(it)) lookup(it) else { camera = false; mutation.run { throw ApiFailure("VALIDATION") } } }
         preview?.let { redemption -> Tile {
             Text(redemption.obj("reward").text("name"), style = MaterialTheme.typography.titleLarge); Text(redemption.obj("member").text("fullName")); Text(redemption.obj("member").text("nim")); Text(redemption.text("code"))
             Decide(tr("loyalty.fulfill"), redemption.obj("reward").text("name"), !mutation.busy) { mutation.run { try { api.request("POST", "/api/admin/loyalty/codes/fulfill", body("code" to redemption.text("code"), "eventId" to event!!.text("id"))); code = ""; mutation.notice = "loyalty.fulfilled" } finally { preview = null } } }

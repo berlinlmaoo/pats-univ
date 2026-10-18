@@ -24,7 +24,7 @@ import android.app.Activity
     Column {
         if (tabs.none { it.first == route }) Row(Modifier.fillMaxWidth().padding(horizontal = Space.page)) { TextButton({ back() }) { Text(tr("common.back")) } }
         Box(Modifier.weight(1f)) {
-            key(route) { Page {
+            key(route) { Page(onRefresh = { try { model.api.reload(); model.offline = false } catch(e: kotlinx.coroutines.CancellationException) { throw e } catch(e: Exception) { model.offline = true; throw e } }) {
                 if (offline) Notice(tr("errors.network"))
                 val kind = route.substringBefore('/'); val id = route.substringAfter('/', "")
                 val needs = when(kind) { "scan", "manual", "city-events", "city-event", "event-new", "event-edit" -> "checkin.scan"; "handover" -> "card.handover"; "member-cards", "member-card" -> "card.reportLost"; "encode", "encode-run" -> "card.encode"; "reencode" -> "card.requestReencode"; "reward-validation" -> "reward.validate"; "claims-review" -> "promoter.manage"; "operations", "crew" -> "city.operations"; else -> null }
@@ -67,6 +67,6 @@ import android.app.Activity
             } }
         }
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-        Row(Modifier.fillMaxWidth().padding(Space.tiny)) { tabs.forEach { (target, title) -> TextButton({ stack.clear(); route = target }, Modifier.weight(1f), colors = ButtonDefaults.textButtonColors(contentColor = if (route == target) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)) { Text(tr(title), style = MaterialTheme.typography.bodySmall) } } }
+        Row(Modifier.fillMaxWidth().padding(Space.tiny)) { tabs.forEach { (target, title) -> TextButton({ stack.clear(); route = target }, Modifier.weight(1f).heightIn(min = Space.control), contentPadding = PaddingValues(horizontal = Space.tiny / 2, vertical = Space.small), colors = ButtonDefaults.textButtonColors(contentColor = if (route == target) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)) { Text(tr(title), style = MaterialTheme.typography.labelMedium, maxLines = 1, softWrap = false) } } }
     }
 }

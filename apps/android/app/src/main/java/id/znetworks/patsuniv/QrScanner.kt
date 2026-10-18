@@ -38,6 +38,7 @@ fun decodeQr(bytes: ByteArray, width: Int, height: Int): String? {
 @Composable fun QrScanner(onScan: (String) -> Unit) {
     val context = LocalContext.current; val lifecycle = LocalLifecycleOwner.current
     var granted by remember { mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) }
+    androidx.lifecycle.compose.LifecycleResumeEffect(context) { granted = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED; onPauseOrDispose { } }
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted = it }
     var error by remember { mutableStateOf(false) }; var torch by remember { mutableStateOf(false) }; var camera by remember { mutableStateOf<Camera?>(null) }
     val callback by rememberUpdatedState(onScan)

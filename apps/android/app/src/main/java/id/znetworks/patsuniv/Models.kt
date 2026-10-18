@@ -27,6 +27,20 @@ fun cardToken(input: String): String? = Regex("/c/([A-Za-z0-9_-]{32})(?:[/?#]|$)
 fun validEmail(input: String) = Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$").matches(input.trim())
 fun validOtp(input: String) = Regex("^[0-9]{6}$").matches(input)
 fun errorKey(code: String): String {
-    val special = mapOf("VALIDATION" to "validation.invalid", "INTERNAL" to "errors.generic", "INSUFFICIENT_XP" to "loyalty.insufficientXp", "REDEEM_USED" to "loyalty.codeUsed", "REDEEM_EXPIRED" to "loyalty.codeExpired")
+    val special = mapOf("VALIDATION" to "validation.invalid", "INTERNAL" to "errors.generic", "INSUFFICIENT_XP" to "loyalty.insufficientXp", "REWARD_UNAVAILABLE" to "loyalty.unavailable", "SPIN_LIMIT" to "loyalty.spinLimit", "REDEEM_USED" to "loyalty.codeUsed", "REDEEM_EXPIRED" to "loyalty.codeExpired", "REPORT_REVIEWED" to "loyalty.reportReviewed", "RECAP_LOCKED" to "loyalty.recapLocked", "CHECK_IN_REQUIRED" to "loyalty.checkInRequired")
     return special[code] ?: "errors." + code.lowercase().split('_').mapIndexed { i, word -> if (i == 0) word else word.replaceFirstChar { it.uppercase() } }.joinToString("")
+}
+fun errorArgs(failure: Exception): Array<Pair<String, String>> {
+    val data = (failure as? ApiFailure)?.details ?: return emptyArray()
+    val params = data.obj("params").ifEmpty { data.obj("error").obj("params") }
+    if (params.isNotEmpty()) return params.mapNotNull { (key, value) -> (value as? JsonPrimitive)?.contentOrNull?.let { key to it } }.toTypedArray()
+    return data.obj("error").text("retryAfter").takeIf { it.isNotEmpty() }?.let { arrayOf("seconds" to it) } ?: emptyArray()
+}
+fun notificationRoute(data: JsonObject): String? = when (data.text("screen")) {
+    "event" -> data.text("eventId").takeIf { it.isNotBlank() }?.let { "event/$it" }
+    "hub" -> when { data.text("conversationId").isNotBlank() -> "conversation/${data.text("conversationId")}"; data.text("channelId").isNotBlank() -> "channel/${data.text("channelId")}"; else -> "hub" }
+    "social-operations", "reservations" -> "social-operations"
+    "roaming", "claims", "history", "card" -> data.text("screen")
+    "memberCard" -> data.text("memberId").takeIf { it.isNotBlank() }?.let { "member-card/$it" }
+    else -> null
 }

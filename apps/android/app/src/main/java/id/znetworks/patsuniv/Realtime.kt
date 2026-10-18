@@ -12,31 +12,59 @@ import kotlin.coroutines.resumeWithException
 
 /** A room belongs to the visible screen; close on disposal and obtain fresh credentials on re-entry. */
 class RealtimeRoom {
-    private var socket: Socket? = null
+    @Volatile private var socket: Socket? = null
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var retry: Job? = null
+    private var expiry: Job? = null
+    @Volatile private var generation = 0
     private val ready = MutableStateFlow(false)
     val connected = ready.asStateFlow()
     suspend fun connect(api: Api, kind: String, id: String, changed: () -> Unit, lost: () -> Unit) {
         close()
+        val current = generation
+        suspend fun open() {
         val credentials = api.request("GET", "/api/social/token")
+        if (generation != current) return
+        socket?.off(); socket?.disconnect()
         val client = IO.socket(credentials.text("url"), IO.Options().apply {
             auth = mapOf("token" to credentials.text("token"))
             transports = arrayOf("websocket")
-            reconnection = true
+            reconnection = false
             callFactory = api.http
             webSocketFactory = api.http
         })
         socket = client
+        fun reconnect() {
+            if (generation != current) return
+            retry?.cancel()
+            retry = scope.launch {
+                while (isActive && generation == current) {
+                    delay(3000)
+                    try { open(); break } catch(e: CancellationException) { throw e } catch (_: Exception) { }
+                }
+            }
+        }
         client.on(Socket.EVENT_CONNECT) {
             client.emit("join", JSONObject().put("kind", kind).put("id", id), io.socket.client.Ack { args ->
                 val result = args.firstOrNull() as? JSONObject
-                if (result?.optBoolean("ok") == true) { ready.value = true; changed() } else lost()
+                if (generation == current && result?.optBoolean("ok") == true) {
+                    ready.value = true; changed(); expiry?.cancel()
+                    result.optString("expiresAt").takeIf { it.isNotBlank() }?.let { iso ->
+                        val deadline = runCatching { java.time.Instant.parse(iso).toEpochMilli() }.getOrNull()
+                        if (deadline != null) expiry = scope.launch { delay((deadline - System.currentTimeMillis()).coerceAtLeast(0)); if (generation == current) { close(); lost() } }
+                    }
+                } else if (generation == current) { close(); lost() }
             })
         }
-        client.on("changed") { changed() }
-        client.on("access_lost") { close(); lost() }
-        client.on(Socket.EVENT_DISCONNECT) { ready.value = false }
-        client.on(Socket.EVENT_CONNECT_ERROR) { ready.value = false }
+        client.on("changed") { if (generation == current) changed() }
+        client.on("access_lost") { if (generation == current) { close(); lost() } }
+        client.on(Socket.EVENT_DISCONNECT) { if (generation == current) { ready.value = false; reconnect() } }
+        client.on(Socket.EVENT_CONNECT_ERROR) { if (generation == current) { ready.value = false; reconnect() } }
         client.connect()
+        }
+        try { open() } catch(e: CancellationException) { throw e } catch (_: Exception) {
+            retry = scope.launch { while (isActive && generation == current) { delay(3000); try { open(); break } catch(e: CancellationException) { throw e } catch (_: Exception) { } } }
+        }
     }
     fun send(message: JsonObject, completed: (Boolean) -> Unit) {
         val client = socket
@@ -56,5 +84,5 @@ class RealtimeRoom {
             })
         }
     }
-    fun close() { ready.value = false; socket?.off(); socket?.disconnect(); socket = null }
+    fun close() { generation++; retry?.cancel(); retry = null; expiry?.cancel(); expiry = null; ready.value = false; socket?.off(); socket?.disconnect(); socket = null }
 }

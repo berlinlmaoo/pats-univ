@@ -10,7 +10,7 @@ export async function route(value) {
   adb('shell', 'am', 'start', '-W', '-n', 'id.znetworks.patsuniv/.MainActivity', '--es', 'qaRoute', value, '--ez', 'qaCapture', 'true');
   await sleep(1600);
 }
-export async function capture(name, value, phase = '2') {
+export async function capture(name, value, phase = process.env.PATS_PHASE ?? '2') {
   await route(value);
   const xml = dump(); fs.writeFileSync(path.join(root, '.qa', `${phase}-${name}.xml`), xml);
   screenshot(`${phase}-${name}`);
@@ -21,4 +21,4 @@ export async function capture(name, value, phase = '2') {
 }
 const adminRoutes = { tools: 'tools', scan: 'scan', scanner: `scan/${fixtures.activeEventId}`, manual: `manual/${fixtures.activeEventId}`, events: 'city-events', event: `city-event/${fixtures.activeEventId}`, create: 'event-new', edit: `event-edit/${fixtures.activeEventId}`, handover: 'handover', members: 'member-cards', member: `member-card/${fixtures.memberId}`, codes: 'reward-validation', claims: 'claims-review', operations: 'operations', community: 'social-operations', encode: 'encode', 'encode-run': 'encode-run', crew: 'crew' };
 if (process.argv[2] === 'member') for (const name of process.argv.slice(3)) await capture(name, routes[name]);
-if (process.argv[2] === 'admin') for (const name of process.argv.slice(3)) await capture(name, adminRoutes[name], '3');
+if (process.argv[2] === 'admin') for (const name of process.argv.slice(3)) await capture(name, adminRoutes[name], process.env.PATS_PHASE ?? '3');

@@ -73,7 +73,8 @@ import java.time.*
             val tag = reader.withTag { Ntag.inspect(it) }; val token = cardToken(tag.url.orEmpty()) ?: throw ApiFailure("CARD_INVALID")
             val input = body("method" to "NFC", "token" to token, "nfcUid" to tag.uid); subject = input; preview = api.request("POST", "/api/admin/check-in/preview", JsonObject(input + ("eventId" to JsonPrimitive(eventId))))
         } }
-        if (!mutation.busy) key(scanCycle) { QrScanner { value -> identify(body("method" to "APP_QR", "token" to value)) } }
+        if (mutation.failure != null) Action(tr("app.scanAgain"), !mutation.busy, true) { mutation.run { subject = null; scanCycle++ } }
+        else if (!mutation.busy) key(scanCycle) { QrScanner { value -> identify(body("method" to "APP_QR", "token" to value)) } }
         Notice(tr("app.scanNotRecorded"))
         Action(tr("app.scanManual"), !mutation.busy, true) { go("manual/$eventId") }
     }
@@ -117,14 +118,14 @@ import java.time.*
             if (request.text("status") == "APPROVED" && request.flag("mine") && runCatching { Instant.parse(request.text("grantExpiresAt")) > Instant.now() }.getOrDefault(false)) Action(tr("app.reencodeNow")) { go("reencode/${request.text("id")}/${data.obj("member").text("nim")}") }
         }
         data.rows("cards").forEach { c -> Tile {
-            Text(tr("cardStatus." + c.text("status")), style = MaterialTheme.typography.titleMedium); Text(c.obj("batch").text("label")); Text(c.text("nfcUid")); Text(c.text("chipType")); Text(c.text("encodedStation")); if (c.text("deliveredAt").isNotBlank()) Text(dateTime(c.text("deliveredAt"), language)); if (c.text("revokeReason").isNotBlank()) Text(c.text("revokeReason"))
+            Text(tr("cardStatus." + c.text("status")), style = MaterialTheme.typography.titleMedium); (listOf(c.obj("batch").text("label")) + listOf("nfcUid", "chipType", "encodedStation", "revokeReason").map { c.text(it) }).filter { it.isNotBlank() }.forEach { Text(it) }; if (c.text("deliveredAt").isNotBlank()) Text(dateTime(c.text("deliveredAt"), language))
         } }
     }
 }
 @Composable fun AdminEventDetail(session: Session, api: Api, id: String, language: String, go: (String) -> Unit) {
     val mutation = rememberMutation(); MutationStatus(mutation); val live = liveVersion(api, "attendance", id)
     Remote(api, "/api/admin/events/$id", refresh = live) { data, reload ->
-        val e = data.obj("event"); Title(e.text("title"), e.obj("city").text("name")); Text(dateTime(e.text("startsAt"), language, e.obj("city").text("timezone", "Asia/Jakarta"))); Text(e.text("description")); Text(tr("eventPhase." + e.text("phase")))
+        val e = data.obj("event"); Title(e.text("title"), e.obj("city").text("name")); Text(dateTime(e.text("startsAt"), language, e.obj("city").text("timezone", "Asia/Jakarta"))); if (e.text("description").isNotBlank()) Text(e.text("description")); Text(tr("eventPhase." + e.text("phase")))
         if (session.me.obj("user").obj("city").isNotEmpty()) Action(tr("common.edit"), secondary = true) { go("event-edit/$id") }
         listOf("publish" to "events.publishTitle", "open" to "events.openTitle", "close" to "events.closeTitle").filter { (action, _) -> when(action) { "publish" -> e.text("status") == "DRAFT"; "open" -> e.text("status") != "OPEN" && e.text("phase") != "ended"; else -> e.text("status") == "OPEN" } }.forEach { (action, key) ->
             Decide(tr(key), tr(if (action == "close") "events.closeBody" else if (action == "publish") "events.publishBody" else "events.openBody", "city" to e.obj("city").text("name"), "time" to dateTime(e.text("checkInClosesAt"), language)), !mutation.busy, true) { mutation.run { api.request("POST", "/api/admin/events/$id/actions", body("action" to action)); reload() } }
@@ -147,7 +148,8 @@ fun validEventFields(values: Map<String, String>) = runCatching { LocalDate.pars
     }
 }
 @Composable fun EventForm(api: Api, meta: JsonObject, initial: JsonObject?, id: String, go: (String) -> Unit) {
-    val context = LocalContext.current
+    val baseContext = LocalContext.current; val language = LocalLanguage.current
+    val context = remember(baseContext, language) { android.view.ContextThemeWrapper(baseContext, R.style.PatsTheme).apply { applyOverrideConfiguration(android.content.res.Configuration().apply { setLocale(java.util.Locale.forLanguageTag(language)) }) } }
     val values = remember(initial) { mutableStateMapOf("title" to initial?.text("title").orEmpty(), "description" to initial?.text("description").orEmpty(), "venueId" to initial?.text("venueId").orEmpty(), "date" to (initial?.text("date") ?: LocalDate.now(ZoneId.of(meta.obj("city").text("timezone", "Asia/Jakarta"))).toString()), "startTime" to (initial?.text("startTime") ?: "20:00"), "endTime" to (initial?.text("endTime") ?: "02:00"), "opensBeforeMinutes" to (initial?.text("opensBeforeMinutes") ?: meta.text("opensBeforeMinutes", "60")), "capacity" to initial?.text("capacity").orEmpty()) }
     var publish by remember { mutableStateOf(initial?.flag("publish") ?: true) }; val mutation = rememberMutation(); MutationStatus(mutation)
     Field(tr("events.eventTitle"), values.getValue("title"), { values["title"] = it.take(120) })
