@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/cn';
 
 export type TabItem = {
@@ -31,8 +32,34 @@ export function Tabs({
   label: string;
   className?: string;
 }) {
+  // Narrow screens: tabs scroll sideways; fade the edge that has more tabs behind it so they stay discoverable.
+  const ref = useRef<HTMLDivElement>(null);
+  const [edges, setEdges] = useState({ start: false, end: false });
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const update = () => setEdges({ start: el.scrollLeft > 4, end: el.scrollLeft + el.clientWidth < el.scrollWidth - 4 });
+    // Bring the active tab into view horizontally only (never scroll the page).
+    const active = el.querySelector<HTMLElement>('[aria-selected="true"],[aria-current="page"]');
+    if (active && active.offsetLeft + active.offsetWidth > el.clientWidth) el.scrollLeft = active.offsetLeft - 16;
+    update();
+    el.addEventListener('scroll', update, { passive: true });
+    window.addEventListener('resize', update);
+    return () => {
+      el.removeEventListener('scroll', update);
+      window.removeEventListener('resize', update);
+    };
+  }, []);
+  const mask =
+    edges.start && edges.end
+      ? '[mask-image:linear-gradient(to_right,transparent,black_2.5rem,black_calc(100%-2.5rem),transparent)]'
+      : edges.end
+        ? '[mask-image:linear-gradient(to_right,black_calc(100%-2.5rem),transparent)]'
+        : edges.start
+          ? '[mask-image:linear-gradient(to_right,transparent,black_2.5rem)]'
+          : '';
   return (
-    <div className={cn('-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0 [scrollbar-width:none]', className)}>
+    <div ref={ref} className={cn('-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0 [scrollbar-width:none]', mask, className)}>
       <div role={onChange ? 'tablist' : undefined} aria-label={label} className="flex min-w-max gap-1 border-b border-border">
         {items.map((item) => {
           const selected = item.value === active;

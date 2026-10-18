@@ -142,7 +142,10 @@ function MethodMix({ counts, total, t }: { counts: Partial<Record<CheckInMethod,
       <div className="flex h-1.5 overflow-hidden rounded-full bg-surface-muted" role="img" aria-label={label}>
         {CHECK_IN_METHODS.map((m) => (counts[m] ? <div key={m} className={MIX_COLOR[m]} style={{ width: `${((counts[m] ?? 0) / total) * 100}%` }} /> : null))}
       </div>
-      <p className="mt-1 truncate text-caption tabular-nums text-muted">{t('events.nfcShare', { percent: pct('NFC') })}</p>
+      {/* Spell out every method so a bar that is all manual reads as "Manual 100%", not as an alert. */}
+      <p className="mt-1 text-caption tabular-nums text-muted">
+        {CHECK_IN_METHODS.filter((m) => counts[m]).map((m) => `${t(`checkInMethod.${m}`)} ${pct(m)}%`).join(' · ')}
+      </p>
     </div>
   );
 }

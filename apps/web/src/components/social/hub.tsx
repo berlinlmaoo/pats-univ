@@ -1,7 +1,7 @@
 "use client";
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
-import { Camera, MessageCircle, Pencil, Plus, Trash2, VolumeX } from "lucide-react";
+import { Camera, Heart, MessageCircle, Pencil, Pin, PinOff, Plus, Trash2, VolumeX } from "lucide-react";
 import {
   formatCount,
   formatDateTime,
@@ -381,60 +381,65 @@ export function Feed({
                   />
                 ))}
               {channel && (
-                <div className="flex flex-wrap gap-1">
-                  {channel.kind === "TIMELINE" && (
+                // One aligned row: the like count on the left (a real toggle), moderation on the right.
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                  {channel.kind === "TIMELINE" ? (
+                    <button
+                      type="button"
+                      aria-pressed={Boolean(item.reacted)}
+                      onClick={() => void mutate("react", { postId: item.id, active: !item.reacted })}
+                      className={cn(
+                        "inline-flex h-control-sm items-center gap-1.5 rounded-control px-1.5 text-caption tabular-nums transition-colors hover:bg-surface-hover",
+                        item.reacted ? "font-bold text-fg" : "text-muted",
+                      )}
+                    >
+                      <Heart className={cn("size-4", item.reacted && "fill-current")} aria-hidden="true" />
+                      {t.loose(item.reacted ? "phase5.reacted" : "phase5.react")} · {formatCount(item.reactionCount ?? 0)}
+                    </button>
+                  ) : (
+                    <span />
+                  )}
+                  <div className="flex flex-wrap items-center justify-end gap-1.5">
+                    {channel.kind === "TIMELINE" && (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => void mutate("moderate", { action: "pin", id: item.id, pinned: !item.pinned })}
+                      >
+                        {item.pinned ? <PinOff aria-hidden="true" /> : <Pin aria-hidden="true" />}
+                        {t(item.pinned ? "social.unpin" : "social.pin")}
+                      </Button>
+                    )}
                     <Button
                       size="sm"
-                      variant="ghost"
+                      variant="secondary"
                       onClick={() =>
-                        void mutate("moderate", {
-                          action: "pin",
-                          id: item.id,
-                          pinned: !item.pinned,
+                        setConfirm({
+                          title: t("social.mute"),
+                          body: { action: "mute", cityId: channel.cityId, userId: item.author.id, muted: true },
                         })
                       }
                     >
-                      {t(item.pinned ? "social.unpin" : "social.pin")}
+                      <VolumeX aria-hidden="true" />
+                      {t("social.mute")}
                     </Button>
-                  )}
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() =>
-                      setConfirm({
-                        title: t("social.delete"),
-                        body: {
-                          action:
-                            channel.kind === "TIMELINE"
-                              ? "deletePost"
-                              : "deleteMessage",
-                          id: item.id,
-                        },
-                      })
-                    }
-                  >
-                    {t("social.delete")}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() =>
-                      setConfirm({
-                        title: t("social.mute"),
-                        body: {
-                          action: "mute",
-                          cityId: channel.cityId,
-                          userId: item.author.id,
-                          muted: true,
-                        },
-                      })
-                    }
-                  >
-                    {t("social.mute")}
-                  </Button>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      className="text-danger-fg hover:border-danger hover:bg-danger-subtle"
+                      onClick={() =>
+                        setConfirm({
+                          title: t("social.delete"),
+                          body: { action: channel.kind === "TIMELINE" ? "deletePost" : "deleteMessage", id: item.id },
+                        })
+                      }
+                    >
+                      <Trash2 aria-hidden="true" />
+                      {t("social.delete")}
+                    </Button>
+                  </div>
                 </div>
               )}
-              {channel?.kind === 'TIMELINE' && <Button variant="ghost" onClick={() => void mutate('react', { postId: item.id, active: !item.reacted })}>{t.loose(item.reacted ? 'phase5.reacted' : 'phase5.react')} · {item.reactionCount ?? 0}</Button>}
             </article>
           ),
         )
@@ -730,6 +735,11 @@ function Operations({ tab }: { tab: string }) {
 }
 
 const GRID = 12;
+
+/** Rows the floor-plan preview shows: the plan's last used row, at least 4, at most the grid. */
+function previewRows(slots: VenueSlot[]): number {
+  return Math.min(GRID, Math.max(4, ...slots.map((s) => s.y + s.h)));
+}
 const NEW_SLOT: VenueSlot = { code: "", kind: "SOFA", x: 0, y: 0, w: 2, h: 2, pax: 4 };
 
 function LayoutEditor({ venue }: { venue: SocialOperations["venues"][number] }) {
@@ -748,12 +758,13 @@ function LayoutEditor({ venue }: { venue: SocialOperations["venues"][number] }) 
         description={venue.cityName ? `${venue.cityName} · ${t("social.layoutHint")}` : t("social.layoutHint")}
         className="pb-4"
       />
-      <div className="grid gap-6 border-t border-border p-5 lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)]">
-        <div>
+      <div className="grid gap-6 border-t border-border p-5 xl:grid-cols-[minmax(0,20rem)_minmax(0,1fr)]">
+        <div className="min-w-0">
           <p className="ktm-label mb-2 text-muted">{t("social.preview")}</p>
+          {/* Only the rows the plan uses (at least 4), so the preview is sized to its content. */}
           <div
-            className="grid aspect-square w-full gap-1 rounded-control border border-border bg-surface-muted p-1.5"
-            style={{ gridTemplateColumns: `repeat(${GRID}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${GRID}, minmax(0, 1fr))` }}
+            className="grid w-full max-w-sm gap-1 rounded-control border border-border bg-surface-muted p-1.5"
+            style={{ gridTemplateColumns: `repeat(${GRID}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${previewRows(slots)}, minmax(0, 1fr))`, aspectRatio: `${GRID} / ${previewRows(slots)}` }}
           >
             {slots.map((s, i) => (
               <button
@@ -822,7 +833,6 @@ function LayoutEditor({ venue }: { venue: SocialOperations["venues"][number] }) 
                 <thead>
                   <tr>
                     <Th>{t("social.slotCode")}</Th>
-                    <Th>{t("social.kind")}</Th>
                     <Th>{t("social.position")}</Th>
                     <Th className="text-right">{t("social.pax")}</Th>
                     <Th className="text-right">{t("phase5.minimumCharge")}</Th>
@@ -834,13 +844,15 @@ function LayoutEditor({ venue }: { venue: SocialOperations["venues"][number] }) 
                 <tbody>
                   {slots.map((s, i) => (
                     <Tr key={i}>
-                      <Td className="font-bold">{s.code}</Td>
-                      <Td>{t.loose(`social.${s.kind}`)}</Td>
+                      <Td>
+                        <span className="block font-bold">{s.code}</span>
+                        <span className="block text-caption text-muted">{t.loose(`social.${s.kind}`)}</span>
+                      </Td>
                       <Td className="whitespace-nowrap tabular-nums text-muted">
                         {t("social.positionValue", { x: s.x, y: s.y, w: s.w, h: s.h })}
                       </Td>
                       <Td className="text-right tabular-nums">{formatCount(s.pax)}</Td>
-                      <Td className="whitespace-nowrap text-right tabular-nums">
+                      <Td className="text-right tabular-nums">
                         {s.minimumCharge == null ? <span className="text-muted">{t("social.venueDefault")}</span> : formatRupiah(s.minimumCharge)}
                       </Td>
                       <Td>

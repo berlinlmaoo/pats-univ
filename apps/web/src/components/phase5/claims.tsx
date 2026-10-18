@@ -9,7 +9,7 @@ import { Card } from '@/components/ui/card';
 import { Field, Input, Textarea } from '@/components/ui/field';
 import { ConfirmDialog } from '@/components/ui/dialog';
 import { EmptyState } from '@/components/ui/empty-state';
-import { Tabs } from '@/components/ui/tabs';
+import { Segmented } from '@/components/ui/segmented';
 import { DataState, useLoyalty } from '@/components/loyalty/state';
 import { postJson } from '@/lib/client/api';
 
@@ -31,7 +31,7 @@ export function ClaimQueue() {
   return (
     <section className="space-y-4" aria-labelledby="claims-title">
       <h2 id="claims-title" className="sr-only">{t('phase5.claimReview')}</h2>
-      <Tabs
+      <Segmented
         label={t('phase5.claimReview')}
         active={tab}
         onChange={(v) => setTab(v as 'pending' | 'history')}
