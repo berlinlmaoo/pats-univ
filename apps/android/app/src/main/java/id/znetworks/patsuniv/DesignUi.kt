@@ -16,6 +16,8 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.autofill.ContentType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextAlign
 import androidx.core.content.res.ResourcesCompat
 import kotlinx.serialization.json.*
 
@@ -60,6 +62,20 @@ import kotlinx.serialization.json.*
         else -> R.drawable.lucide_inbox
     }
     Icon(painterResource(resource), null, modifier, tint = color)
+}
+@Composable fun FitTabLabel(text: String, color: Color, modifier: Modifier = Modifier) {
+    val nav = LocalDesign.current.obj("nav")
+    val label = MaterialTheme.typography.labelSmall
+    val style = label.copy(fontWeight = androidx.compose.ui.text.font.FontWeight(nav.number("labelWeight")), letterSpacing = label.fontSize * nav["labelTracking"]!!.jsonPrimitive.float)
+    val measurer = rememberTextMeasurer()
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val caps = text.uppercase(java.util.Locale.ROOT)
+    BoxWithConstraints(modifier, contentAlignment = Alignment.Center) {
+        val width = with(density) { maxWidth.toPx() }
+        val natural = measurer.measure(caps,style,softWrap = false,maxLines = 1).size.width.coerceAtLeast(1)
+        val fit = ((width-1f)/natural).coerceIn(.1f,1f)
+        Text(caps, Modifier.fillMaxWidth(), style = style.copy(fontSize = style.fontSize * fit, letterSpacing = style.letterSpacing * fit), color = color, maxLines = 1, softWrap = false, textAlign = TextAlign.Center)
+    }
 }
 fun Modifier.dashedBorder(color: Color) = drawBehind {
     drawRoundRect(color, cornerRadius = androidx.compose.ui.geometry.CornerRadius(6.dp.toPx()), style = Stroke(1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx()))))

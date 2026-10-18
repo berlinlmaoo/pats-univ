@@ -38,6 +38,10 @@
       "tracking": 0.02
     }
   },
+  "nav": {
+    "labelWeight": 700,
+    "labelTracking": 0.04
+  },
   "type": {
     "display": {
       "size": 32,

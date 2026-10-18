@@ -59,7 +59,11 @@ fun validPhotoSize(bytes: Int, width: Int, height: Int) = bytes in 1..5*1024*102
             if(bounds.outMimeType !in setOf("image/jpeg", "image/png", "image/webp")) { photoError = "validation.photoType"; return@withContext null }
             if(!validPhotoSize(bytes.size, bounds.outWidth, bounds.outHeight)) { photoError = if(bytes.size > 5*1024*1024) "validation.photoTooLarge" else "validation.photoDimensions"; return@withContext null }
             photoError = null
-            val original = BitmapFactory.decodeByteArray(bytes,0,bytes.size)
+            val decode = BitmapFactory.Options()
+            var sample = 1
+            while(maxOf(bounds.outWidth,bounds.outHeight) / sample > 2048 && minOf(bounds.outWidth,bounds.outHeight) / (sample*2) >= 400) sample *= 2
+            decode.inSampleSize = sample
+            val original = BitmapFactory.decodeByteArray(bytes,0,bytes.size,decode)
             val orientation = runCatching { android.media.ExifInterface(java.io.ByteArrayInputStream(bytes)).getAttributeInt(android.media.ExifInterface.TAG_ORIENTATION, 1) }.getOrDefault(1)
             val matrix = android.graphics.Matrix().apply { when(orientation) { 2 -> setScale(-1f,1f); 3 -> setRotate(180f); 4 -> setScale(1f,-1f); 5 -> { setRotate(90f); postScale(-1f,1f) }; 6 -> setRotate(90f); 7 -> { setRotate(270f); postScale(-1f,1f) }; 8 -> setRotate(270f) } }
             Bitmap.createBitmap(original,0,0,original.width,original.height,matrix,true).also { if(it !== original) original.recycle() }
@@ -113,9 +117,10 @@ fun validPhotoSize(bytes: Int, width: Int, height: Int) = bytes in 1..5*1024*102
                 previewPx = with(density) { maxWidth.toPx() }
                 Image(bitmap.asImageBitmap(), tr("join.photoAlt"), Modifier.fillMaxSize().graphicsLayer { scaleX = zoom; scaleY = zoom; translationX = offset.x * previewPx; translationY = offset.y * previewPx }.pointerInput(zoom) { detectDragGestures { change, delta -> change.consume(); offset = bound(offset + delta / previewPx, zoom) } }, contentScale = androidx.compose.ui.layout.ContentScale.Crop)
             }
-            Slider(zoom, { zoom = it; offset = bound(offset,it) }, valueRange = 1f..minOf(4f,minSide/400f).coerceAtLeast(1.01f))
+            val maxZoom = minOf(4f,minSide/400f)
+            Slider(zoom, { zoom = it; offset = bound(offset,it) }, valueRange = 1f..if(maxZoom > 1f) maxZoom else 1.01f, enabled = maxZoom > 1f)
             Action(tr("common.save")) {
-                val crop = minSide / zoom
+                val crop = (minSide / zoom).coerceAtLeast(400f)
                 val left = ((bitmap.width-crop)/2 - offset.x * minSide/zoom).toInt().coerceIn(0,bitmap.width-crop.toInt())
                 val top = ((bitmap.height-crop)/2 - offset.y * minSide/zoom).toInt().coerceIn(0,bitmap.height-crop.toInt())
                 val square = Bitmap.createBitmap(bitmap,left,top,crop.toInt(),crop.toInt())

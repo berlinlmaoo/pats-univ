@@ -103,8 +103,8 @@ import android.app.Activity
                 Column(Modifier.weight(1f).selectable(selected, role = Role.Tab, onClick = { stack.clear(); route = target }).padding(bottom = Space.small), horizontalAlignment = Alignment.CenterHorizontally) {
                     Box(Modifier.fillMaxWidth().height(3.dp).background(if(selected) tone("gold") else Color.Transparent))
                     Box(Modifier.padding(top = Space.small, bottom = Space.tiny).size(32.dp).background(if(target == "card") tone("secondary") else Color.Transparent, MaterialTheme.shapes.medium), contentAlignment = Alignment.Center) { PatsIcon(target, tone(if(selected || target == "card") "bandText" else "bandMuted")) }
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.tiny)) {
-                        Text(tr(title).uppercase(), style = MaterialTheme.typography.labelSmall, color = tone(if(selected) "bandText" else "bandMuted"), maxLines = 1, softWrap = false)
+                    Row(Modifier.fillMaxWidth().padding(horizontal = Space.tiny), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.tiny)) {
+                        FitTabLabel(tr(title), tone(if(selected) "bandText" else "bandMuted"), Modifier.weight(1f))
                         if(target == "tools" && pendingClaims > 0) CountChip(pendingClaims)
                     }
                 }

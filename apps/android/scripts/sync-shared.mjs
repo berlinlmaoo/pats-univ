@@ -14,7 +14,7 @@ fs.copyFileSync(path.join(root, 'packages/shared/src/colors.json'), path.join(as
 // Read the same geometry and typography used by web; Android never maintains a second set.
 const tokens = fs.readFileSync(path.join(root, 'packages/shared/src/tokens.ts'), 'utf8');
 const design = {};
-for (const name of ['ktm', 'varsity', 'type', 'radius', 'space', 'size']) {
+for (const name of ['ktm', 'varsity', 'nav', 'type', 'radius', 'space', 'size']) {
   const block = tokens.match(new RegExp(`export const ${name} = (\\{[\\s\\S]*?\\n\\}) as const`))[1];
   design[name] = vm.runInNewContext(`(${block})`, Object.create(null));
 }
