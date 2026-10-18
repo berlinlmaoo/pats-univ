@@ -128,8 +128,8 @@ import java.time.*
     Remote(api, "/api/admin/events/$id", refresh = live) { data, reload ->
         val e = data.obj("event"); Title(e.text("title"), e.obj("city").text("name")); Text(dateTime(e.text("startsAt"), language, e.obj("city").text("timezone", "Asia/Jakarta"))); if (e.text("description").isNotBlank()) Text(e.text("description")); Text(tr("eventPhase." + e.text("phase")))
         if (session.me.obj("user").obj("city").isNotEmpty()) Action(tr("common.edit"), secondary = true) { go("event-edit/$id") }
-        listOf("publish" to "events.publishTitle", "open" to "events.openTitle", "close" to "events.closeTitle").filter { (action, _) -> when(action) { "publish" -> e.text("status") == "DRAFT"; "open" -> e.text("status") != "OPEN" && e.text("phase") != "ended"; else -> e.text("status") == "OPEN" } }.forEach { (action, key) ->
-            Decide(tr(key), tr(if (action == "close") "events.closeBody" else if (action == "publish") "events.publishBody" else "events.openBody", "city" to e.obj("city").text("name"), "time" to dateTime(e.text("checkInClosesAt"), language)), !mutation.busy, true) { mutation.run { api.request("POST", "/api/admin/events/$id/actions", body("action" to action)); reload() } }
+        listOf("publish" to "events.actionPublish", "open" to "events.actionOpen", "close" to "events.actionClose").filter { (action, _) -> when(action) { "publish" -> e.text("status") == "DRAFT"; "open" -> e.text("status") != "OPEN" && e.text("phase") != "ended"; else -> e.text("status") == "OPEN" } }.forEach { (action, key) ->
+            Decide(tr(key), tr(if (action == "close") "events.closeBody" else if (action == "publish") "events.publishBody" else "events.openBody", "city" to e.obj("city").text("name"), "time" to dateTime(e.text("checkInClosesAt"), language)), !mutation.busy, true, title = tr("events.${action}Title")) { mutation.run { api.request("POST", "/api/admin/events/$id/actions", body("action" to action)); reload() } }
         }
         Action(tr("app.adminScan")) { go("scan/$id") }; Action(tr("phase5.draw"), secondary = true) { go("draw/$id") }
     }

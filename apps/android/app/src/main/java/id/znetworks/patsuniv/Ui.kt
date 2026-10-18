@@ -93,8 +93,8 @@ private val RupiahInput = androidx.compose.ui.text.input.VisualTransformation { 
         Image(painterResource(R.drawable.lockup_cream), null, Modifier.width(160.dp).height(80.dp))
     }
 }
-@Composable fun Confirm(label: String, message: String, onDismiss: () -> Unit, onConfirm: () -> Unit) {
-    AlertDialog(onDismissRequest = onDismiss, title = { Text(label) }, text = { Text(message) }, confirmButton = { TextButton(onConfirm, colors = ButtonDefaults.textButtonColors(contentColor = tone("dangerText"))) { Text(label) } }, dismissButton = { TextButton(onDismiss) { Text(tr("common.cancel")) } })
+@Composable fun Confirm(label: String, message: String, onDismiss: () -> Unit, title: String = label, onConfirm: () -> Unit) {
+    AlertDialog(onDismissRequest = onDismiss, title = { Text(title) }, text = { Text(message) }, confirmButton = { TextButton(onConfirm, colors = ButtonDefaults.textButtonColors(contentColor = tone("dangerText"))) { Text(label) } }, dismissButton = { TextButton(onDismiss) { Text(tr("common.cancel")) } })
 }
 /** Request ownership follows the visible screen; stale responses cannot update another route. */
 @Composable fun Remote(api: Api, path: String, refresh: Int = 0, pollMs: Long = 0, authenticated: Boolean = true, onForbidden: () -> Unit = {}, placeholder: (@Composable () -> Unit)? = null, content: @Composable ColumnScope.(JsonObject, () -> Unit) -> Unit) {

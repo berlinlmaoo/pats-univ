@@ -44,10 +44,10 @@ class Mutation(private val scope: CoroutineScope) {
 }
 @Composable fun rememberMutation(): Mutation { val scope = rememberCoroutineScope(); return remember(scope) { Mutation(scope) } }
 @Composable fun MutationStatus(state: Mutation) { state.failure?.let { Notice(tr(it, *state.failureArgs), true) }; state.notice?.let { Notice(tr(it)) }; if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth()) }
-@Composable fun Decide(label: String, message: String, enabled: Boolean = true, secondary: Boolean = false, maroon: Boolean = false, action: () -> Unit) {
+@Composable fun Decide(label: String, message: String, enabled: Boolean = true, secondary: Boolean = false, maroon: Boolean = false, title: String = label, action: () -> Unit) {
     var open by remember { mutableStateOf(false) }
     Action(label, enabled, secondary, maroon = maroon) { open = true }
-    if (open) Confirm(label, message, { open = false }) { open = false; action() }
+    if (open) Confirm(label, message, { open = false }, title = title) { open = false; action() }
 }
 @Composable fun Choices(label: String, options: List<Pair<String, String>>, selected: String, change: (String) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
