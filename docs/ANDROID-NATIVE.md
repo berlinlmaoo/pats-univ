@@ -249,3 +249,33 @@ languages and themes. Screenshots, XML and contact sheets are in
 The report distinguishes emulator/software verification from the remaining original-master overlay,
 physical optical QR and NFC acceptance. No membership level or unavailable photo fields are invented
 where the web API does not supply them.
+
+## 19 October Avenir font round
+
+Fetched `../pats-dev-avenir.bundle` and merged `vm/dev` (`09b0bfd`) as `81fe359`.
+Review fix `8a2d003` remains an ancestor. The build bundles the licensed shared Avenir Black
+unchanged. `sync-shared.mjs` now exports `fonts.cardValue.capHeight` as `cardValueCapHeight`,
+and `KtmCard.kt` uses it instead of the old Figtree divisor. Synced geometry includes the new
+glyph origin (0.0492), cap size (0.0312), tracking (-0.065 em) and cap height (0.708 em).
+The existing ink-top placement remains as specified in NATIVE-DESIGN section 2.1.
+
+`testDebugUnitTest assembleDebug` passes with 21 tests and zero failures. The source font,
+generated resource and actual APK entry `res/font/card_value.ttf` all have SHA-256
+`897AF4EB430E2F6BA18BA7FBB72FBB8A7CDC6663729C60E7A707C05D81E29A6B`.
+The APK's `assets/design.json` was also checked for tracking -0.065 and cap height 0.708.
+APK SHA-256: `5344220723A2CEAC92440704F338E0CD5C5B2829A874B2C13477D273D9BFF9BA`.
+
+Pixel_10_Pro ran with a visible window and `-gpu host` against PATS dev at
+`https://pats-univ.tail765d02.ts.net`, approximately 359 dp. KTM front/back and Profile were
+captured and visually inspected in ID/EN and light/dark (12 matrix PNGs, plus one initial capture).
+Values render in the new face, the QR refreshes and both card sides display correctly.
+Gallery: `C:/Users/Berlin/Documents/Dev/pats-shots/font-19oct/index.html`;
+original screenshots and route XML are beside it. Display density was restored to 480 and
+night mode to automatic before shutting down Pixel_10_Pro. The existing Pixel_7 emulator
+was left running.
+
+**Original-card acceptance remains unverified:** `example-front.png` is absent from the bundle
+and local workspace. Read-only access to `pats-univ:~/pats-univ-brand/ktm/example-front.png`
+failed SSH host-key verification. A local source path was requested; no trust setting was
+bypassed. These captures use the real Bima demo account, so they do not establish the requested
+MICHAEL WIBOWO / TEQUILA / HIPHOP, BREAKBEAT overlay within 1% of card width.
