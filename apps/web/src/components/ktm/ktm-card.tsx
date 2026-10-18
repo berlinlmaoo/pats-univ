@@ -1,6 +1,6 @@
 'use client';
 
-import { brand, ktm } from '@pats/shared/tokens';
+import { brand, fonts, ktm } from '@pats/shared/tokens';
 import { RotateCcw } from 'lucide-react';
 import QRCode from 'qrcode';
 import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
@@ -14,9 +14,9 @@ import { cn } from '@/lib/cn';
  * units), so it is identical at 280 px and at 800 px.
  */
 
-/** Figtree's cap top sits ~0.15 em below the top of a line-height-1 box (measured against the card). */
-const CAP_OFFSET_EM = 0.15;
-const CAP_HEIGHT_EM = 0.7;
+/** The card font's cap top below the top of a line-height-1 box, and its cap height (both em). */
+const CAP_OFFSET_EM = fonts.cardValue.capTop;
+const CAP_HEIGHT_EM = fonts.cardValue.capHeight;
 /** Base value size in cqw: the measured cap height divided by the face's cap ratio. */
 const VALUE_CQW = (ktm.valueCap / CAP_HEIGHT_EM) * 100;
 const pct = (n: number) => `${(n * 100).toFixed(3)}%`;
