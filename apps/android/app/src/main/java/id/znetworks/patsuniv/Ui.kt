@@ -45,9 +45,9 @@ private val LocalPageRefresh = staticCompositionLocalOf<PageRefresh?> { null }
         }
     }
 }
-@Composable fun Title(text: String, subtitle: String = "") {
+@Composable fun Title(text: String, subtitle: String = "", hero: Boolean = false) {
     Column(Modifier.fillMaxWidth().background(tone("band"), MaterialTheme.shapes.medium).padding(Space.page), verticalArrangement = Arrangement.spacedBy(Space.small)) {
-        VarsityText(text, tone("bandText"))
+        VarsityText(text, tone("bandText"), hero = hero)
         Box(Modifier.fillMaxWidth().height(3.dp).background(tone("gold")))
         if (subtitle.isNotBlank()) Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = tone("bandMuted"))
     }

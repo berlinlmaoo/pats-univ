@@ -20,10 +20,10 @@ import androidx.core.content.res.ResourcesCompat
 import kotlinx.serialization.json.*
 
 /** Graduate's native outline uses the same 0.045 em stroke as web. */
-@Composable fun VarsityText(text: String, color: Color = MaterialTheme.colorScheme.onSurface, small: Boolean = false) {
+@Composable fun VarsityText(text: String, color: Color = MaterialTheme.colorScheme.onSurface, small: Boolean = false, hero: Boolean = false) {
     val context = LocalContext.current
     val face = remember { ResourcesCompat.getFont(context, R.font.graduate) }
-    val spec = LocalDesign.current.obj("varsity").obj(if(small) "small" else "title")
+    val spec = LocalDesign.current.obj("varsity").obj(if(hero) "hero" else if(small) "small" else "title")
     val fontSize = spec.number("size"); val lineHeight = spec.number("lineHeight")
     val tracking = spec["tracking"]!!.jsonPrimitive.float
     val stroke = LocalDesign.current["varsityStroke"]!!.jsonPrimitive.float

@@ -37,5 +37,5 @@ for (const [source, target] of [
 const palette = JSON.parse(fs.readFileSync(path.join(assets, 'colors.json'), 'utf8'));
 for (const [mode, folder] of [['light', 'values'], ['dark', 'values-night']]) {
   const dir = path.join(root, 'apps/android/app/src/main/res', folder); fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(path.join(dir, 'colors.xml'), `<resources>\n    <color name="pats_primary">${palette[mode].primary}</color>\n    <color name="pats_on_primary">${palette[mode].primaryText}</color>\n    <color name="pats_background">${palette[mode].bg}</color>\n    <color name="pats_band">${palette[mode].band}</color>\n    <color name="pats_navy">${palette.brand.navy}</color>\n</resources>\n`);
+  fs.writeFileSync(path.join(dir, 'colors.xml'), `<resources>\n    <color name="pats_primary">${palette[mode].primary}</color>\n    <color name="pats_accent">${palette[mode].accent}</color>\n    <color name="pats_on_primary">${palette[mode].primaryText}</color>\n    <color name="pats_background">${palette[mode].bg}</color>\n    <color name="pats_band">${palette[mode].band}</color>\n    <color name="pats_navy">${palette.brand.navy}</color>\n</resources>\n`);
 }

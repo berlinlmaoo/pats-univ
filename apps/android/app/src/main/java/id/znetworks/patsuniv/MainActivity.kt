@@ -115,7 +115,7 @@ class MainActivity : ComponentActivity() {
     Page {
         Column(Modifier.fillMaxWidth().background(tone("band")).padding(Space.large), verticalArrangement = Arrangement.spacedBy(Space.page)) { Brand(); LanguageToggle(language, true, setLanguage) }
         Box(Modifier.fillMaxWidth().height(androidx.compose.ui.unit.Dp(3f)).background(tone("gold")))
-        Title(tr(if (otp == null) "auth.signInHeading" else "otp.title"), tr(if (otp == null) "app.loginSubtitle" else "otp.subtitle", "email" to email))
+        Title(tr(if (otp == null) "auth.signInHeading" else "otp.title"), tr(if (otp == null) "app.loginSubtitle" else "otp.subtitle", "email" to email), hero = true)
         if (otp == null) Field(tr("auth.emailLabel"), email, { email = it }, KeyboardType.Email)
         else {
             val demo = otp!!.text("demoCode")
