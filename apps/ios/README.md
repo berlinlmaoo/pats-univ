@@ -37,8 +37,10 @@ scripts/check-localization.sh
 swift test --build-system native --jobs 2
 ```
 
-The importer reads `packages/shared` dictionaries and colors; It also copies the approved full crest, icon, splash, card artwork and Figtree/Graduate/shared
-card-value fonts, and generates Swift card geometry from `tokens.ts`. Native-only copy lives in
+The importer reads `packages/shared` dictionaries and colors; It also copies the approved full crest, icon, splash, card artwork and Figtree/Graduate fonts,
+and generates Swift card geometry and card-font metrics from `tokens.ts`. The Xcode build
+copies the licensed `card-value.ttf` directly from `packages/shared/assets/fonts` into the app;
+there is no second committed iOS font copy. Native-only copy lives in
 `scripts/en-native.json` and `scripts/id-native.json`. Both language tables must have identical,
 unique keys. Localization checking also runs during every app build.
 

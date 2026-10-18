@@ -12,7 +12,7 @@ via `vm/dev`; this round adds native iOS consumption and shared bilingual copy.
   member/admin capability detection, public `/c/<token>` links, native push delegate,
   Socket.IO v4 over URLSession WebSocket following NEXUS's dependency-free approach.
 - Member screens: implemented and compile checked; camera, media and live service/device QA pending.
-- Admin screens and NFC: implemented and compile checked; 28 macOS SwiftPM tests pass.
+- Admin screens and NFC: implemented and compile checked; 31 macOS SwiftPM tests pass.
 - Static parity audit: complete against `pc/android-native` at `282ac2f` and the Expo sources. Device/visual QA remains pending; no simulator or app has been launched.
 
 ## Build without running
@@ -190,8 +190,8 @@ Implemented:
 - Exact web 1600 px front/back artwork decoded losslessly to PNG at resource import, shared
   fractional geometry, cap-top placement and the
   exact bundled `packages/shared/assets/fonts/card-value.ttf` drawn directly with CoreText.
-  The font is read directly from its bytes, avoiding collisions with Figtree's named instances
-  and preserving the future licensed-font replacement path. No system Avenir.
+  The licensed Avenir update below loads the file's CoreText descriptor and verifies its URL,
+  avoiding the system Avenir PostScript name collision.
 - Live white QR inside the maroon tile, error correction M, one filled vector path; gold expiry
   progress, expired/background code removal, plain-maroon enlarged QR. Physical status and
   NIM/song/quote stay below the artwork. Card flip hides backfaces; Reduce Motion crossfades.
@@ -236,3 +236,27 @@ Also smoke-test OTP/restore after UUID migration, profile save, gallery/camera c
 recovery, photo face matching in crew tools, QR refresh/expiry/background, flip with Reduce Motion,
 claims counts and tabs, check-in strips, leaderboard periods, ended draws and Hub navigation.
 No deployed accounts, real NFC tags, uploads, server state or release settings were changed here.
+
+
+### Licensed Avenir update — 19 October
+
+Merged refreshed `vm/dev` through `09b0bfd` and re-ran `sync-shared.mjs`. The importer now
+reads `fonts.cardValue` metrics alongside the shared card geometry: tracking −0.065 em,
+cap height 0.708, glyph origin 0.0492 of card width and cap size 0.0312 of card width.
+Removed the old committed iOS font and its obsolete OFL notice. Xcode copies the unchanged
+licensed shared file into the app at build time; `UIAppFonts` still names `card-value.ttf`.
+The licence note now identifies the commercial App + Web licence held by PATS.
+
+The renderer registers the bundled URL and creates CoreText fonts from that file's descriptor,
+never from `Avenir-Black` by name. It checks the resolved font URL so a system-face substitution
+cannot silently draw the card. CoreText draws from the cap baseline directly; it has no native
+Text line-box padding to subtract. Shrinking recomputes size, tracking and baseline; values below
+the web's 0.6 fit threshold wrap with the same fit-scale rule.
+
+Compile-only build passed after waiting for the existing Xcode build; no simulator or app was
+launched. All 31 macOS Swift tests passed, including three new font checks for the descriptor
+URL, licensed-file sample widths, shared cap/position metrics, and tracking/baseline during
+shrink/wrap. The built app's font is byte-identical to the shared licensed file. At 100 pt,
+CoreText's tracked MICHAEL WIBOWO width is 858.6 pt (TEQUILA 391.6; HIPHOP, BREAKBEAT 920.6).
+These are native test measurements, not a claim that a browser or device overlay was run.
+The §9 physical overlay comparison and same-size iPhone/web width comparison remain device QA.
