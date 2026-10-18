@@ -2,18 +2,7 @@
   "images": [
     {
       "idiom": "universal",
-      "filename": "KTMBack-1.jpg",
-      "scale": "1x"
-    },
-    {
-      "idiom": "universal",
-      "filename": "KTMBack-2.jpg",
-      "scale": "2x"
-    },
-    {
-      "idiom": "universal",
-      "filename": "KTMBack-3.jpg",
-      "scale": "3x"
+      "filename": "KTMBack.png"
     }
   ],
   "info": {

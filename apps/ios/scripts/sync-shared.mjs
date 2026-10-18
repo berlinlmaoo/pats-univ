@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import vm from 'node:vm';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -40,9 +41,6 @@ for (const [name, sources] of [
   ['Crest', [80, 160, 240].map(n => `apps/web/public/brand/crest-${n}.png`)],
   ['BrandLockup', [240, 480, 720].map(n => `apps/web/public/brand/lockup-cream-${n}.png`)],
   ['SplashCrest', [1, 2, 3].map(() => 'apps/mobile/assets/splash-icon.png')],
-  // JPEG copies of the same official masters avoid platform-dependent WebP decoding.
-  ['KTMFront', [1, 2, 3].map(() => 'apps/web/card-templates/ktm-2026/front.jpg')],
-  ['KTMBack', [1, 2, 3].map(() => 'apps/web/card-templates/ktm-2026/back.jpg')],
 ]) {
   const dir = `${resources}/Assets.xcassets/${name}.imageset`;
   fs.mkdirSync(dir, { recursive: true });
@@ -52,6 +50,14 @@ for (const [name, sources] of [
     return { idiom: 'universal', filename, scale: `${i + 1}x` };
   });
   fs.writeFileSync(`${dir}/Contents.json`, JSON.stringify({ images, info: { author: 'xcode', version: 1 } }, null, 2));
+}
+// Decode the exact web artwork losslessly at import time; UIImage need not decode WebP.
+for (const [name, side] of [['KTMFront', 'front'], ['KTMBack', 'back']]) {
+  const dir = `${resources}/Assets.xcassets/${name}.imageset`;
+  fs.rmSync(dir, { recursive: true, force: true });
+  fs.mkdirSync(dir, { recursive: true });
+  execFileSync('/usr/bin/sips', ['-s', 'format', 'png', `${root}/apps/web/public/ktm/${side}-1600.webp`, '--out', `${dir}/${name}.png`], { stdio: 'pipe' });
+  fs.writeFileSync(`${dir}/Contents.json`, JSON.stringify({ images: [{ idiom: 'universal', filename: `${name}.png` }], info: { author: 'xcode', version: 1 } }, null, 2));
 }
 const tokens = fs.readFileSync(`${root}/packages/shared/src/tokens.ts`, 'utf8');
 function tokenObject(name) {
