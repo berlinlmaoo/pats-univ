@@ -13,7 +13,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import kotlinx.coroutines.*
 import kotlinx.serialization.json.*
 
-@Composable fun Hub(session: Session, api: Api, go: (String) -> Unit) {
+@Composable fun Hub(session: Session, api: Api, go: (String) -> Unit, selectedChannel: String = "") {
     Title(tr("social.title"), tr("social.subtitle"))
     val admin = hasCapability(session, "city.operations")
     Action(tr(if (admin) "social.operations" else "social.reservations"), secondary = true) { go("social-operations") }
@@ -22,6 +22,7 @@ import kotlinx.serialization.json.*
     Tabs(listOf("TIMELINE" to tr("social.TIMELINE"), "CHAT" to tr("social.CHAT"), "reservations" to tr("social.reservations")), kind) { if(it == "reservations") go("social-operations") else kind = it }
     var city by remember { mutableStateOf("") }; var create by remember { mutableStateOf(false) }
     Remote(api, "/api/social/hub") { data, reload ->
+        LaunchedEffect(selectedChannel) { data.rows("channels").find { it.text("id") == selectedChannel }?.let { kind = it.text("kind"); city = it.text("cityId") } }
         val selected = if (data.rows("cities").any { it.text("id") == city }) city else data.text("homeCityId", data.rows("cities").firstOrNull()?.text("id").orEmpty())
         Choices(tr("social.city"), data.rows("cities").map { it.text("id") to it.text("name") }, selected) { city = it }
         if (admin) Action(tr("social.newChannel"), secondary = true) { create = !create }
@@ -29,7 +30,7 @@ import kotlinx.serialization.json.*
         val channels = data.rows("channels").filter { it.text("cityId") == selected && it.text("kind") == kind }
         if (channels.isEmpty()) Empty(tr("social.noChannels"), tr("social.noChannelsBody"))
         if(channels.isNotEmpty()) Notice(tr("native.selectChannel"))
-        channels.forEach { c -> Tile { Text(c.text("name"), style = MaterialTheme.typography.titleMedium); Text(tr("social." + c.text("kind"))); if (c.flag("archived")) Text(tr("social.archived")); Action(tr("common.continue"), secondary = true) { go("channel/" + c.text("id")) } } }
+        channels.forEach { c -> Tile(selected = c.text("id") == selectedChannel) { Text(c.text("name"), style = MaterialTheme.typography.titleMedium); Text(tr("social." + c.text("kind"))); if (c.flag("archived")) Text(tr("social.archived")); Action(tr("common.continue"), secondary = c.text("id") != selectedChannel) { go("channel/" + c.text("id")) } } }
     }
 }
 @Composable fun Channel(session: Session, api: Api, id: String, conversation: Boolean, language: String, allowCapture: Boolean) {

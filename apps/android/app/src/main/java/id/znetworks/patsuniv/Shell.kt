@@ -30,6 +30,7 @@ import android.app.Activity
     val activity = LocalContext.current as Activity
     val reader = remember(activity) { AndroidCardReader(activity) }
     var route by rememberSaveable(session.me.obj("user").text("id")) { mutableStateOf(home) }
+    var selectedHubChannel by rememberSaveable(session.me.obj("user").text("id")) { mutableStateOf("") }
     val stack = remember { mutableStateListOf<String>() }
     fun go(next: String) { if (next != route) { stack.add(route); route = next } }
     fun back() { route = if (stack.isEmpty()) home else stack.removeAt(stack.lastIndex) }
@@ -71,7 +72,7 @@ import android.app.Activity
                     "region-change" -> RegionChange(model.api)
                     "roaming" -> Roaming(session, model.api, id, ::go)
                     "reservation" -> Reservation(model.api, id, ::go)
-                    "hub", "social-hub" -> Hub(session, model.api, ::go)
+                    "hub", "social-hub" -> Hub(session, model.api, { next -> if(next.startsWith("channel/")) selectedHubChannel = next.substringAfter('/'); go(next) }, selectedChannel = selectedHubChannel)
                     "channel", "conversation" -> Channel(session, model.api, id, kind == "conversation", language, BuildConfig.DEBUG && model.qaCapture)
                     "social-operations" -> SocialOperations(session, model.api, language, ::go)
                     "notifications" -> Notifications(model.api, language, ::go)

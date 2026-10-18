@@ -52,8 +52,8 @@ private val LocalPageRefresh = staticCompositionLocalOf<PageRefresh?> { null }
         if (subtitle.isNotBlank()) Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = tone("bandMuted"))
     }
 }
-@Composable fun Tile(content: @Composable ColumnScope.() -> Unit) {
-    Card(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), elevation = CardDefaults.cardElevation(1.dp)) { Column(Modifier.padding(Space.page), verticalArrangement = Arrangement.spacedBy(Space.gap), content = content) }
+@Composable fun Tile(selected: Boolean = false, content: @Composable ColumnScope.() -> Unit) {
+    Card(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large, border = BorderStroke(if(selected) 2.dp else 1.dp, if(selected) tone("gold") else MaterialTheme.colorScheme.outlineVariant), colors = CardDefaults.cardColors(containerColor = if(selected) tone("accentSubtle") else MaterialTheme.colorScheme.surface), elevation = CardDefaults.cardElevation(1.dp)) { Column(Modifier.padding(Space.page), verticalArrangement = Arrangement.spacedBy(Space.gap), content = content) }
 }
 @Composable fun Action(label: String, enabled: Boolean = true, secondary: Boolean = false, maroon: Boolean = false, danger: Boolean = false, onClick: () -> Unit) {
     val interactions = remember { MutableInteractionSource() }; val pressed by interactions.collectIsPressedAsState()
