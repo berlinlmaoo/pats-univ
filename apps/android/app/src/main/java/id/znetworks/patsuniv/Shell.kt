@@ -3,6 +3,9 @@ package id.znetworks.patsuniv
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.*
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
@@ -32,6 +35,12 @@ import android.app.Activity
     fun back() { route = if (stack.isEmpty()) home else stack.removeAt(stack.lastIndex) }
     LaunchedEffect(model.requestedRoute) { model.requestedRoute?.let { go(it); model.requestedRoute = null } }
     val tabs = if (admin) listOf("tools" to "app.tabAdmin", "hub" to "app.tabHub", "profile" to "app.tabProfile") else listOf("home" to "native.home", "events" to "app.tabEvents", "card" to "app.tabCard", "hub" to "app.tabHub", "profile" to "app.tabProfile")
+    val activeTab = when(route.substringBefore('/')) {
+        "home", "events", "card", "hub", "profile", "tools" -> route
+        "channel", "conversation", "social-hub", "social-operations" -> "hub"
+        "notifications", "notification-settings", "region-change" -> "profile"
+        else -> if(admin) "tools" else when(route.substringBefore('/')) { "event", "reservation", "roaming" -> "events"; else -> "home" }
+    }
     BackHandler(route != home || stack.isNotEmpty()) { back() }
     Column(Modifier.background(MaterialTheme.colorScheme.background)) {
         Row(Modifier.fillMaxWidth().background(tone("band")).padding(horizontal = Space.page, vertical = Space.small), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.gap)) {
@@ -88,10 +97,10 @@ import android.app.Activity
                 }
             } }
         }
-        Row(Modifier.fillMaxWidth().background(tone("band"))) {
+        Row(Modifier.fillMaxWidth().background(tone("band")).selectableGroup()) {
             tabs.forEach { (target, title) ->
-                val selected = route == target
-                Column(Modifier.weight(1f).clickable { stack.clear(); route = target }.padding(bottom = Space.small), horizontalAlignment = Alignment.CenterHorizontally) {
+                val selected = activeTab == target
+                Column(Modifier.weight(1f).selectable(selected, role = Role.Tab, onClick = { stack.clear(); route = target }).padding(bottom = Space.small), horizontalAlignment = Alignment.CenterHorizontally) {
                     Box(Modifier.fillMaxWidth().height(3.dp).background(if(selected) tone("gold") else Color.Transparent))
                     Box(Modifier.padding(top = Space.small, bottom = Space.tiny).size(32.dp).background(if(target == "card") tone("secondary") else Color.Transparent, MaterialTheme.shapes.medium), contentAlignment = Alignment.Center) { PatsIcon(target, tone(if(selected || target == "card") "bandText" else "bandMuted")) }
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.tiny)) {

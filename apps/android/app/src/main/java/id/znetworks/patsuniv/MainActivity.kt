@@ -93,11 +93,12 @@ class MainActivity : ComponentActivity() {
 @Composable fun Login(api: Api, language: String, setLanguage: (String) -> Unit) {
     var email by rememberSaveable { mutableStateOf("") }
     var code by rememberSaveable { mutableStateOf("") }
-    var otp by remember { mutableStateOf<JsonObject?>(null) }
+    var otpJson by rememberSaveable { mutableStateOf<String?>(null) }
+    val otp = remember(otpJson) { otpJson?.let { PatsJson.parseToJsonElement(it).jsonObject } }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var errorParams by remember { mutableStateOf<Array<Pair<String, String>>>(emptyArray()) }
-    var cooldown by remember { mutableIntStateOf(0) }
+    var cooldown by rememberSaveable { mutableIntStateOf(0) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     LaunchedEffect(cooldown) { if (cooldown > 0) { delay(1000); cooldown-- } }
@@ -106,7 +107,7 @@ class MainActivity : ComponentActivity() {
         scope.launch {
             try {
                 if (verify) api.signIn(email, code)
-                else { otp = api.request("POST", "/api/auth/otp/request", body("email" to email.trim(), "locale" to language, "audience" to "app"), false); cooldown = otp!!.number("resendAfter") }
+                else { val response = api.request("POST", "/api/auth/otp/request", body("email" to email.trim(), "locale" to language, "audience" to "app"), false); otpJson = response.toString(); cooldown = response.number("resendAfter") }
             } catch (e: CancellationException) { throw e } catch (e: Exception) { error = errorKey((e as? ApiFailure)?.code ?: "NETWORK"); errorParams = errorArgs(e) }
             finally { busy = false }
         }
@@ -126,7 +127,7 @@ class MainActivity : ComponentActivity() {
         Action(tr(if (busy) "common.loading" else if (otp == null) "auth.sendCode" else "otp.verify"), !busy && if (otp == null) validEmail(email) else validOtp(code)) { submit(otp != null) }
         if (otp != null) {
             Action(if (cooldown > 0) tr("otp.resendIn", "seconds" to cooldown.toString()) else tr("otp.resend"), !busy && cooldown == 0, true) { submit(false) }
-            Action(tr("otp.changeEmail"), !busy, true) { otp = null; code = ""; error = null }
+            Action(tr("otp.changeEmail"), !busy, true) { otpJson = null; code = ""; error = null }
         }
         Action(tr("auth.joinLink"), secondary = true) { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(api.joinUrl))) }
     }
