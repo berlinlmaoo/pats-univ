@@ -89,8 +89,20 @@ function EventForm({
   const err = (field: string) => (state && !state.ok && state.fields?.[field] ? t.loose(state.fields[field], range[field]) : undefined);
 
   return (
-    <Dialog open={open} onClose={onClose} title={event ? t('events.editTitle') : t('events.addTitle')}>
-      <form ref={formRef} action={action} noValidate className="flex flex-col gap-4 pb-2">
+    <Dialog open={open} onClose={onClose} title={event ? t('events.editTitle') : t('events.addTitle')}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose} disabled={pending}>
+          {t('common.cancel')}
+          </Button>
+          <Button type="submit" form="event-form" loading={pending}>
+          {pending ? t('common.saving') : event ? t('common.saveChanges') : t('events.create')}
+          </Button>
+          
+        </>
+      }
+    >
+      <form id="event-form" ref={formRef} action={action} noValidate className="flex flex-col gap-4 pb-2">
         <Field label={t('events.eventTitle')} htmlFor="title" error={err('title')}>
           <Input id="title" name="title" defaultValue={v?.title} placeholder={t('events.eventTitlePlaceholder')} aria-invalid={Boolean(err('title'))} autoFocus />
         </Field>
@@ -131,7 +143,7 @@ function EventForm({
           <Field label={t('events.date')} htmlFor="date" error={err('date')} className="col-span-2 sm:col-span-1">
             <DateInput id="date" name="date" defaultValue={v?.date ?? defaults.date} aria-invalid={Boolean(err('date'))} />
           </Field>
-          <Field label={`${t('events.startTime')} (${city?.zoneLabel ?? ''})`} htmlFor="startTime" error={err('startTime')}>
+          <Field label={`${t('events.startTime')} (${city?.zoneLabel ?? 'WIB'})`} htmlFor="startTime" error={err('startTime')}>
             <TimeInput id="startTime" name="startTime" defaultValue={v?.startTime ?? '20:00'} aria-invalid={Boolean(err('startTime'))} />
           </Field>
           <Field label={t('events.endTime')} htmlFor="endTime" error={err('endTime')}>
@@ -180,14 +192,6 @@ function EventForm({
           </span>
         </label>
         {state && !state.ok && state.message && <Alert tone="danger">{t.loose(state.message)}</Alert>}
-        <div className="flex justify-end gap-2 pt-2">
-          <Button variant="secondary" onClick={onClose} disabled={pending}>
-            {t('common.cancel')}
-          </Button>
-          <Button type="submit" loading={pending}>
-            {pending ? t('common.saving') : event ? t('common.saveChanges') : t('events.create')}
-          </Button>
-        </div>
       </form>
     </Dialog>
   );

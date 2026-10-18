@@ -187,8 +187,19 @@ function RewardForm({
       open
       onClose={close}
       title={t(reward ? 'loyalty.editReward' : 'loyalty.newReward')}
+      footer={
+        <>
+          <Button variant="secondary" onClick={close} disabled={busy}>
+          {t('common.cancel')}
+          </Button>
+          <Button type="submit" form="reward-form" loading={busy}>
+          {t('common.save')}
+          </Button>
+          
+        </>
+      }
     >
-      <form className="space-y-4 pb-3" onSubmit={submit} noValidate>
+      <form id="reward-form" className="space-y-4 pb-3" onSubmit={submit} noValidate>
         {error && (
           <p role="alert" className="text-danger-fg">
             {t.loose(error)}
@@ -273,14 +284,6 @@ function RewardForm({
           label={t('loyalty.active')}
           description={t('loyalty.activeHint')}
         />
-        <div className="flex justify-end gap-2">
-          <Button variant="secondary" onClick={close} disabled={busy}>
-            {t('common.cancel')}
-          </Button>
-          <Button type="submit" loading={busy}>
-            {t('common.save')}
-          </Button>
-        </div>
       </form>
     </Dialog>
   );

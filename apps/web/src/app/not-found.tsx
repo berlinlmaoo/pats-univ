@@ -10,7 +10,9 @@ export default async function NotFound() {
   return (
     <I18nProvider locale={t.locale}>
     <AuthFrame>
+      <p className="varsity varsity-hero text-center text-fg" aria-hidden="true">404</p>
       <EmptyState
+        className="pt-6"
         icon={Compass}
         title={t('errors.pageNotFound')}
         body={t('errors.pageNotFoundBody')}

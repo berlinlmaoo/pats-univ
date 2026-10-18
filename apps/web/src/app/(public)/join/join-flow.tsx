@@ -308,8 +308,9 @@ function JoinForm({
     errors[field] ? `${field}-error` : hasHint ? `${field}-hint` : undefined;
 
   return (
-    <section className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,27rem)] lg:gap-14">
-      <div className="min-w-0 lg:order-2 lg:sticky lg:top-8">
+    <section className="grid items-start gap-8 lg:grid-cols-[minmax(0,28rem)_minmax(0,1fr)] lg:gap-14">
+      {/* The card leads: hero + live KTM first (left on desktop, top on phones), the form follows. */}
+      <div className="min-w-0 lg:sticky lg:top-8">
         <h1 className="varsity varsity-hero text-fg">{t('join.heroLine')}</h1>
         <p className="mt-3 max-w-md text-body text-muted">{t('join.subtitle')}</p>
         <div className="mt-6 max-w-md">
@@ -318,7 +319,7 @@ function JoinForm({
         </div>
       </div>
 
-      <div className="min-w-0 lg:order-1">
+      <div className="min-w-0">
         {demo && (
           <Alert tone="info" className="mb-6">
             <span className="font-semibold">{t('common.demoMode')}.</span> {t('common.demoModeBody')}

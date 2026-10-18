@@ -36,8 +36,15 @@ function periodLabel(mode: string, year: number, month: number, locale: 'id' | '
   return formatMonth(year, month, locale);
 }
 
-/** Top three wear the card's colours: gold, then navy, then maroon. */
-const PODIUM = ['bg-gold text-band', 'bg-primary text-primary-fg', 'bg-secondary text-secondary-fg'];
+/**
+ * Top three: #1 is a navy band chip with cream numerals, #2 and #3 neutral chips; all three carry the
+ * KTM gold rule underneath. Gold stays a rule/indicator (DESIGN.md §3), never a fill.
+ */
+const PODIUM = [
+  'bg-band text-band-fg shadow-[inset_0_-3px_0_var(--pats-gold)]',
+  'bg-surface-muted text-fg shadow-[inset_0_-3px_0_var(--pats-gold)]',
+  'bg-surface-muted text-fg shadow-[inset_0_-3px_0_var(--pats-gold)]',
+];
 
 export function LeaderboardPage() {
   const t = useT();

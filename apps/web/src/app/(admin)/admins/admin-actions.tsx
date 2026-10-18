@@ -33,8 +33,20 @@ function AddAdminForm({ open, onClose, cities }: { open: boolean; onClose: () =>
   const err = (field: string) => (state && !state.ok && state.fields?.[field] ? t.loose(state.fields[field]) : undefined);
 
   return (
-    <Dialog open={open} onClose={onClose} title={t('admins.inviteTitle')} description={t('admins.inviteBody')}>
-      <form action={action} noValidate className="flex flex-col gap-4 pb-2">
+    <Dialog open={open} onClose={onClose} title={t('admins.inviteTitle')} description={t('admins.inviteBody')}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose} disabled={pending}>
+          {t('common.cancel')}
+          </Button>
+          <Button type="submit" form="admin-invite-form" loading={pending}>
+          {pending ? t('common.saving') : t('admins.invite')}
+          </Button>
+          
+        </>
+      }
+    >
+      <form id="admin-invite-form" action={action} noValidate className="flex flex-col gap-4 pb-2">
         <input type="hidden" name="locale" value={t.locale} />
         <Field label={t('admins.name')} htmlFor="name" error={err('name')}>
           <Input id="name" name="name" autoComplete="off" aria-invalid={Boolean(err('name'))} />
@@ -58,14 +70,6 @@ function AddAdminForm({ open, onClose, cities }: { open: boolean; onClose: () =>
           </Select>
         </Field>
         {state && !state.ok && state.message && <Alert tone="danger">{t.loose(state.message)}</Alert>}
-        <div className="flex justify-end gap-2 pt-2">
-          <Button variant="secondary" onClick={onClose} disabled={pending}>
-            {t('common.cancel')}
-          </Button>
-          <Button type="submit" loading={pending}>
-            {pending ? t('common.saving') : t('admins.invite')}
-          </Button>
-        </div>
       </form>
     </Dialog>
   );
@@ -77,7 +81,14 @@ export function AdminRowActions({ admin }: { admin: { id: string; name: string; 
   const [pending, start] = useTransition();
   return (
     <>
-      <Button variant="ghost" size="sm" onClick={() => (admin.active ? setOpen(true) : start(() => void setAdminActiveAction(admin.id, true)))} loading={pending && !open}>
+      {/* Same treatment as member detail: secondary with danger text; the confirm dialog carries the solid danger button. */}
+      <Button
+        variant="secondary"
+        size="sm"
+        className={admin.active ? 'text-danger-fg hover:text-danger-fg' : undefined}
+        onClick={() => (admin.active ? setOpen(true) : start(() => void setAdminActiveAction(admin.id, true)))}
+        loading={pending && !open}
+      >
         {admin.active ? t('admins.deactivate') : t('admins.reactivate')}
       </Button>
       <ConfirmDialog
