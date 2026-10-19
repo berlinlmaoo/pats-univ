@@ -158,7 +158,7 @@ fun validEventFields(values: Map<String, String>) = runCatching { LocalDate.pars
 }
 @Composable fun EventForm(api: Api, meta: JsonObject, initial: JsonObject?, id: String, go: (String) -> Unit) {
     val baseContext = LocalContext.current; val language = LocalLanguage.current
-    val context = remember(baseContext, language) { android.view.ContextThemeWrapper(baseContext, R.style.PatsTheme).apply { applyOverrideConfiguration(android.content.res.Configuration().apply { setLocale(java.util.Locale.forLanguageTag(language)) }) } }
+    val context = remember(baseContext, language) { android.view.ContextThemeWrapper(baseContext, R.style.PatsTheme).apply { applyOverrideConfiguration(android.content.res.Configuration().apply { setLocale(java.util.Locale.forLanguageTag(if (language == "en") "en-GB" else "id-ID")) }) } }
     val values = remember(initial) { mutableStateMapOf("title" to initial?.text("title").orEmpty(), "description" to initial?.text("description").orEmpty(), "venueId" to initial?.text("venueId").orEmpty(), "date" to (initial?.text("date") ?: LocalDate.now(ZoneId.of(meta.obj("city").text("timezone", "Asia/Jakarta"))).toString()), "startTime" to (initial?.text("startTime") ?: "20:00"), "endTime" to (initial?.text("endTime") ?: "02:00"), "opensBeforeMinutes" to (initial?.text("opensBeforeMinutes") ?: meta.text("opensBeforeMinutes", "60")), "capacity" to initial?.text("capacity").orEmpty()) }
     var publish by remember { mutableStateOf(initial?.flag("publish") ?: true) }; val mutation = rememberMutation(); MutationStatus(mutation)
     Field(tr("events.eventTitle"), values.getValue("title"), { values["title"] = it.take(120) })
