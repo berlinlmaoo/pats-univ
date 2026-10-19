@@ -332,6 +332,9 @@ export function toCssVariables(): string {
   return (
     `:root{${scale}${typeVars}${varsityVars}${colorVars('light')}}` +
     `@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){${colorVars('dark')}}}` +
-    `:root[data-theme="dark"]{${colorVars('dark')}}`
+    `:root[data-theme="dark"]{${colorVars('dark')}}` +
+    // Pages wrapped in [data-pats-theme="light"] (member enrolment) keep the card-front palette in
+    // every system theme. Declared last so it beats both dark rules at equal specificity.
+    `:root:has([data-pats-theme="light"]){${colorVars('light')}}`
   );
 }

@@ -1,4 +1,5 @@
-import type { Metadata } from 'next';
+import { colors } from '@pats/shared/tokens';
+import type { Metadata, Viewport } from 'next';
 import { db } from '@/lib/db';
 import { isDemoOtp } from '@/lib/env';
 import { getT } from '@/lib/i18n';
@@ -9,6 +10,9 @@ export async function generateMetadata(): Promise<Metadata> {
   const t = await getT();
   return { title: { absolute: t('join.metaTitle') }, description: t('join.metaDescription') };
 }
+
+// Enrolment always shows the card-front (light) palette, whatever the system theme.
+export const viewport: Viewport = { themeColor: colors.light.bg };
 
 /** Public registration (PRODUCT.md §4.1 steps 1–4). `?src=` comes from the venue / social QR. */
 export default async function JoinPage({ searchParams }: { searchParams: Promise<{ src?: string | string[] }> }) {
@@ -22,12 +26,14 @@ export default async function JoinPage({ searchParams }: { searchParams: Promise
   const preset = source ? cities.find((c) => source.toUpperCase().startsWith(c.code)) : undefined;
 
   return (
-    <JoinFlow
-      cities={cities}
-      minAge={minAge}
-      source={source}
-      defaultCityId={preset?.id ?? (cities.length === 1 ? cities[0]!.id : '')}
-      demo={isDemoOtp()}
-    />
+    <div data-pats-theme="light" className="contents">
+      <JoinFlow
+        cities={cities}
+        minAge={minAge}
+        source={source}
+        defaultCityId={preset?.id ?? (cities.length === 1 ? cities[0]!.id : '')}
+        demo={isDemoOtp()}
+      />
+    </div>
   );
 }
