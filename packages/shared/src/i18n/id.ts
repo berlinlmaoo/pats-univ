@@ -20,7 +20,8 @@ export const id: DictionaryShape<typeof en> = {
   "saved": "Profil disimpan",
   "reset": "reset {date}",
   "nextEvent": "Event berikutnya",
-  "endedDraw": "Event sudah selesai. Lihat hasil undian tersimpan di bawah."
+  "endedDraw": "Event sudah selesai. Lihat hasil undian tersimpan di bawah.",
+  "hqWeb": "Kelola melalui dashboard HQ"
 },
   ops: {
     datePlaceholder: 'hh/bb/tttt',

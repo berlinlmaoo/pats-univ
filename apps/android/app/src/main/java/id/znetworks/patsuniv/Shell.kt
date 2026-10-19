@@ -81,7 +81,12 @@ import android.app.Activity
                     "tools" -> AdminTools(session, ::go)
                     "scan" -> if (id.isEmpty()) Events(model.api, ::go, language, admin = true, scan = true) else Scan(model.api, reader, id, false, ::go)
                     "manual" -> Scan(model.api, reader, id, true, ::go)
-                    "city-events" -> Events(model.api, ::go, language, admin = true, onCreate = if (session.me.obj("user").obj("city").isNotEmpty()) ({ go("event-new") }) else null)
+                    "city-events" -> {
+                        if (hasCapability(session, "hq.manage")) Action(tr("native.hqWeb"), secondary = true) {
+                            activity.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(model.api.origin.trimEnd('/') + "/events")))
+                        }
+                        Events(model.api, ::go, language, admin = true, onCreate = if (session.me.obj("user").obj("city").isNotEmpty()) ({ go("event-new") }) else null)
+                    }
                     "city-event" -> AdminEventDetail(session, model.api, id, language, ::go)
                     "event-new" -> EventEditor(model.api, "", ::go)
                     "event-edit" -> EventEditor(model.api, id, ::go)
