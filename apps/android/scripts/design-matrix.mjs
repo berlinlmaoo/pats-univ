@@ -7,7 +7,7 @@ if (adb('emu','avd','name').split(/\r?\n/)[0].trim() !== 'Pixel_10_Pro') throw E
 const fixture = JSON.parse(fs.readFileSync(new URL('../.qa/fixtures.json',import.meta.url)));
 const role = process.argv[2] ?? 'member';
 const member = {
-  home:'home', card:'card', events:'events', event:`event/${fixture.activeEventId}`, rewards:'wallet', leaderboard:'leaderboard', claims:'claims', draw:`draw/${fixture.activeEventId}`, history:'history', region:'region-change', roaming:'roaming', reservation:`reservation/${fixture.activeEventId}`, hub:'hub', chat:'channel/phase4-JKT-CHAT', timeline:'channel/phase4-JKT-TIMELINE', reservations:'social-operations', notifications:'notifications', preferences:'notification-settings', profile:'profile', promoter:'promoter',
+  home:'home', card:'card', events:'events', event:`event/${fixture.activeEventId}`, rewards:'wallet', leaderboard:'leaderboard', claims:'claims', draw:`draw/${fixture.activeEventId}`, history:'history', region:'region-change', roaming:'roaming', reservation:`reservation/${fixture.reservationEventId ?? fixture.activeEventId}`, hub:'hub', chat:`channel/${fixture.chatChannelId}`, timeline:`channel/${fixture.timelineChannelId}`, reservations:'social-operations', notifications:'notifications', preferences:'notification-settings', profile:'profile', promoter:'promoter',
 };
 const admin = {
   tools:'tools', scan:'scan', scanner:`scan/${fixture.activeEventId}`, manual:`manual/${fixture.activeEventId}`, events:'city-events', event:`city-event/${fixture.activeEventId}`, create:'event-new', edit:`event-edit/${fixture.activeEventId}`, handover:'handover', members:'member-cards', member:`member-card/${fixture.memberId}`, codes:'reward-validation', claims:'claims-review', operations:'operations', community:'social-operations', encode:'encode', station:'encode-run', crew:'crew', hub:'hub', profile:'profile',
@@ -41,6 +41,10 @@ for(const scheme of ['light','dark']) {
       if(name === 'card') {
         const list=nodes(dump()); tapNode(list.find(n=>n.text === (language === 'en' ? 'Show back':'Lihat belakang')) ?? list.find(n=>n.text.toLowerCase().includes('belakang')));
         await sleep(600); await save(`${role}-${language}-${scheme}-card-back`);
+      }
+      if(process.env.PATS_QA_DETAILS === '1' && name !== 'scanner') {
+        for(let i=0;i<2;i++) adb('shell','input','swipe','640','2250','640','700','250');
+        await sleep(250); await save(`${role}-${language}-${scheme}-${name}-details`);
       }
     }
   }
