@@ -1,5 +1,9 @@
 # Status
 
+Native Android (18 Oct 2026): foundation/member phases complete; admin/NFC implemented and parity checks
+green on `feat/android-native` (18 JVM tests + APK). Final closure awaits the missing Phase 3 review notes.
+Build, emulator evidence and iOS API map: [ANDROID-NATIVE.md](ANDROID-NATIVE.md).
+
 | Fase | Status | Catatan |
 |---|---|---|
 | 0 — Skeleton, auth, registrasi web | **Selesai** (16 Okt 2026) | Rincian, cara demo, dan yang belum: [PHASE0-REPORT.md](PHASE0-REPORT.md) |

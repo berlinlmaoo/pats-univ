@@ -140,6 +140,12 @@ export const fonts = {
  */
 export const varsityStroke = 0.045;
 
+/** Native tab labels remain complete at compact widths and enlarged system text. */
+export const nav = {
+  labelWeight: 700,
+  labelTracking: 0.04,
+} as const;
+
 export const varsity = {
   hero: { size: 40, lineHeight: 44, tracking: 0.02 },
   title: { size: 28, lineHeight: 34, tracking: 0.02 },

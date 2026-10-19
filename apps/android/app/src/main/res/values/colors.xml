@@ -1,0 +1,8 @@
+<resources>
+    <color name="pats_primary">#001836</color>
+    <color name="pats_accent">#001836</color>
+    <color name="pats_on_primary">#fcead8</color>
+    <color name="pats_background">#f1efec</color>
+    <color name="pats_band">#071935</color>
+    <color name="pats_navy">#001836</color>
+</resources>

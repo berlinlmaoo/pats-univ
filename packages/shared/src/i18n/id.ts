@@ -2,6 +2,26 @@ import type { en } from './en';
 import type { DictionaryShape } from './types';
 
 export const id: DictionaryShape<typeof en> = {
+  native: {
+  "retryBody": "Coba lagi atau minta bantuan crew.",
+  "home": "Beranda",
+  "cardAccessibility": "KTM PATS University: {name}, minuman favorit {drink}, genre favorit {genre}",
+  "enlargeQr": "Perbesar QR",
+  "photoPrompt": "Tambah foto supaya crew bisa mencocokkan wajahmu di pintu.",
+  "photoCamera": "Ambil foto",
+  "photoLibrary": "Pilih dari galeri",
+  "photoCrop": "Potong foto",
+  "photoHint": "Geser untuk membingkai wajah. Gunakan slider untuk memperbesar.",
+  "photoPermission": "Izinkan kamera di pengaturan, lalu coba lagi.",
+  "pending": "Menunggu",
+  "history": "Riwayat",
+  "selectChannel": "Pilih channel untuk membaca pesan",
+  "profileEdit": "Edit profil",
+  "saved": "Profil disimpan",
+  "reset": "reset {date}",
+  "nextEvent": "Event berikutnya",
+  "endedDraw": "Event sudah selesai. Lihat hasil undian tersimpan di bawah."
+},
   ops: {
     datePlaceholder: 'hh/bb/tttt',
     pickDate: 'Pilih tanggal',
@@ -851,7 +871,7 @@ export const id: DictionaryShape<typeof en> = {
     unitAdmins: 'admin',
   },
   app: {
-    tabCard: 'Kartu',
+    tabCard: 'KTM',
     tabEvents: 'Event',
     tabRewards: 'Reward',
     tabHub: 'Hub',
