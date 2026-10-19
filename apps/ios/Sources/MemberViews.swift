@@ -5,7 +5,6 @@ struct MemberCardView: View {
     @StateObject private var state = Resource()
     @State private var deadline: QRDeadline?
     @State private var enlarged = false
-    @StateObject private var linkReader = NDEFLinkReader()
     @Environment(\.scenePhase) private var phase
     var body: some View {
         Page(title: "app.cardTitle") {
@@ -28,7 +27,6 @@ struct MemberCardView: View {
                     DetailRow(key: "join.quotes", value: store.member["quotes"].text)
                     DetailRow(key: "app.city", value: store.member["city"]["name"].text)
                 }
-                if linkReader.available { Button(L.t("native.tap"), systemImage: "wave.3.right") { linkReader.complete = { store.open($0) }; linkReader.begin() }.buttonStyle(PATSButtonStyle(variant: .secondary)) }
                 Text(L.t("app.cardQrBody", ["seconds": String(Int(deadline?.ttl ?? 60))])).font(Theme.body(13)).foregroundStyle(Theme.muted)
             } else { Notice(text: L.t("app.noMemberProfile")) }
         }
@@ -43,7 +41,7 @@ struct MemberCardView: View {
             }
         }
         .refreshable { await refresh(); await store.reload() }
-        .onDisappear { if !enlarged { UIApplication.shared.isIdleTimerDisabled = false }; deadline = nil; linkReader.cancel() }
+        .onDisappear { if !enlarged { UIApplication.shared.isIdleTimerDisabled = false }; deadline = nil }
         .onChange(of: phase) { _, value in
             UIApplication.shared.isIdleTimerDisabled = value == .active
             if value != .active { deadline = nil } else { Task { await refresh() } }
