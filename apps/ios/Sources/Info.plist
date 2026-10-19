@@ -38,6 +38,8 @@
 	<string>Scan member QR codes and capture receipts or community photos.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Record voice messages and community videos.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Choose a member photo so venue crew can match your face.</string>
 	<key>PATSDevServerURL</key>
 	<string>$(PATS_DEV_SERVER_URL)</string>
 	<key>UIAppFonts</key>
@@ -49,6 +51,10 @@
 	<array>
 		<string>remote-notification</string>
 	</array>
+	<key>UILaunchStoryboardName</key>
+	<string>LaunchScreen</string>
+	<key>UIStatusBarStyle</key>
+	<string>UIStatusBarStyleLightContent</string>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
@@ -56,13 +62,7 @@
 		<string>UIInterfaceOrientationLandscapeRight</string>
 		<string>UIInterfaceOrientationPortraitUpsideDown</string>
 	</array>
-	<key>UILaunchStoryboardName</key>
-	<string>LaunchScreen</string>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<false/>
-	<key>UIStatusBarStyle</key>
-	<string>UIStatusBarStyleLightContent</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Choose a member photo so venue crew can match your face.</string>
 </dict>
 </plist>
