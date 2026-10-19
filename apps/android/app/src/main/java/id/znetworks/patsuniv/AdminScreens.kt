@@ -126,7 +126,7 @@ import java.time.*
 @Composable fun AdminEventDetail(session: Session, api: Api, id: String, language: String, go: (String) -> Unit) {
     val mutation = rememberMutation(); MutationStatus(mutation); val live = liveVersion(api, "attendance", id)
     Remote(api, "/api/admin/events/$id", refresh = live) { data, reload ->
-        val e = data.obj("event"); Title(e.text("title"), e.obj("city").text("name")); Text(dateTime(e.text("startsAt"), language, e.obj("city").text("timezone", "Asia/Jakarta"))); if (e.text("description").isNotBlank()) Text(e.text("description")); Text(tr("eventPhase." + e.text("phase")))
+        val e = data.obj("event"); Title(e.text("title"), e.obj("city").text("name")); Text(dateTime(e.text("startsAt"), language, e.obj("city").text("timezone", "Asia/Jakarta"))); Text(dateTime(e.text("endsAt"), language, e.obj("city").text("timezone", "Asia/Jakarta"))); CheckInWindow(e, language); if (e.text("description").isNotBlank()) Text(e.text("description")); Badge(tr("eventPhase." + e.text("phase")), e.text("phase"))
         if (session.me.obj("user").obj("city").isNotEmpty()) Action(tr("common.edit"), secondary = true) { go("event-edit/$id") }
         listOf("publish" to "events.actionPublish", "open" to "events.actionOpen", "close" to "events.actionClose").filter { (action, _) -> when(action) { "publish" -> e.text("status") == "DRAFT"; "open" -> e.text("status") != "OPEN" && e.text("phase") != "ended"; else -> e.text("status") == "OPEN" } }.forEach { (action, key) ->
             Decide(tr(key), tr(if (action == "close") "events.closeBody" else if (action == "publish") "events.publishBody" else "events.openBody", "city" to e.obj("city").text("name"), "time" to dateTime(e.text("checkInClosesAt"), language)), !mutation.busy, true, title = tr("events.${action}Title")) { mutation.run { api.request("POST", "/api/admin/events/$id/actions", body("action" to action)); reload() } }
@@ -136,6 +136,14 @@ import java.time.*
     Text(tr("app.adminLive"), style = MaterialTheme.typography.titleLarge)
     Remote(api, "/api/admin/events/$id/attendance", refresh = live, pollMs = 5000) { data, _ ->
         Text(tr("app.attendanceCount", "count" to count(data.number("count"))))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.gap)) {
+            listOf("NFC", "APP_QR", "MANUAL").forEach { method ->
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.small)) {
+                    Badge(tr("checkInMethod.$method"))
+                    Text(count(data.obj("byMethod").number(method)), style = MaterialTheme.typography.titleLarge)
+                }
+            }
+        }
         if (data.rows("entries").isEmpty()) Empty(tr("events.attendanceEmptyTitle"), tr("events.attendanceEmptyBody"))
         data.rows("entries").forEach { row -> Tile { Text(row.obj("member").text("fullName"), style = MaterialTheme.typography.titleMedium); Text(row.obj("member").text("nim")); Text(dateTime(row.text("checkedInAt"), language)); Text(tr("checkInMethod." + row.text("method"))); Text(row.obj("admin").text("name")); if (row.text("manualReason").isNotBlank()) Text(row.text("manualReason")) } }
     }
