@@ -24,6 +24,13 @@ import com.google.zxing.qrcode.QRCodeWriter
 import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
 import kotlinx.serialization.json.*
 
+data class CardValueFit(val scale: Float, val wrap: Boolean)
+fun cardValueFit(available: Float, natural: Float): CardValueFit {
+    val ratio = available / natural.coerceAtLeast(1f)
+    return if (ratio < .6f) CardValueFit((ratio * 1.9f).coerceIn(.42f, .6f), true)
+    else CardValueFit(ratio.coerceAtMost(1f), false)
+}
+
 fun qrMatrix(value: String, onTile: Boolean = false) = QRCodeWriter().encode(value, com.google.zxing.BarcodeFormat.QR_CODE, 0, 0, mapOf(EncodeHintType.ERROR_CORRECTION to ErrorCorrectionLevel.M, EncodeHintType.MARGIN to if(onTile) 0 else 4))
 
 @Composable fun TileQr(value: String, modifier: Modifier = Modifier) {
@@ -66,15 +73,23 @@ fun qrMatrix(value: String, onTile: Boolean = false) = QRCodeWriter().encode(val
                         Canvas(Modifier.fillMaxSize()) {
                             val textView = android.widget.TextView(context).apply { layoutParams = android.view.ViewGroup.LayoutParams(-2,-2); typeface = face; setTextColor(android.graphics.Color.BLACK); letterSpacing = tracking; includeFontPadding = false; setSingleLine(true) }
                             listOf(Triple("fullName", "nameY", "nameMaxW"), Triple("favoriteDrink", "drinkY", "valueMaxW"), Triple("favoriteGenre", "genreY", "valueMaxW")).forEach { (field, y, max) ->
-                                val value = member.text(field).uppercase(java.util.Locale.ROOT)
+                                val value = member.text(field).trim().uppercase(java.util.Locale.ROOT)
+                                textView.setSingleLine(true)
+                                textView.setLineSpacing(0f, 1f)
                                 textView.text = value
                                 val fontPx = size.width * g("valueCap") / capHeight
                                 textView.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, fontPx)
                                 textView.measure(0, 0)
-                                val fit = (size.width * g(max) / textView.measuredWidth.coerceAtLeast(1)).coerceAtMost(1f)
-                                textView.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, fontPx * fit)
-                                textView.measure(0, 0); textView.layout(0, 0, textView.measuredWidth, textView.measuredHeight)
-                                val bounds = android.graphics.Rect(); textView.paint.getTextBounds(value, 0, value.length, bounds)
+                                val fit = cardValueFit(size.width * g(max), textView.measuredWidth.toFloat())
+                                textView.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, fontPx * fit.scale)
+                                textView.setSingleLine(!fit.wrap)
+                                if (fit.wrap) {
+                                    val metrics = textView.paint.fontMetrics
+                                    textView.setLineSpacing(fontPx * fit.scale * 1.04f - (metrics.descent - metrics.ascent), 1f)
+                                }
+                                val widthSpec = if (fit.wrap) android.view.View.MeasureSpec.makeMeasureSpec((size.width * g(max)).toInt(), android.view.View.MeasureSpec.EXACTLY) else 0
+                                textView.measure(widthSpec, 0); textView.layout(0, 0, textView.measuredWidth, textView.measuredHeight)
+                                val bounds = android.graphics.Rect(); textView.paint.getTextBounds(value, 0, textView.layout.getLineEnd(0), bounds)
                                 drawIntoCanvas { val canvas = it.nativeCanvas; canvas.save(); canvas.translate(size.width * g("valueX"), size.height * g(y) - textView.baseline - bounds.top); textView.draw(canvas); canvas.restore() }
                             }
                         }

@@ -17,7 +17,8 @@ export const en = {
   "saved": "Profile saved",
   "reset": "reset {date}",
   "nextEvent": "Next event",
-  "endedDraw": "The event has ended. See the saved draw result below."
+  "endedDraw": "The event has ended. See the saved draw result below.",
+  "hqWeb": "Manage this in the HQ dashboard"
 },
   ops: {
     datePlaceholder: 'dd/mm/yyyy',

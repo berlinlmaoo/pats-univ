@@ -24,8 +24,10 @@ fun validCardLookup(value: String) = cardToken(value) != null || Regex("^[A-Za-z
     val context = androidx.compose.ui.platform.LocalContext.current
     val station = remember { val prefs = context.getSharedPreferences("station", 0); val id = prefs.getString("id", null) ?: java.util.UUID.randomUUID().toString().take(8).also { prefs.edit().putString("id", it).apply() }; (android.os.Build.MODEL.take(40) + " · " + id).take(60) }
     val mutation = rememberMutation(); MutationStatus(mutation)
+    val reports = remember(api.origin, api.userId) { PendingEncodeStore(context.noBackupFilesDir, api.origin, api.userId, KeystoreSessionCipher()) }
+    val restored = remember(reports) { reports.load() }
     var lookup by remember { mutableStateOf(initialLookup) }; var reencode by remember { mutableStateOf(grantId.isNotBlank()) }; var scanning by remember { mutableStateOf(false) }
-    var claim by remember { mutableStateOf<JsonObject?>(null) }; var pending by remember { mutableStateOf<JsonObject?>(null) }; var result by remember { mutableStateOf<JsonObject?>(null) }
+    var claim by remember(reports) { mutableStateOf(restored?.obj("claim")) }; var pending by remember(reports) { mutableStateOf(restored?.obj("report")) }; var result by remember { mutableStateOf<JsonObject?>(null) }
     val latestClaim by rememberUpdatedState(claim); val latestPending by rememberUpdatedState(pending); val latestResult by rememberUpdatedState(result)
     val scope = rememberCoroutineScope()
     suspend fun release(held: JsonObject, failure: String? = null) { if (held.obj("lease").isNotEmpty()) runCatching { api.request("POST", "/api/hq/cards/${held.obj("card").text("id")}/release", JsonObject(body("leaseId" to held.obj("lease").text("id")) + (failure?.let { mapOf("failure" to JsonPrimitive(it)) } ?: emptyMap()))) } }
@@ -34,7 +36,7 @@ fun validCardLookup(value: String) = cardToken(value) != null || Regex("^[A-Za-z
         claim = api.request("POST", "/api/hq/cards/prepare", JsonObject(fields + (if (batchId.isNotBlank()) mapOf("batchId" to JsonPrimitive(batchId)) else emptyMap()) + (if (grantId.isNotBlank()) mapOf("grantId" to JsonPrimitive(grantId)) else emptyMap())))
         scanning = false
     } }
-    suspend fun report(held: JsonObject, data: JsonObject) { result = api.request("POST", "/api/hq/cards/${held.obj("card").text("id")}/encoded", data); pending = null }
+    suspend fun report(held: JsonObject, data: JsonObject) { result = api.request("POST", "/api/hq/cards/${held.obj("card").text("id")}/encoded", data); reports.clear(); pending = null }
     DisposableEffect(Unit) { onDispose { val held = latestClaim; if (held != null && latestPending == null && latestResult == null) scope.launch(NonCancellable + Dispatchers.IO) { release(held) } } }
     LaunchedEffect(initialLookup) { if (initialLookup.isNotBlank() && claim == null) identify(initialLookup) }
     val held = claim
@@ -66,7 +68,7 @@ fun validCardLookup(value: String) = cardToken(value) != null || Regex("^[A-Za-z
                         if (existing != null && !held.text("url").endsWith(existing) && !reencode) throw ApiFailure("UID_IN_USE")
                         val key = api.request("POST", "/api/hq/cards/${held.obj("card").text("id")}/key", body("leaseId" to held.obj("lease").text("id"), "nfcUid" to inspection.uid))
                         val write = Ntag.encode(io, inspection, key.text("url"), unhex(key.text("pwd")), unhex(key.text("pack")))
-                        body("leaseId" to held.obj("lease").text("id"), "nfcUid" to inspection.uid, "protectedNow" to write.protectedNow, "chipType" to inspection.chip.name).also { pending = it }
+                        body("leaseId" to held.obj("lease").text("id"), "nfcUid" to inspection.uid, "protectedNow" to write.protectedNow, "chipType" to inspection.chip.name).also { pending = it; reports.save(held, it) }
                     }
                     report(held, data)
                 } catch(e: CancellationException) { throw e }

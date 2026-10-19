@@ -1,6 +1,6 @@
 package id.znetworks.patsuniv
 
-import android.app.DatePickerDialog
+import android.app.AlertDialog
 import android.app.TimePickerDialog
 import android.content.Intent
 import android.provider.Settings
@@ -51,7 +51,7 @@ import java.time.*
     else if (preview != null) {
         val p = preview!!; Who(api, p.obj("member"))
         val issue = p.obj("issue")
-        if (issue.isNotEmpty()) Notice(when(issue.text("code")) { "ALREADY_CHECKED_IN" -> tr("app.resultAlready", "time" to dateTime(issue.text("checkedInAt")), "admin" to issue.text("byAdmin")); "MEMBER_INACTIVE" -> tr("app.resultInactive"); else -> tr("app.resultOtherCity", "city" to p.obj("member").obj("city").text("name")) }, true)
+        if (issue.isNotEmpty()) Notice(when(issue.text("code")) { "ALREADY_CHECKED_IN" -> tr("app.resultAlready", "time" to dateTime(issue.text("checkedInAt"), LocalLanguage.current), "admin" to issue.text("byAdmin")); "MEMBER_INACTIVE" -> tr("app.resultInactive"); else -> tr("app.resultOtherCity", "city" to p.obj("member").obj("city").text("name")) }, true)
         if (p.flag("roaming")) Notice(tr("app.resultRoaming", "city" to p.obj("member").obj("city").text("name")))
         if (p.flag("capacityReached")) Notice(tr("app.resultCapacity"))
         var remaining by remember(p) { mutableIntStateOf(120) }
@@ -88,7 +88,7 @@ import java.time.*
     else if (preview != null) {
         val p = preview!!; Who(api, p.obj("member")); Text(tr("cardStatus." + p.obj("card").text("status")))
         if (p.obj("issue").isEmpty()) { Text(tr("app.handoverCheck")); Action(tr("app.handoverConfirm"), !mutation.busy) { mutation.run { api.request("POST", "/api/admin/cards/handover", input); done = true } } }
-        else Notice(when(p.obj("issue").text("code")) { "ALREADY_DELIVERED" -> tr("app.handoverAlready", "date" to dateTime(p.obj("issue").text("at")), "name" to p.obj("issue").text("by")); "OTHER_CITY" -> tr("app.handoverOtherCity", "city" to p.obj("member").obj("city").text("name")); else -> tr("app.resultInactive") }, true)
+        else Notice(when(p.obj("issue").text("code")) { "ALREADY_DELIVERED" -> tr("app.handoverAlready", "date" to dateTime(p.obj("issue").text("at"), LocalLanguage.current), "name" to p.obj("issue").text("by")); "OTHER_CITY" -> tr("app.handoverOtherCity", "city" to p.obj("member").obj("city").text("name")); else -> tr("app.resultInactive") }, true)
         Action(tr("app.handoverAgain"), !mutation.busy, true) { preview = null; input = null }
     } else NfcAction(reader, "app.handoverTap", mutation.busy) { mutation.run {
         val tag = reader.withTag { Ntag.inspect(it) }; val token = cardToken(tag.url.orEmpty()) ?: throw ApiFailure("CARD_INVALID")
@@ -126,7 +126,7 @@ import java.time.*
 @Composable fun AdminEventDetail(session: Session, api: Api, id: String, language: String, go: (String) -> Unit) {
     val mutation = rememberMutation(); MutationStatus(mutation); val live = liveVersion(api, "attendance", id)
     Remote(api, "/api/admin/events/$id", refresh = live) { data, reload ->
-        val e = data.obj("event"); Title(e.text("title"), e.obj("city").text("name")); Text(dateTime(e.text("startsAt"), language, e.obj("city").text("timezone", "Asia/Jakarta"))); if (e.text("description").isNotBlank()) Text(e.text("description")); Text(tr("eventPhase." + e.text("phase")))
+        val e = data.obj("event"); Title(e.text("title"), e.obj("city").text("name")); Text(dateTime(e.text("startsAt"), language, e.obj("city").text("timezone", "Asia/Jakarta"))); Text(dateTime(e.text("endsAt"), language, e.obj("city").text("timezone", "Asia/Jakarta"))); CheckInWindow(e, language); if (e.text("description").isNotBlank()) Text(e.text("description")); Badge(tr("eventPhase." + e.text("phase")), e.text("phase"))
         if (session.me.obj("user").obj("city").isNotEmpty()) Action(tr("common.edit"), secondary = true) { go("event-edit/$id") }
         listOf("publish" to "events.actionPublish", "open" to "events.actionOpen", "close" to "events.actionClose").filter { (action, _) -> when(action) { "publish" -> e.text("status") == "DRAFT"; "open" -> e.text("status") != "OPEN" && e.text("phase") != "ended"; else -> e.text("status") == "OPEN" } }.forEach { (action, key) ->
             Decide(tr(key), tr(if (action == "close") "events.closeBody" else if (action == "publish") "events.publishBody" else "events.openBody", "city" to e.obj("city").text("name"), "time" to dateTime(e.text("checkInClosesAt"), language)), !mutation.busy, true, title = tr("events.${action}Title")) { mutation.run { api.request("POST", "/api/admin/events/$id/actions", body("action" to action)); reload() } }
@@ -136,11 +136,40 @@ import java.time.*
     Text(tr("app.adminLive"), style = MaterialTheme.typography.titleLarge)
     Remote(api, "/api/admin/events/$id/attendance", refresh = live, pollMs = 5000) { data, _ ->
         Text(tr("app.attendanceCount", "count" to count(data.number("count"))))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.gap)) {
+            listOf("NFC", "APP_QR", "MANUAL").forEach { method ->
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.small)) {
+                    Badge(tr("checkInMethod.$method"))
+                    Text(count(data.obj("byMethod").number(method)), style = MaterialTheme.typography.titleLarge)
+                }
+            }
+        }
         if (data.rows("entries").isEmpty()) Empty(tr("events.attendanceEmptyTitle"), tr("events.attendanceEmptyBody"))
         data.rows("entries").forEach { row -> Tile { Text(row.obj("member").text("fullName"), style = MaterialTheme.typography.titleMedium); Text(row.obj("member").text("nim")); Text(dateTime(row.text("checkedInAt"), language)); Text(tr("checkInMethod." + row.text("method"))); Text(row.obj("admin").text("name")); if (row.text("manualReason").isNotBlank()) Text(row.text("manualReason")) } }
     }
 }
 fun validEventFields(values: Map<String, String>) = runCatching { LocalDate.parse(values.getValue("date")); LocalTime.parse(values.getValue("startTime")); LocalTime.parse(values.getValue("endTime")); values.getValue("title").trim().length in 2..120 && values.getOrDefault("description", "").length <= 2000 && values.getValue("opensBeforeMinutes").toInt() in 0..720 && (values.getValue("capacity").isBlank() || values.getValue("capacity").toInt() in 1..100000) }.getOrDefault(false)
+// The platform DatePicker can retain the device's month-first order despite a localized context.
+// Public NumberPickers keep the required day/month/year order without private framework IDs.
+fun showEventDatePicker(context: android.content.Context, date: LocalDate, language: String, title: String, labels: List<String>, save: String, cancel: String, selected: (LocalDate) -> Unit) {
+    val day = android.widget.NumberPicker(context).apply { minValue = 1; maxValue = date.lengthOfMonth(); value = date.dayOfMonth }
+    val month = android.widget.NumberPicker(context).apply { minValue = 1; maxValue = 12; displayedValues = java.text.DateFormatSymbols(java.util.Locale.forLanguageTag(language)).shortMonths.take(12).toTypedArray(); value = date.monthValue }
+    val year = android.widget.NumberPicker(context).apply { minValue = minOf(1900, date.year); maxValue = maxOf(2100, date.year); value = date.year }
+    fun clampDay() { val maximum = YearMonth.of(year.value, month.value).lengthOfMonth(); if(day.value > maximum) day.value = maximum; day.maxValue = maximum }
+    month.setOnValueChangedListener { _, _, _ -> clampDay() }; year.setOnValueChangedListener { _, _, _ -> clampDay() }
+    val row = android.widget.LinearLayout(context).apply { orientation = android.widget.LinearLayout.HORIZONTAL }
+    listOf(day, month, year).forEachIndexed { index, picker ->
+        picker.contentDescription = labels[index]
+        row.addView(android.widget.LinearLayout(context).apply {
+            orientation = android.widget.LinearLayout.VERTICAL; gravity = android.view.Gravity.CENTER_HORIZONTAL
+            addView(android.widget.TextView(context).apply { text = labels[index]; gravity = android.view.Gravity.CENTER })
+            addView(picker)
+        }, android.widget.LinearLayout.LayoutParams(0, android.view.ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+    }
+    AlertDialog.Builder(context).setTitle(title).setView(row).setPositiveButton(save) { _, _ ->
+        row.clearFocus(); selected(LocalDate.of(year.value, month.value, day.value))
+    }.setNegativeButton(cancel, null).show()
+}
 @Composable fun EventEditor(api: Api, id: String, go: (String) -> Unit) {
     Title(tr(if (id.isEmpty()) "events.create" else "events.editTitle"))
     Remote(api, "/api/admin/event-form") { meta, _ ->
@@ -150,12 +179,15 @@ fun validEventFields(values: Map<String, String>) = runCatching { LocalDate.pars
 }
 @Composable fun EventForm(api: Api, meta: JsonObject, initial: JsonObject?, id: String, go: (String) -> Unit) {
     val baseContext = LocalContext.current; val language = LocalLanguage.current
-    val context = remember(baseContext, language) { android.view.ContextThemeWrapper(baseContext, R.style.PatsTheme).apply { applyOverrideConfiguration(android.content.res.Configuration().apply { setLocale(java.util.Locale.forLanguageTag(language)) }) } }
+    val context = remember(baseContext, language) { android.view.ContextThemeWrapper(baseContext, R.style.PatsTheme).apply { applyOverrideConfiguration(android.content.res.Configuration().apply { setLocale(java.util.Locale.forLanguageTag(if (language == "en") "en-GB" else "id-ID")) }) } }
     val values = remember(initial) { mutableStateMapOf("title" to initial?.text("title").orEmpty(), "description" to initial?.text("description").orEmpty(), "venueId" to initial?.text("venueId").orEmpty(), "date" to (initial?.text("date") ?: LocalDate.now(ZoneId.of(meta.obj("city").text("timezone", "Asia/Jakarta"))).toString()), "startTime" to (initial?.text("startTime") ?: "20:00"), "endTime" to (initial?.text("endTime") ?: "02:00"), "opensBeforeMinutes" to (initial?.text("opensBeforeMinutes") ?: meta.text("opensBeforeMinutes", "60")), "capacity" to initial?.text("capacity").orEmpty()) }
     var publish by remember { mutableStateOf(initial?.flag("publish") ?: true) }; val mutation = rememberMutation(); MutationStatus(mutation)
     Field(tr("events.eventTitle"), values.getValue("title"), { values["title"] = it.take(120) })
     val date = LocalDate.parse(values.getValue("date"))
-    Action(tr("events.date") + ": " + date.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy")), secondary = true) { DatePickerDialog(context, { _, y, m, d -> values["date"] = "%04d-%02d-%02d".format(y, m + 1, d) }, date.year, date.monthValue - 1, date.dayOfMonth).show() }
+    val dateTitle = tr("events.date") + " · " + tr("ops.datePlaceholder")
+    val dateLabels = listOf(tr("join.dobDay"), tr("join.dobMonth"), tr("join.dobYear"))
+    val saveDate = tr("common.save"); val cancelDate = tr("common.cancel")
+    Action(tr("events.date") + ": " + date.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy")), secondary = true) { showEventDatePicker(context, date, language, dateTitle, dateLabels, saveDate, cancelDate) { values["date"] = it.toString() } }
     listOf("startTime", "endTime").forEach { key -> val time = LocalTime.parse(values.getValue(key)); Action(tr("events.$key") + " (" + zoneLabel(meta.obj("city").text("timezone", "Asia/Jakarta")) + "): " + values.getValue(key).replace(':', '.'), secondary = true) { TimePickerDialog(context, { _, h, m -> values[key] = "%02d:%02d".format(h, m) }, time.hour, time.minute, true).show() } }
     Text(tr("events.endHint"), style = MaterialTheme.typography.bodySmall)
     Choices(tr("events.venue"), listOf("" to tr("app.eventFormVenueNone")) + meta.rows("venues").map { it.text("id") to it.text("name") }, values.getValue("venueId")) { values["venueId"] = it }
