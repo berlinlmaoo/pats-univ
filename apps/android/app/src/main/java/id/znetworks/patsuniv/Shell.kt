@@ -66,7 +66,7 @@ import android.app.Activity
                     "event" -> EventDetail(model.api, id, language, ::go)
                     "history" -> History(model.api, language)
                     "wallet" -> Wallet(session, model.api, language, ::go)
-                    "leaderboard" -> Leaderboard(model.api, language)
+                    "leaderboard" -> Leaderboard(model.api, language, session.me.obj("member").obj("city").text("id"))
                     "claims", "promoter" -> Claims(session, model.api)
                     "draw" -> Draw(session, model.api, id, language)
                     "region-change" -> RegionChange(model.api)

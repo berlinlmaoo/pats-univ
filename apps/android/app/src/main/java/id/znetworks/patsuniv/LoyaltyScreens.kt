@@ -95,12 +95,13 @@ import java.time.Instant
     }
 }
 }
-@Composable fun Leaderboard(api: Api, language: String) {
+@Composable fun Leaderboard(api: Api, language: String, homeCityId: String) {
     Title(tr("loyalty.leaderboard"), tr("loyalty.earned"))
-    var city by remember { mutableStateOf("") }; var month by remember { mutableStateOf("") }; var appliedMonth by remember { mutableStateOf("") }; var event by remember { mutableStateOf("") }
-    Remote(api, "/api/loyalty/leaderboard?cityId=${query(city)}&month=${query(appliedMonth)}&eventId=${query(event)}") { data, reload ->
-        Tabs(listOf("city" to tr("loyalty.city"), "national" to tr("loyalty.national")), if(city.isBlank()) "national" else "city") { city = if(it == "national") "" else data.rows("cities").firstOrNull()?.text("id").orEmpty() }
-        if(city.isNotBlank()) Choices(tr("loyalty.city"), data.rows("cities").map { it.text("id") to it.text("name") },city) { city = it }
+    var city by remember(homeCityId) { mutableStateOf(homeCityId) }; var national by remember(homeCityId) { mutableStateOf(homeCityId.isBlank()) }
+    var month by remember { mutableStateOf("") }; var appliedMonth by remember { mutableStateOf("") }; var event by remember { mutableStateOf("") }
+    Remote(api, "/api/loyalty/leaderboard?cityId=${query(if(national) "" else city)}&month=${query(appliedMonth)}&eventId=${query(event)}") { data, reload ->
+        Tabs(listOf("city" to tr("loyalty.city"), "national" to tr("loyalty.national")), if(national) "national" else "city") { national = it == "national"; if(!national && city.isBlank()) city = data.rows("cities").firstOrNull()?.text("id").orEmpty() }
+        if(!national) Choices(tr("loyalty.city"), data.rows("cities").map { it.text("id") to it.text("name") },city) { city = it }
         if(data.text("periodStart").isNotEmpty()) Text(leaderboardPeriod(data,language), color = tone("goldText"), style = MaterialTheme.typography.bodySmall)
         if (data.text("mode") in setOf("MONTHLY", "QUARTERLY")) { Field(tr("loyalty.month"), month, { month = it }); Action(tr("loyalty.apply"), month.isBlank() || Regex("^\\d{4}-(0[1-9]|1[0-2])$").matches(month), true) { appliedMonth = month } }
         if (data.text("mode") == "EVENT") Choices(tr("loyalty.event"), data.rows("events").map { it.text("id") to it.text("title") }, event) { event = it }
@@ -148,9 +149,19 @@ import java.time.Instant
         if(visibleClaims.isEmpty()) Empty(tr("phase5.claimEmpty"), tr("phase5.claimBody"))
         visibleClaims.forEach { c -> Tile {
             Text(c.obj("event").text("title"), style = MaterialTheme.typography.titleMedium); Text(tr(if (c.text("formType") == "PR") "phase5.claimPr" else "phase5.claimMember") + " · " + tr("social." + c.text("status")))
+            if (c.text("notes").isNotBlank()) Text(c.text("notes"))
             Text(tr("phase5.guestCount") + ": " + count(c.number("guestCount"))); Text(tr("phase5.reservationCount") + ": " + count(c.number("reservationCount")))
             if (c["bonusValue"] != null && c["bonusValue"] != JsonNull) Text(count(c.number("bonusValue")) + " XP")
             if (c.text("rejectReason").isNotBlank()) Notice(c.text("rejectReason"), true)
+            if (c.text("receiptUrl").isNotBlank()) {
+                var viewedReceipt by remember(c.text("id")) { mutableStateOf("") }
+                val receiptMutation = rememberMutation()
+                Action(tr("loyalty.viewReceipt"), !receiptMutation.busy, true) { receiptMutation.run {
+                    viewedReceipt = api.request("GET", "/api/loyalty/claims/${c.text("id")}/receipt?format=json").text("url")
+                } }
+                MutationStatus(receiptMutation)
+                if (viewedReceipt.isNotBlank()) NetworkImage(api, viewedReceipt)
+            }
             if (c.text("status") == "PENDING") Action(tr("common.edit"), secondary = true) { editing = c; eventId = c.text("eventId"); form = c.text("formType"); guests = c.text("guestCount"); reservations = c.text("reservationCount"); receipt = c.text("receiptUrl"); notes = c.text("notes") }
         } }
     }
