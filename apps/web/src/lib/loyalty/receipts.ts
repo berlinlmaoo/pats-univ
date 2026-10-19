@@ -20,7 +20,7 @@ type SignOptions = {
   contentType?: ReceiptContentType;
 };
 
-const keyPattern = /^receipts\/[a-z0-9]+\/[a-f0-9-]+\.(jpg|png|webp)$/;
+const keyPattern = /^receipts\/[a-z0-9-]+\/[a-f0-9-]+\.(jpg|png|webp)$/;
 
 function checkedKey(key: string) {
   if (!keyPattern.test(key)) throw new AppError('NOT_FOUND', 404);
