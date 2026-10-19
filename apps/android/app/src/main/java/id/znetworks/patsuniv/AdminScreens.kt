@@ -1,6 +1,6 @@
 package id.znetworks.patsuniv
 
-import android.app.DatePickerDialog
+import android.app.AlertDialog
 import android.app.TimePickerDialog
 import android.content.Intent
 import android.provider.Settings
@@ -149,6 +149,27 @@ import java.time.*
     }
 }
 fun validEventFields(values: Map<String, String>) = runCatching { LocalDate.parse(values.getValue("date")); LocalTime.parse(values.getValue("startTime")); LocalTime.parse(values.getValue("endTime")); values.getValue("title").trim().length in 2..120 && values.getOrDefault("description", "").length <= 2000 && values.getValue("opensBeforeMinutes").toInt() in 0..720 && (values.getValue("capacity").isBlank() || values.getValue("capacity").toInt() in 1..100000) }.getOrDefault(false)
+// The platform DatePicker can retain the device's month-first order despite a localized context.
+// Public NumberPickers keep the required day/month/year order without private framework IDs.
+fun showEventDatePicker(context: android.content.Context, date: LocalDate, language: String, title: String, labels: List<String>, save: String, cancel: String, selected: (LocalDate) -> Unit) {
+    val day = android.widget.NumberPicker(context).apply { minValue = 1; maxValue = date.lengthOfMonth(); value = date.dayOfMonth }
+    val month = android.widget.NumberPicker(context).apply { minValue = 1; maxValue = 12; displayedValues = java.text.DateFormatSymbols(java.util.Locale.forLanguageTag(language)).shortMonths.take(12).toTypedArray(); value = date.monthValue }
+    val year = android.widget.NumberPicker(context).apply { minValue = minOf(1900, date.year); maxValue = maxOf(2100, date.year); value = date.year }
+    fun clampDay() { val maximum = YearMonth.of(year.value, month.value).lengthOfMonth(); if(day.value > maximum) day.value = maximum; day.maxValue = maximum }
+    month.setOnValueChangedListener { _, _, _ -> clampDay() }; year.setOnValueChangedListener { _, _, _ -> clampDay() }
+    val row = android.widget.LinearLayout(context).apply { orientation = android.widget.LinearLayout.HORIZONTAL }
+    listOf(day, month, year).forEachIndexed { index, picker ->
+        picker.contentDescription = labels[index]
+        row.addView(android.widget.LinearLayout(context).apply {
+            orientation = android.widget.LinearLayout.VERTICAL; gravity = android.view.Gravity.CENTER_HORIZONTAL
+            addView(android.widget.TextView(context).apply { text = labels[index]; gravity = android.view.Gravity.CENTER })
+            addView(picker)
+        }, android.widget.LinearLayout.LayoutParams(0, android.view.ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+    }
+    AlertDialog.Builder(context).setTitle(title).setView(row).setPositiveButton(save) { _, _ ->
+        row.clearFocus(); selected(LocalDate.of(year.value, month.value, day.value))
+    }.setNegativeButton(cancel, null).show()
+}
 @Composable fun EventEditor(api: Api, id: String, go: (String) -> Unit) {
     Title(tr(if (id.isEmpty()) "events.create" else "events.editTitle"))
     Remote(api, "/api/admin/event-form") { meta, _ ->
@@ -163,7 +184,10 @@ fun validEventFields(values: Map<String, String>) = runCatching { LocalDate.pars
     var publish by remember { mutableStateOf(initial?.flag("publish") ?: true) }; val mutation = rememberMutation(); MutationStatus(mutation)
     Field(tr("events.eventTitle"), values.getValue("title"), { values["title"] = it.take(120) })
     val date = LocalDate.parse(values.getValue("date"))
-    Action(tr("events.date") + ": " + date.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy")), secondary = true) { DatePickerDialog(context, { _, y, m, d -> values["date"] = "%04d-%02d-%02d".format(y, m + 1, d) }, date.year, date.monthValue - 1, date.dayOfMonth).show() }
+    val dateTitle = tr("events.date") + " · " + tr("ops.datePlaceholder")
+    val dateLabels = listOf(tr("join.dobDay"), tr("join.dobMonth"), tr("join.dobYear"))
+    val saveDate = tr("common.save"); val cancelDate = tr("common.cancel")
+    Action(tr("events.date") + ": " + date.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy")), secondary = true) { showEventDatePicker(context, date, language, dateTitle, dateLabels, saveDate, cancelDate) { values["date"] = it.toString() } }
     listOf("startTime", "endTime").forEach { key -> val time = LocalTime.parse(values.getValue(key)); Action(tr("events.$key") + " (" + zoneLabel(meta.obj("city").text("timezone", "Asia/Jakarta")) + "): " + values.getValue(key).replace(':', '.'), secondary = true) { TimePickerDialog(context, { _, h, m -> values[key] = "%02d:%02d".format(h, m) }, time.hour, time.minute, true).show() } }
     Text(tr("events.endHint"), style = MaterialTheme.typography.bodySmall)
     Choices(tr("events.venue"), listOf("" to tr("app.eventFormVenueNone")) + meta.rows("venues").map { it.text("id") to it.text("name") }, values.getValue("venueId")) { values["venueId"] = it }
