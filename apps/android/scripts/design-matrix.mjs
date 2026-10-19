@@ -14,6 +14,8 @@ const admin = {
 };
 const dir = process.env.PATS_SHOTS ?? 'C:/Users/Berlin/Documents/Dev/pats-shots/design-18oct';
 process.env.PATS_SHOTS = dir; fs.mkdirSync(dir,{recursive:true});
+const dictionaries = ['en','id'].map(language => JSON.parse(fs.readFileSync(new URL(`../app/src/main/assets/${language}.json`,import.meta.url))));
+const failures = dictionaries.flatMap(dictionary => ['network','generic','notFound','forbidden'].map(key => dictionary.errors[key]));
 async function navigate(route) {
   adb('shell','am','start','-W','-n','id.znetworks.patsuniv/.MainActivity','--es','qaRoute',route,'--ez','qaCapture','true');
   await sleep(950);
@@ -21,6 +23,13 @@ async function navigate(route) {
 async function save(name) {
   let xml = dump();
   for(let i=0;i<3 && nodes(xml).some(n=>n['content-desc'] === 'Loading…' || n['content-desc'] === 'Memuat…');i++) {await sleep(500); xml=dump();}
+  for(let attempt=0;attempt<3 && nodes(xml).some(n=>failures.includes(n.text));attempt++) {
+    const retry = nodes(xml).find(n=>dictionaries.some(dictionary=>n.text === dictionary.common.retry));
+    if(retry) tapNode(retry);
+    else adb('shell','input','swipe','640','650','640','2200','400');
+    await sleep(1200); xml=dump();
+  }
+  if(nodes(xml).some(n=>failures.includes(n.text))) throw Error('Request did not recover: '+name);
   if(!xml.includes('id.znetworks.patsuniv')) throw Error('App is not visible: '+name);
   if(!nodes(xml).some(n=>n.text === 'ADMIN' || n.text === 'BERANDA' || n.text === 'HOME')) throw Error('Authenticated shell is missing: '+name);
   const missing = nodes(xml).filter(n=>/^(?:native|app|social|loyalty|events|phase5|common|errors)\.[A-Za-z]/.test(n.text));
@@ -31,8 +40,10 @@ async function save(name) {
 }
 const only = process.argv.slice(3);
 for(const scheme of ['light','dark']) {
+  if(process.env.PATS_QA_SCHEME && process.env.PATS_QA_SCHEME !== scheme) continue;
   adb('shell','cmd','uimode','night',scheme === 'dark' ? 'yes':'no'); await sleep(600);
   for(const language of ['en','id']) {
+    if(process.env.PATS_QA_LANGUAGE && process.env.PATS_QA_LANGUAGE !== language) continue;
     await navigate(role === 'member' ? 'home':'tools');
     tapNode(nodes(dump()).find(n=>n.text === language.toUpperCase())); await sleep(500);
     for(const [name,route] of Object.entries(role === 'member' ? member:admin)) {
