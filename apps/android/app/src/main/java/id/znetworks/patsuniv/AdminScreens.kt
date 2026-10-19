@@ -51,7 +51,7 @@ import java.time.*
     else if (preview != null) {
         val p = preview!!; Who(api, p.obj("member"))
         val issue = p.obj("issue")
-        if (issue.isNotEmpty()) Notice(when(issue.text("code")) { "ALREADY_CHECKED_IN" -> tr("app.resultAlready", "time" to dateTime(issue.text("checkedInAt")), "admin" to issue.text("byAdmin")); "MEMBER_INACTIVE" -> tr("app.resultInactive"); else -> tr("app.resultOtherCity", "city" to p.obj("member").obj("city").text("name")) }, true)
+        if (issue.isNotEmpty()) Notice(when(issue.text("code")) { "ALREADY_CHECKED_IN" -> tr("app.resultAlready", "time" to dateTime(issue.text("checkedInAt"), LocalLanguage.current), "admin" to issue.text("byAdmin")); "MEMBER_INACTIVE" -> tr("app.resultInactive"); else -> tr("app.resultOtherCity", "city" to p.obj("member").obj("city").text("name")) }, true)
         if (p.flag("roaming")) Notice(tr("app.resultRoaming", "city" to p.obj("member").obj("city").text("name")))
         if (p.flag("capacityReached")) Notice(tr("app.resultCapacity"))
         var remaining by remember(p) { mutableIntStateOf(120) }
@@ -88,7 +88,7 @@ import java.time.*
     else if (preview != null) {
         val p = preview!!; Who(api, p.obj("member")); Text(tr("cardStatus." + p.obj("card").text("status")))
         if (p.obj("issue").isEmpty()) { Text(tr("app.handoverCheck")); Action(tr("app.handoverConfirm"), !mutation.busy) { mutation.run { api.request("POST", "/api/admin/cards/handover", input); done = true } } }
-        else Notice(when(p.obj("issue").text("code")) { "ALREADY_DELIVERED" -> tr("app.handoverAlready", "date" to dateTime(p.obj("issue").text("at")), "name" to p.obj("issue").text("by")); "OTHER_CITY" -> tr("app.handoverOtherCity", "city" to p.obj("member").obj("city").text("name")); else -> tr("app.resultInactive") }, true)
+        else Notice(when(p.obj("issue").text("code")) { "ALREADY_DELIVERED" -> tr("app.handoverAlready", "date" to dateTime(p.obj("issue").text("at"), LocalLanguage.current), "name" to p.obj("issue").text("by")); "OTHER_CITY" -> tr("app.handoverOtherCity", "city" to p.obj("member").obj("city").text("name")); else -> tr("app.resultInactive") }, true)
         Action(tr("app.handoverAgain"), !mutation.busy, true) { preview = null; input = null }
     } else NfcAction(reader, "app.handoverTap", mutation.busy) { mutation.run {
         val tag = reader.withTag { Ntag.inspect(it) }; val token = cardToken(tag.url.orEmpty()) ?: throw ApiFailure("CARD_INVALID")
