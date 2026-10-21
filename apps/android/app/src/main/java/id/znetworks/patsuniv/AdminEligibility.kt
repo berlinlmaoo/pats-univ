@@ -30,4 +30,3 @@ fun usableRepairGrant(request: JsonObject, now: Instant = Instant.now()): Boolea
 fun claimReviewPayload(id: String, decision: String, guests: String, reservations: String, reason: String): JsonObject =
     JsonObject(body("id" to id, "decision" to decision, "reason" to reason.trim()) +
         if (decision == "APPROVED") mapOf("guestCount" to JsonPrimitive(guests.toInt()), "reservationCount" to JsonPrimitive(reservations.toInt())) else emptyMap())
-

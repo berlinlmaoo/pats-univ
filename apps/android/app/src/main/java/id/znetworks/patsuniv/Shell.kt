@@ -43,7 +43,7 @@ import androidx.compose.ui.unit.dp
     }
     fun navigate(next: String) {
         val need = operationalCapability(next)
-        if (need != null && hasCapability(session, need) && !adminMode) { pendingAdminRoute = next; return }
+        if (need != null && staff && hasCapability(session, need) && !adminMode) { pendingAdminRoute = next; return }
         if (next != route) { stack.add(route); tabLocations[routeTab(route)] = route; route = next }
     }
     fun back() { route = if (stack.isEmpty()) "home" else stack.removeAt(stack.lastIndex) }
@@ -70,7 +70,7 @@ import androidx.compose.ui.unit.dp
                 LanguageToggle(language, true, setLanguage)
             }
             Box(Modifier.fillMaxWidth().height(3.dp).background(tone("gold")))
-            if (adminMode) Row(Modifier.fillMaxWidth().background(tone("band")).padding(horizontal = Space.page), verticalAlignment = Alignment.CenterVertically) {
+            if (adminMode && staff) Row(Modifier.fillMaxWidth().background(tone("band")).padding(horizontal = Space.page), verticalAlignment = Alignment.CenterVertically) {
                 Text(scope, Modifier.weight(1f), color = tone("bandText"), style = MaterialTheme.typography.bodySmall)
                 TextButton({ setMode(false) }) { Text(tr("uxShell.exitAdmin"), color = tone("bandText")) }
             }
@@ -83,7 +83,7 @@ import androidx.compose.ui.unit.dp
                         val kind = route.substringBefore('/'); val id = route.substringAfter('/', "")
                         val need = operationalCapability(route)
                         val personalOnly = kind in setOf("wallet", "claims", "promoter", "region-change", "roaming", "reservation", "history", "profile-edit", "membership-settings")
-                        val denied = (need != null && (!hasCapability(session, need) || !adminMode)) || (personalOnly && !hasPersonalMembership(session))
+                        val denied = (need != null && (!hasCapability(session, need) || !adminMode || !staff)) || (personalOnly && !hasPersonalMembership(session))
                         if (denied) Notice(tr("errors.forbidden"), true) else when (kind) {
                             "home" -> MemberHome(session, model.api, ::navigate)
                             "card" -> MemberCard(session, model.api, ::navigate)

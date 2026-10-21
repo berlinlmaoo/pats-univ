@@ -78,6 +78,7 @@ import androidx.compose.ui.platform.LocalContext
         Action(tr("uxShell.pendingClaims", "count" to count(data.rows("claims").count { it.text("status") == "PENDING" })), secondary = true) { go("claims-review") }
     }
     Remote(api, "/api/social/operations", pollMs = 30_000) { data, _ ->
+        SectionLabel(tr("uxShell.recentQueues"))
         if (hasCapability(session, "hq.manage")) Notice(tr("uxShell.queuesAllCities"))
         Action(tr("uxShell.pendingBookings", "count" to count(data.rows("reservations").count { it.text("status") == "PENDING" })), secondary = true) { go("event-reservations") }
         Action(tr("uxShell.pendingAttendance", "count" to count(data.rows("roaming").count { it.text("status") == "PENDING" && it.text("type") == "ATTENDANCE" })), secondary = true) { go("event-roaming") }

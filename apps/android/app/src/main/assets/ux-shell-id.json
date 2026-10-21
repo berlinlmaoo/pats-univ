@@ -68,6 +68,7 @@
     "queuesAllCities": "Antrean tugas dari semua kota yang diizinkan",
     "pendingAttendance": "{count} permintaan akses event menunggu",
     "pendingHub": "{count} permintaan akses komunitas menunggu",
-    "dashboard": "Buka dashboard HQ"
+    "dashboard": "Buka dashboard HQ",
+    "recentQueues": "Tugas terbaru yang menunggu"
   }
 }

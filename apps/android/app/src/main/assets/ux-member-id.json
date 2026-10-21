@@ -59,7 +59,7 @@
     "viewedStep": "Dilihat",
     "journeyStart": "Ketuk setiap langkah event kamu. Status check-in selalu berasal dari konfirmasi kru.",
     "chooseEvent": "Pilih event ini",
-    "reservationBonus": "Reservasi meja atau sofa jika diperlukan. Kontribusi yang memenuhi syarat dapat memperoleh bonus XP setelah ditinjau kru; pemesanan saja tidak memberikan poin.",
+    "reservationBonus": "Check-in kepada crew dengan reservasi meja atau sofa yang sudah dikonfirmasi untuk mendapat bonus reservasi sesuai ketentuan. Permintaan yang masih menunggu belum mendapat bonus.",
     "reservationEnded": "Event sudah selesai; reservasi baru ditutup.",
     "continueCheckIn": "Lanjut ke check-in",
     "viewOutcome": "Lihat hasil langkah event",

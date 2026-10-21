@@ -59,7 +59,7 @@
     "viewedStep": "Viewed",
     "journeyStart": "Tap through your event steps. Check-in status always comes from crew confirmation.",
     "chooseEvent": "Choose this event",
-    "reservationBonus": "Reserve a table or sofa if you need one. Qualifying contributions can earn bonus XP after crew review; booking alone does not award points.",
+    "reservationBonus": "Check in with crew with a confirmed table or sofa reservation to receive the configured reservation bonus. A pending request does not earn it.",
     "reservationEnded": "This event has ended; new reservations are closed.",
     "continueCheckIn": "Continue to check-in",
     "viewOutcome": "View completed journey",

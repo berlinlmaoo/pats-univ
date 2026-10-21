@@ -68,6 +68,7 @@
     "queuesAllCities": "Work queues across all authorized cities",
     "pendingAttendance": "{count} pending event-access requests",
     "pendingHub": "{count} pending community-access requests",
-    "dashboard": "Open HQ dashboard"
+    "dashboard": "Open HQ dashboard",
+    "recentQueues": "Recent pending work"
   }
 }
