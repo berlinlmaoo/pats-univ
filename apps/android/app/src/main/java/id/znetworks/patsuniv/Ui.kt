@@ -32,6 +32,7 @@ private class PageRefresh {
     fun finished(epoch: Int) { if (epoch == version) { pending--; if (pending <= 0) refreshing = false } }
 }
 private val LocalPageRefresh = staticCompositionLocalOf<PageRefresh?> { null }
+val LocalRequestSucceeded = staticCompositionLocalOf<() -> Unit> { {} }
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable fun Page(onRefresh: (suspend () -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) {
     val refresh = remember { PageRefresh() }
@@ -97,19 +98,20 @@ private val RupiahInput = androidx.compose.ui.text.input.VisualTransformation { 
     AlertDialog(onDismissRequest = onDismiss, title = { Text(title) }, text = { Text(message) }, confirmButton = { TextButton(onConfirm, colors = ButtonDefaults.textButtonColors(contentColor = tone("dangerText"))) { Text(label) } }, dismissButton = { TextButton(onDismiss) { Text(tr("common.cancel")) } })
 }
 /** Request ownership follows the visible screen; stale responses cannot update another route. */
-@Composable fun Remote(api: Api, path: String, refresh: Int = 0, pollMs: Long = 0, authenticated: Boolean = true, onForbidden: () -> Unit = {}, placeholder: (@Composable () -> Unit)? = null, content: @Composable ColumnScope.(JsonObject, () -> Unit) -> Unit) {
+@Composable fun Remote(api: Api, path: String, refresh: Int = 0, pollMs: Long = 0, authenticated: Boolean = true, onForbidden: () -> Unit = {}, placeholder: (@Composable () -> Unit)? = null, onRequestStarted: () -> Unit = {}, content: @Composable ColumnScope.(JsonObject, () -> Unit) -> Unit) {
     var result by remember(path) { mutableStateOf<JsonObject?>(null) }
     var error by remember(path) { mutableStateOf<String?>(null) }
     var errorParams by remember(path) { mutableStateOf<Array<Pair<String, String>>>(emptyArray()) }
     var version by remember(path) { mutableIntStateOf(0) }
     var loading by remember(path) { mutableStateOf(true) }
     val pageRefresh = LocalPageRefresh.current; val pageVersion = pageRefresh?.version ?: 0
+    val requestSucceeded = LocalRequestSucceeded.current
     DisposableEffect(pageRefresh) { pageRefresh?.let { it.listeners++ }; onDispose { pageRefresh?.let { it.listeners--; if (it.listeners == 0) it.refreshing = false } } }
     LaunchedEffect(path, refresh, version, pageVersion) {
         do {
             loading = result == null
             pageRefresh?.started(pageVersion)
-            try { result = api.request("GET", path, authenticated = authenticated); error = null }
+            try { onRequestStarted(); result = api.request("GET", path, authenticated = authenticated); error = null; requestSucceeded() }
             catch (e: CancellationException) { throw e }
             catch (e: Exception) { error = errorKey((e as? ApiFailure)?.code ?: "NETWORK"); errorParams = errorArgs(e); if ((e as? ApiFailure)?.code in setOf("FORBIDDEN", "ACCOUNT_DISABLED", "UNAUTHENTICATED")) { result = null; onForbidden() } }
             finally { loading = false; pageRefresh?.finished(pageVersion) }

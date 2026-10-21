@@ -27,7 +27,15 @@ val Figtree = FontFamily((400..900 step 100).map { Font(R.font.figtree, FontWeig
 val LocalLanguage = staticCompositionLocalOf { "id" }
 @Composable fun tr(key: String, vararg args: Pair<String, String>) = LocalCopy.current(key, args.toMap())
 class Copy(context: Context, language: String) {
-    private val dictionary = PatsJson.parseToJsonElement(context.assets.open("$language.json").bufferedReader().use { it.readText() }).jsonObject
+    private val dictionary = run {
+        val merged = PatsJson.parseToJsonElement(context.assets.open("$language.json").bufferedReader().use { it.readText() }).jsonObject.toMutableMap()
+        context.assets.list("").orEmpty().filter { it.startsWith("ux-") && it.endsWith("-$language.json") }.sorted().forEach { file ->
+            val additions = PatsJson.parseToJsonElement(context.assets.open(file).bufferedReader().use { it.readText() }).jsonObject
+            require(additions.keys.none { it in merged }) { "Duplicate localization namespace" }
+            merged.putAll(additions)
+        }
+        JsonObject(merged)
+    }
     fun get(key: String, args: Map<String, String> = emptyMap()): String {
         var entry: JsonElement? = dictionary
         key.split('.').forEach { entry = (entry as? JsonObject)?.get(it) }

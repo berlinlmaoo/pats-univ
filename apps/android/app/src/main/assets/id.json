@@ -462,22 +462,22 @@
     "getTheApp": "Unduh app",
     "successEyebrow": "Kamu sudah terdaftar",
     "successTitle": "Selamat datang, {name}",
-    "successSubtitle": "Keanggotaanmu aktif. Kartu digitalmu sudah siap di app.",
+    "successSubtitle": "Keanggotaanmu aktif. Selanjutnya: buka app PATS University dan masuk dengan email ini.",
     "nimLabel": "NIM kamu",
-    "nimHint": "Nomor member kamu. Tercetak juga di kartumu.",
+    "nimHint": "Nomor member kamu. Bisa dilihat di app.",
     "copyNim": "Salin NIM",
     "copied": "Tersalin",
     "waTitle": "Gabung grup WhatsApp {city}",
     "waBody": "Info event, meetup, dan pengumuman dari crew kotamu.",
     "waButton": "Buka grup WhatsApp",
     "waMissing": "Crew kotamu akan segera membagikan link grupnya.",
-    "appTitle": "Unduh app PATS University",
-    "appBody": "Masuk dengan {email} untuk melihat kartu, event, dan reward.",
+    "appTitle": "Kembali ke app dan masuk",
+    "appBody": "Masuk dengan {email}. Kami kirim kode 6 digit ke email itu — tanpa kata sandi.",
     "appStore": "App Store",
     "playStore": "Google Play",
     "appSoon": "App masih dalam uji coba terbatas. Link unduhnya akan kami kirim lewat email.",
     "cardTitle": "Kartu fisikmu",
-    "cardBody": "Kartu member NFC-mu kami cetak dan serahkan di event berikutnya di {city}.",
+    "cardBody": "Kartu member NFC-mu kami cetak dan serahkan di event di {city}. Sampai saat itu, kartu digital di app sudah bisa dipakai di pintu masuk.",
     "emailSent": "Detail ini juga sudah kami kirim ke {email}."
   },
   "auth": {
@@ -1439,6 +1439,14 @@
     "reencodeRejected": {
       "title": "Encode ulang ditolak",
       "body": "HQ menolak encode ulang kartu {member} ({nim})."
+    },
+    "contentSubmitted": {
+      "title": "Poster perlu disetujui",
+      "body": "{sender} mengirim poster/deskripsi untuk {event}."
+    },
+    "contentDecided": {
+      "title": "Update poster",
+      "body": "{event}: {status}."
     }
   },
   "nfc": {
@@ -1662,5 +1670,261 @@
     "PROMOTER_BONUS": "Bonus PR",
     "ADJUST": "Penyesuaian",
     "attendanceHint": "Cocokkan jumlah tamu dan foto struk dengan kehadiran event sebelum memvalidasi."
+  },
+  "ux": {
+    "nav": {
+      "home": "Beranda",
+      "events": "Event",
+      "card": "Kartu",
+      "community": "Komunitas",
+      "account": "Akun"
+    },
+    "adminMode": {
+      "title": "Mode admin",
+      "body": "Tampilkan alat staf di Beranda, Event, dan Komunitas. Peran dan izinmu tidak berubah.",
+      "on": "Mode admin · {scope}",
+      "exit": "Keluar dari mode admin",
+      "scopeHq": "HQ, semua kota",
+      "scopeCity": "Admin Regional · {city}",
+      "openIn": "Buka di mode admin",
+      "finishFirst": "Selesaikan atau batalkan scan yang sedang berjalan sebelum ganti mode."
+    },
+    "welcome": {
+      "title": "Selamat datang di PATS University",
+      "cardNow": "Kartu digitalmu sudah bisa dipakai. Tunjukkan QR-nya ke crew di pintu masuk.",
+      "crewConfirms": "Crew yang mengonfirmasi check-in-mu; hasilnya langsung muncul di app.",
+      "physicalCard": "KTM fisikmu disiapkan terpisah dan diserahkan di event di {city}.",
+      "photo": "Tambahkan foto agar crew bisa mencocokkan wajahmu.",
+      "staff": "Alat staf ada di Akun → Mode admin.",
+      "start": "Mulai",
+      "skip": "Lewati"
+    },
+    "otp": {
+      "signInTitle": "Masuk dengan email",
+      "signInBody": "Kami kirim kode 6 digit ke email-mu. Tanpa kata sandi.",
+      "sentTo": "Kode dikirim ke {email}",
+      "validFor": "Berlaku {minutes} menit.",
+      "checkSpam": "Belum masuk? Cek folder spam atau promosi.",
+      "changeEmail": "Ganti email",
+      "resent": "Kode dikirim ulang ke {email}.",
+      "notMember": "Belum jadi member? Daftar di web, lalu kembali dan masuk dengan email yang sama."
+    },
+    "staff": {
+      "noMembershipTitle": "Tidak ada kartu member pribadi",
+      "noMembershipBody": "Akun staf ini tidak punya keanggotaan PATS, jadi tidak ada NIM, kartu, atau XP. Alat staf ada di Akun → Mode admin."
+    },
+    "card": {
+      "title": "Kartu",
+      "subtitle": "KTM — kartu member PATS-mu",
+      "digitalTitle": "QR check-in digital",
+      "digitalReady": "Siap dipakai",
+      "digitalReadyBody": "Tunjukkan QR ini ke crew. Bisa dipakai sebelum kartu fisikmu datang.",
+      "digitalInactive": "Tidak tersedia: keanggotaanmu tidak aktif.",
+      "showQr": "Tampilkan QR check-in",
+      "showToCrew": "Tunjukkan ke crew; check-in tercatat setelah mereka konfirmasi.",
+      "qrRefresh": "Diperbarui tiap {seconds} detik. Screenshot tidak berlaku.",
+      "flip": "Balik kartu",
+      "physicalTitle": "Kartu fisik",
+      "stage": {
+        "queued": "Dalam antrean cetak",
+        "printing": "Sedang dicetak",
+        "atHq": "Di HQ, sedang disiapkan",
+        "encoded": "Siap di HQ, belum dikirim",
+        "shipped": "Sudah sampai di {city}: ambil di event berikutnya",
+        "delivered": "Aktif: tempelkan di pintu masuk",
+        "inactive": "Kartu fisik ini nonaktif. Tanyakan penggantinya ke crew."
+      },
+      "fields": {
+        "name": "NAME",
+        "drink": "FAVORITE DRINK",
+        "quote": "QOTD"
+      },
+      "quoteHint": "QOTD — quote andalanmu, tercetak di kartu.",
+      "feeDue": "Biaya kartu pengganti {amount} — bayar ke crew; crew yang mencatat.",
+      "feePaid": "Biaya kartu pengganti lunas {date}"
+    },
+    "home": {
+      "nextTitle": "Selanjutnya",
+      "noEvent": "Belum ada event mendatang di {city}.",
+      "browseNational": "Lihat kota lain"
+    },
+    "journey": {
+      "event": "Cek event berikutnya",
+      "poster": "Sebarkan poster",
+      "posterPending": "Detailnya segera dari HQ.",
+      "reservation": "Reservasi meja atau sofa",
+      "reservationBonus": "+{xp} XP saat check-in dengan reservasi terkonfirmasi",
+      "reservationSkip": "Lain kali",
+      "reservationRequested": "Menunggu persetujuan crew",
+      "checkIn": "Check-in di pintu masuk",
+      "completed": "Selesai",
+      "markDone": "Tandai selesai",
+      "done": "Selesai"
+    },
+    "events": {
+      "national": "Nasional",
+      "nationalOn": "Event di semua kota aktif",
+      "nationalOff": "Event di {city}",
+      "upcoming": "Mendatang",
+      "past": "Selesai",
+      "viewEvent": "Lihat event",
+      "reservation": "Reservasi",
+      "otherCity": "Kota lain"
+    },
+    "timing": {
+      "starts": "Mulai",
+      "ends": "Selesai",
+      "checkInOpens": "Check-in dibuka",
+      "checkInCloses": "Check-in ditutup",
+      "overnight": "Berlangsung lewat tengah malam",
+      "opensBefore": "Check-in dibuka {minutes} menit sebelum mulai",
+      "minutesBefore": "menit sebelum mulai"
+    },
+    "reason": {
+      "eventEnded": "Event ini sudah selesai.",
+      "eventNotEnded": "Tersedia setelah event selesai.",
+      "noVenue": "Event ini tidak punya venue untuk reservasi.",
+      "reservationExists": "Kamu sudah punya reservasi untuk event ini.",
+      "noCityAccess": "Minta akses ke kota ini dulu.",
+      "checkInNotOpen": "Check-in belum dibuka.",
+      "alreadyCheckedIn": "Kamu sudah check-in.",
+      "roamingRequired": "Ajukan izin hadir di event kota lain ini dulu.",
+      "homeCity": "Event ini di kotamu.",
+      "claimSubmitted": "Kamu sudah mengajukan klaim untuk event ini.",
+      "drawNotConfigured": "Tidak ada undian di event ini."
+    },
+    "roaming": {
+      "visitTitle": "Kunjungi kota lain",
+      "attend": "Hadir di event ini",
+      "attendBody": "Crew {city} yang menyetujui. Bukan reservasi atau akses masuk langsung.",
+      "hub": "Akses Komunitas {city} sementara",
+      "hubBody": "HQ yang menyetujui. Akses berakhir {hours} jam setelah event.",
+      "eventChanged": "Event berubah. Pilih lagi sebelum mengirim.",
+      "homeCityError": "Event ini di kotamu sendiri; tidak perlu pengajuan.",
+      "requestExists": "Kamu sudah punya pengajuan untuk event ini.",
+      "monthlyLimit": "Batas pengajuan bulan ini sudah tercapai."
+    },
+    "reservation": {
+      "title": "Reservasi",
+      "mine": "Reservasiku",
+      "review": "Periksa pengajuanmu",
+      "send": "Kirim permintaan reservasi",
+      "pendingTitle": "Menunggu persetujuan crew",
+      "confirmedTitle": "Terkonfirmasi",
+      "minimumCharge": "Minimum charge {amount}",
+      "depositUnpaid": "DP belum tercatat",
+      "depositPaid": "DP {amount} tercatat {date}",
+      "depositOffApp": "Bayar DP ke crew di luar app; crew yang mencatatnya di sini.",
+      "blocked": "Reservasimu untuk {event} belum ada DP. Booking baru terbuka setelah crew mencatat DP.",
+      "openBlocking": "Buka reservasi itu",
+      "recordDeposit": "Catat DP diterima",
+      "depositAmount": "Nominal DP",
+      "depositConfirm": "Catat DP {amount} untuk {member}? Booking berikutnya akan terbuka.",
+      "cancelConfirm": "Batalkan reservasi {slot} di {event}? Slotnya kembali tersedia untuk yang lain.",
+      "posterHint": "Ketuk untuk melihat poster dan detail lengkap",
+      "kind": {
+        "TABLE": "Meja",
+        "SOFA": "Sofa",
+        "OTHER": "Lainnya"
+      }
+    },
+    "content": {
+      "title": "Poster & deskripsi",
+      "live": "Tayang untuk member",
+      "pending": "Menunggu persetujuan HQ",
+      "approvalHint": "Perubahanmu dikirim ke HQ untuk disetujui sebelum terlihat member.",
+      "directHint": "Perubahan langsung tayang untuk member begitu disimpan.",
+      "submit": "Kirim ke HQ",
+      "save": "Simpan",
+      "submitted": "Terkirim ke HQ untuk disetujui.",
+      "saved": "Poster dan deskripsi diperbarui.",
+      "approve": "Setujui",
+      "reject": "Tolak",
+      "rejectReason": "Alasan (terlihat oleh admin)",
+      "approved": "Disetujui: sekarang tayang untuk member.",
+      "rejected": "Ditolak.",
+      "queueTitle": "Persetujuan poster",
+      "queueEmpty": "Tidak ada pengajuan yang menunggu",
+      "queueEmptyBody": "Poster dan deskripsi dari admin regional muncul di sini untuk disetujui.",
+      "posterLabel": "Poster",
+      "descriptionLabel": "Deskripsi",
+      "noChange": "Ubah poster atau deskripsi dulu.",
+      "replacesPending": "Ini menggantikan pengajuanmu sebelumnya yang masih menunggu.",
+      "by": "Oleh {name} · {date}",
+      "statusPENDING": "Menunggu",
+      "statusAPPROVED": "Disetujui",
+      "statusREJECTED": "Ditolak",
+      "statusWITHDRAWN": "Digantikan"
+    },
+    "workspace": {
+      "title": "Ruang kerja event",
+      "overview": "Ringkasan",
+      "attendance": "Kehadiran",
+      "reservations": "Reservasi",
+      "claims": "Klaim",
+      "draw": "Undian",
+      "rewards": "Reward",
+      "recap": "Rekap",
+      "chooseScanEvent": "Pilih event untuk scan",
+      "noOpenEvent": "Tidak ada event yang dibuka untuk check-in",
+      "nextOpens": "Berikutnya: {event} dibuka {time}",
+      "checkInEnded": "Check-in berakhir {time}",
+      "openEarly": "Buka check-in sekarang",
+      "openEarlyBody": "Check-in dimulai sekarang, bukan {time}. Member bisa langsung discan.",
+      "manageInDashboard": "Kelola di dashboard",
+      "pendingWork": "Pekerjaan tertunda",
+      "pending": {
+        "claims": "Klaim untuk ditinjau",
+        "reservations": "Reservasi untuk diputuskan",
+        "deposits": "DP untuk dicatat",
+        "roaming": "Pengajuan kota lain",
+        "hubAccess": "Pengajuan akses Komunitas",
+        "reencode": "Permintaan encode ulang",
+        "regionChanges": "Pindah kota asal",
+        "content": "Persetujuan poster",
+        "myContent": "Posterku menunggu HQ",
+        "recapsDue": "Rekap untuk diisi"
+      }
+    },
+    "recap": {
+      "sold": "Reservasi terjual",
+      "soldTable": "Meja terjual",
+      "soldSofa": "Sofa terjual",
+      "soldHint": "Reservasi terkonfirmasi di event ini, per jenis slot di denah.",
+      "fdcSold": "FDC terjual",
+      "fdcPending": "Menunggu definisi FDC dari HQ"
+    },
+    "notif": {
+      "markAllRead": "Tandai semua dibaca"
+    },
+    "notifAction": {
+      "viewEvent": "Lihat event",
+      "viewAttendance": "Lihat kehadiran",
+      "openCard": "Buka kartu",
+      "openBooking": "Buka reservasi",
+      "reviewBooking": "Tinjau reservasi",
+      "reviewRequest": "Tinjau pengajuan",
+      "viewRequest": "Lihat pengajuan",
+      "viewClaim": "Lihat klaim",
+      "reviewClaim": "Tinjau klaim",
+      "reviewPoster": "Tinjau poster",
+      "viewPoster": "Lihat poster",
+      "openChat": "Buka chat",
+      "open": "Buka"
+    },
+    "claims": {
+      "bonusTitle": "Ajukan bonus XP",
+      "bonusBody": "XP check-in otomatis. Form ini melaporkan reservasi yang memenuhi syarat setelah event untuk ditinjau.",
+      "glNotAllowed": "Guest list tidak dihitung pada klaim member.",
+      "reasonRequired": "Alasan wajib diisi untuk menolak."
+    },
+    "draw": {
+      "staffTitle": "Undian langsung",
+      "runWhenFull": "Jalankan undian saat semua slot terisi di jam peak."
+    },
+    "archive": {
+      "prReports": "Laporan PR · arsip (baca saja)",
+      "prReportsBody": "Laporan PR lama disimpan sebagai referensi. Bonus XP baru lewat Klaim."
+    }
   }
 }
