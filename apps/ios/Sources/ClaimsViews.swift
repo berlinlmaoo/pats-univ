@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ClaimsView: View {
     var initialEventID = ""
+    var initialClaimID = ""
     @EnvironmentObject private var store: AppStore
     @State private var eventID = ""
     @State private var form = "MEMBER"
@@ -11,10 +12,15 @@ struct ClaimsView: View {
     @State private var reservations = "0"
     @State private var receipt = ""
     @State private var notes = ""
+    @State private var targetInitialized = false
     @StateObject private var mutation = Mutation()
     var body: some View {
-        DataPage(title: "phase5.claimTitle", path: "/api/loyalty/claims", room: Room(kind: "wallet", id: store.member.id)) { data, reload in
-            Notice(text: L.t("phase5.claimBody"))
+        DataPage(title: "ux.claims.bonusTitle", path: "/api/loyalty/claims", room: Room(kind: "wallet", id: store.member.id)) { data, reload in
+            let related = data["claims"].rows.first { $0.id == initialClaimID }
+            if !initialClaimID.isEmpty {
+                Notice(text: L.t(related == nil ? "ux.claim.relatedUnavailable" : "ux.claim.relatedClaim"), error: related == nil)
+            }
+            Notice(text: L.t("ux.claims.bonusBody"))
             OperationEventContext(events: data["events"].rows, selection: $eventID, fixed: !initialEventID.isEmpty)
                 .onChange(of: eventID) { _, _ in if editing.isEmpty || data["claims"].rows.first(where: { $0.id == editing })?["eventId"].text != eventID { clear() } }
             if data["isPromoter"].bool {
@@ -30,7 +36,8 @@ struct ClaimsView: View {
                     ReceiptCaptureView(key: $receipt)
                     Button(L.t(editing.isEmpty ? "phase5.claimSubmit" : "common.save")) {
                         Task {
-                            var body: [String: JSON] = ["eventId": .str(eventID), "formType": .str(form), "guestCount": .num((form == "PR" || data["allowMemberGl"].bool) ? Int(guests) ?? 0 : 0), "reservationCount": .num(Int(reservations) ?? 0), "receiptUrl": .str(receipt), "notes": .str(notes)]
+                            var body: [String: JSON] = ["eventId": .str(eventID), "formType": .str(form), "reservationCount": .num(Int(reservations) ?? 0), "receiptUrl": .str(receipt), "notes": .str(notes)]
+                            if form == "PR" || data["allowMemberGl"].bool { body["guestCount"] = .num(Int(guests) ?? 0) }
                             if !editing.isEmpty { body["id"] = .str(editing) }
                             await mutation.run {
                                 _ = try await APIClient.shared.call(editing.isEmpty ? "POST" : "PATCH", "/api/loyalty/claims", .object(body))
@@ -42,11 +49,19 @@ struct ClaimsView: View {
                 }
             }
             MutationState(mutation: mutation)
+                .task(id: initialClaimID + (related?["status"].text ?? "")) {
+                    if !targetInitialized, !initialClaimID.isEmpty, let related {
+                        section = related["status"].text == "PENDING" ? "pending" : "history"
+                        eventID = related["eventId"].text; targetInitialized = true
+                    }
+                }
             Tabs(options: [("pending", "ktm.pending"), ("history", "ktm.history")], selection: $section, counts: ["pending": data["claims"].rows.filter { $0["status"].text == "PENDING" }.count])
-            let rows = data["claims"].rows.filter { ($0["status"].text == "PENDING") == (section == "pending") && (initialEventID.isEmpty || $0["eventId"].text == initialEventID) }
+            let matchingRows = data["claims"].rows.filter { ($0["status"].text == "PENDING") == (section == "pending") && (initialEventID.isEmpty || $0["eventId"].text == eventID) }
+            let rows = matchingRows.filter { $0.id == initialClaimID } + matchingRows.filter { $0.id != initialClaimID }
             if rows.isEmpty { EmptyState(title: "phase5.claimEmpty") }
             ForEach(rows) { claim in
                 Panel {
+                    if claim.id == initialClaimID { Label(L.t("ux.claim.relatedClaim"), systemImage: "bell.badge").fontWeight(.semibold) }
                     ClaimSummary(claim: claim)
                     if !claim["receiptUrl"].text.isEmpty { PrivateReceiptButton(path: "/api/loyalty/claims/\(claim.id)/receipt?format=json") }
                     if claim["status"].text == "PENDING" {

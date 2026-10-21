@@ -30,8 +30,32 @@ enum UXNotificationTarget: Equatable {
     case personalCard, event(String), claims(String), claimReview(String), cardRequest(String)
     case payments(String), recap(String), scan(String), channel(String), conversation(String)
     case community, requests(String), adminRequests(String), roaming(String), regionChange, wallet, notifications
+    case task(JSON)
 
     static func resolve(_ data: JSON) -> UXNotificationTarget {
+        if data["target"].exists { return resolve(data["target"]) }
+        if data.object.keys.contains("requiresAdminMode") || !data["actionKey"].text.isEmpty {
+            var target = data
+            if data["screen"].text.hasPrefix("admin") { target["requiresAdminMode"] = .bool(true) }
+            return .task(target)
+        }
+        if ["eventBroadcast", "reminder3d", "reminder1d", "reminderToday", "thankYou", "fomo"].contains(data["kind"].text) {
+            var target = data; target["screen"] = .str(data["eventId"].text.isEmpty ? "notifications" : "event"); target["requiresAdminMode"] = .bool(false); return .task(target)
+        }
+        let kinds: [String: (String, Bool)] = [
+            "reservationRequested": ("adminReservations", true), "reservationDecided": ("reservation", false),
+            "roamingRequested": ("adminRoaming", true), "roamingDecided": ("roaming", false),
+            "claimDecided": ("claims", false), "reencodeApproved": ("adminMemberCard", true), "reencodeRejected": ("adminMemberCard", true),
+            "contentSubmitted": ("adminContentQueue", true), "contentDecided": ("adminEventContent", true),
+            "cardShipped": ("card", false), "cardDelivered": ("card", false), "checkIn": ("attendance", false),
+            "hubMention": (data["conversationId"].text.isEmpty ? "hub" : "conversation", true)
+        ]
+        if let (name, staff) = kinds[data["kind"].text] {
+            var target = data; target["screen"] = .str(name); target["requiresAdminMode"] = .bool(staff); return .task(target)
+        }
+        if data["screen"].text.hasPrefix("admin") {
+            var target = data; target["requiresAdminMode"] = .bool(true); return .task(target)
+        }
         let screen = data["screen"].text.lowercased().replacingOccurrences(of: "_", with: "-")
         let event = data["eventId"].text
         switch screen {

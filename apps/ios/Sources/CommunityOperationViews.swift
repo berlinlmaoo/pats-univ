@@ -4,47 +4,73 @@ import SwiftUI
 struct SocialOperationsView: View {
     var initialSection = "reservations"
     var eventID = ""
+    var initialReservationID = ""
+    var initialRequestID = ""
+    var personal = false
     @EnvironmentObject private var store: AppStore
     @State private var section = "reservations"
     @StateObject private var mutation = Mutation()
+    @StateObject private var context = Resource()
+    private var managing: Bool { store.managing && !personal }
+    private var contextPath: String { eventID.isEmpty ? "" : "/api/\(managing ? "admin/" : "")events/\(eventID)" }
     var body: some View {
-        DataPage(title: store.managing ? "social.operations" : "ux.social.myRequests", path: "/api/social/operations", poll: true) { data, reload in
+        DataPage(title: managing ? "social.operations" : "ux.social.myRequests", path: query("/api/social/operations", ["eventId": eventID]), poll: true, eventContext: context.data["event"]) { data, reload in
             let reservations = scoped(data["reservations"].rows)
             let roaming = scoped(data["roaming"].rows)
-            if !store.member.exists && !store.managing {
+            let counts = queueCounts(data, reservations: reservations, roaming: roaming)
+            if !store.member.exists && !managing {
                 EmptyState(title: "ux.social.memberRequestsOnly", message: "ux.social.staffContext", icon: "person.crop.circle")
             } else {
                 MutationState(mutation: mutation)
                 if !eventID.isEmpty {
+                    ResourceState(resource: context) { await loadContext() }
                     let event = (reservations + roaming).first?["event"] ?? .null
                     Notice(text: L.t("ux.social.eventScope", ["event": event["title"].text.isEmpty ? L.t("events.details") : event["title"].text]))
                 }
                 Tabs(options: sections, selection: $section, counts: [
-                    "reservations": reservations.filter { $0["status"].text == "PENDING" || ($0["status"].text == "CONFIRMED" && !$0["downPaymentAt"].exists) }.count,
-                    "roaming": roaming.filter { $0["status"].text == "PENDING" }.count,
+                    "reservations": counts["reservationsPending"].int,
+                    "roaming": counts["roamingPending"].int,
                     "moderation": data["muted"].rows.count
                 ])
                 if section == "reservations" {
-                    ReservationQueue(rows: reservations, mutation: mutation, reload: reload)
+                    ReservationQueue(rows: focused(reservations, id: initialReservationID), focusID: initialReservationID, managing: managing, pending: counts["reservationsPending"].int, unpaid: counts["depositsUnpaid"].int, mutation: mutation, reload: reload)
                 } else if section == "roaming" {
-                    RoamingQueue(rows: roaming, mutation: mutation, reload: reload)
-                } else if store.managing {
+                    RoamingQueue(rows: focused(roaming, id: initialRequestID), focusID: initialRequestID, managing: managing, pending: counts["roamingPending"].int, mutation: mutation, reload: reload)
+                } else if managing {
                     CommunityModerationQueue(data: data, mutation: mutation, reload: reload)
                 }
             }
         }
-        .onAppear { section = initialSection == "moderation" && !store.managing ? "reservations" : initialSection }
-        .onChange(of: store.managing) { _, managing in if !managing && section == "moderation" { section = "reservations" } }
+        .task(id: contextPath) { context.data = .null; await loadContext() }
+        .onAppear { section = !initialRequestID.isEmpty ? "roaming" : initialSection == "moderation" && !managing ? "reservations" : initialSection }
+        .onChange(of: managing) { _, managing in if !managing && section == "moderation" { section = "reservations" } }
+    }
+    private func focused(_ rows: [JSON], id: String) -> [JSON] {
+        guard !id.isEmpty else { return rows }
+        return rows.filter { $0.id == id } + rows.filter { $0.id != id }
+    }
+    private func loadContext() async {
+        guard !contextPath.isEmpty else { return }
+        await context.load(contextPath)
     }
     private var sections: [(String, String)] {
         var values = [("reservations", "social.reservations"), ("roaming", "ux.social.visitingAccess")]
-        if store.managing { values.append(("moderation", "ux.social.moderation")) }
+        if managing { values.append(("moderation", "ux.social.moderation")) }
         return values
+    }
+    private func queueCounts(_ data: JSON, reservations: [JSON], roaming: [JSON]) -> JSON {
+        // Staff personal presentation must not show counts for other members in the crew scope.
+        if data["counts"].exists && (managing || !store.admin) { return data["counts"] }
+        return .object([
+            "reservationsPending": .num(reservations.filter { $0["status"].text == "PENDING" }.count),
+            "depositsUnpaid": .num(reservations.filter(ReservationPresentation.blocksBooking).count),
+            "roamingPending": .num(roaming.filter { $0["status"].text == "PENDING" }.count)
+        ])
     }
     private func scoped(_ rows: [JSON]) -> [JSON] {
         rows.filter { row in
             let belongsToEvent = eventID.isEmpty || row["eventId"].text == eventID || row["event"].id == eventID
-            let belongsToMember = store.managing || (store.member.exists && row["memberId"].text == store.member.id)
+            let belongsToMember = managing || (store.member.exists && row["memberId"].text == store.member.id)
             return belongsToEvent && belongsToMember
         }
     }
@@ -52,6 +78,10 @@ struct SocialOperationsView: View {
 
 private struct ReservationQueue: View {
     let rows: [JSON]
+    let focusID: String
+    let managing: Bool
+    let pending: Int
+    let unpaid: Int
     @ObservedObject var mutation: Mutation
     var reload: () async -> Void
     @State private var status = "all"
@@ -60,14 +90,14 @@ private struct ReservationQueue: View {
     private var filtered: [JSON] {
         rows.filter { row in
             let matchesStatus: Bool
-            if status == "unpaid" { matchesStatus = row["status"].text == "CONFIRMED" && !row["downPaymentAt"].exists }
+            if status == "unpaid" { matchesStatus = ReservationPresentation.blocksBooking(row) }
             else { matchesStatus = status == "all" || row["status"].text == status }
             let content = row["event"]["title"].text + " " + row["member"]["fullName"].text + " " + row["slotCode"].text
             return matchesStatus && (search.isEmpty || content.localizedCaseInsensitiveContains(search))
         }
     }
     var body: some View {
-        Text(L.t("ux.social.reservationCounts", ["pending": L.count(rows.filter { $0["status"].text == "PENDING" }.count), "unpaid": L.count(rows.filter { $0["status"].text == "CONFIRMED" && !$0["downPaymentAt"].exists }.count)])).font(Theme.body(13)).foregroundStyle(Theme.muted)
+        Text(L.t("ux.social.reservationCounts", ["pending": L.count(pending), "unpaid": L.count(unpaid)])).font(Theme.body(13)).foregroundStyle(Theme.muted)
         Field(key: "ux.social.searchRequests", value: $search)
         Picker(L.t("ux.social.filter"), selection: $status) {
             Text(L.t("ux.social.allRecords")).tag("all")
@@ -78,16 +108,24 @@ private struct ReservationQueue: View {
         if filtered.isEmpty {
             EmptyState(title: rows.isEmpty ? "ux.social.noReservations" : "ux.social.noMatches", message: rows.isEmpty ? "ux.social.noReservationsBody" : "ux.social.noMatchesBody", icon: "list.bullet.rectangle")
         }
-        ForEach(filtered) { row in ReservationOperationCard(row: row, mutation: mutation, reload: reload) }
+        ForEach(filtered) { row in
+            ReservationOperationCard(row: row, managing: managing, mutation: mutation, reload: reload)
+                .overlay(RoundedRectangle(cornerRadius: Theme.radius).stroke(row.id == focusID ? Theme.accent : .clear, lineWidth: 2))
+        }
     }
 }
 
 private struct ReservationOperationCard: View {
     let row: JSON
+    let managing: Bool
     @ObservedObject var mutation: Mutation
     var reload: () async -> Void
     @EnvironmentObject private var store: AppStore
-    private var canManage: Bool { store.managing && store.can("reservation.manage") && row["canDecide"].bool }
+    private var canManage: Bool { managing && store.can("reservation.manage") && row["canDecide"].bool }
+    private var canRecord: Bool { managing && store.can("reservation.manage") && row["canRecordDeposit"].bool }
+    private var conversationID: String { row["conversationId"].text.isEmpty ? row["conversation"].id : row["conversationId"].text }
+    private var payment: JSON { row["payment"] }
+    private var paid: Bool { payment.exists ? payment["paid"].bool : row["downPaymentAt"].exists }
     private var canCancel: Bool {
         ["PENDING", "CONFIRMED"].contains(row["status"].text) &&
         (canManage || (store.member.exists && row["memberId"].text == store.member.id))
@@ -97,27 +135,31 @@ private struct ReservationOperationCard: View {
     }
     var body: some View {
         Panel {
-            ReservationEventContext(event: row["event"], eventID: row["eventId"].text)
+            EventPosterHighlight(event: ReservationPresentation.event(row))
             Text(row["event"]["title"].text + " · " + row["slotCode"].text).font(Theme.title(17))
             if !row["event"]["city"]["name"].text.isEmpty { Text(row["event"]["city"]["name"].text).foregroundStyle(Theme.muted) }
             Text(row["member"]["fullName"].text + " · " + L.count(row["pax"].int))
+            Text(row["slotCode"].text + " · " + L.t("ux.reservation.kind." + (row["slotKind"].text.isEmpty ? "OTHER" : row["slotKind"].text)))
+            let venueName = row["venueName"].text.isEmpty ? row["venue"]["name"].text : row["venueName"].text
+            if !venueName.isEmpty { Text(venueName).foregroundStyle(Theme.muted) }
             Badge(value: row["status"].text)
             if !row["note"].text.isEmpty { Text(row["note"].text) }
             if row["minimumCharge"].exists { Text(L.t("phase5.minimumCharge") + ": " + L.money(row["minimumCharge"].int)) }
-            if row["downPaymentAt"].exists {
-                Label(L.t("ux.social.depositRecorded", ["amount": L.money(row["downPaymentAmount"].int)]), systemImage: "checkmark.circle.fill")
-                Text(L.date(row["downPaymentAt"].text)).font(Theme.body(13)).foregroundStyle(Theme.muted)
+            if paid {
+                let amount = payment.exists ? payment["amount"].int : row["downPaymentAmount"].int
+                let date = payment.exists ? payment["paidAt"].text : row["downPaymentAt"].text
+                Label(L.t("ux.social.depositRecorded", ["amount": L.money(amount)]), systemImage: "checkmark.circle.fill")
+                Text(L.date(date)).font(Theme.body(13)).foregroundStyle(Theme.muted)
+                if !payment["recordedBy"].text.isEmpty { Text(L.t("ux.social.recordedBy", ["name": payment["recordedBy"].text])).font(Theme.body(13)).foregroundStyle(Theme.muted) }
             } else {
                 Badge(value: "unpaid")
-                if ["PENDING", "CONFIRMED"].contains(row["status"].text) {
-                    Notice(text: L.t(row["status"].text == "PENDING" ? "ux.social.depositAfterConfirmation" : "ux.social.depositNextStep"))
-                }
-                if canManage && row["status"].text == "CONFIRMED" {
+                if ReservationPresentation.blocksBooking(row) { Notice(text: L.t("ux.social.depositNextStep")) }
+                if canRecord {
                     NavigationRow(title: "ux.social.recordDeposit", icon: "banknote") { ReservationDepositView(reservation: row, reload: reload) }
                 }
             }
-            if row["conversation"].exists {
-                NavigationRow(title: "social.chat", subtitle: L.t("ux.social.depositChat"), icon: "bubble.left") { ChannelView(room: Room(kind: "conversation", id: row["conversation"].id)) }
+            if !conversationID.isEmpty {
+                NavigationRow(title: "social.chat", subtitle: L.t("ux.social.depositChat"), icon: "bubble.left") { ChannelView(room: Room(kind: "conversation", id: conversationID)) }
             }
             if canManage && row["status"].text == "PENDING" {
                 decision("social.confirm", status: "CONFIRMED")
@@ -127,27 +169,29 @@ private struct ReservationOperationCard: View {
         }
     }
     private func decision(_ key: String, status: String) -> some View {
-        ConfirmAction(label: key, message: confirmation, destructive: status == "CANCELLED", disabled: mutation.busy) {
+        ConfirmAction(label: key, message: status == "CANCELLED" ? L.t("ux.reservation.cancelConfirm", ["slot": row["slotCode"].text, "event": row["event"]["title"].text]) : confirmation, destructive: status == "CANCELLED", disabled: mutation.busy) {
             guard status == "CANCELLED" ? canCancel : canManage else { return }
             await mutation.send("/api/social/reservation-decision", body: .object(["id": .str(row.id), "status": .str(status)]), after: reload)
         }
     }
 }
 
-/// Operations may receive a compact event summary. Fetch the same published poster used in Events.
-private struct ReservationEventContext: View {
-    let event: JSON
-    let eventID: String
-    @StateObject private var detail = Resource()
-    private var complete: Bool { event["description"].exists && (event["posterUrl"].exists || event["flyerUrl"].exists) }
-    var body: some View {
-        EventPosterHighlight(event: complete ? event : detail.data["event"])
-        if !complete && detail.error != nil { ResourceState(resource: detail) { await load() } }
-        Color.clear.frame(height: 0).task(id: eventID) { if !complete { await load() } }
+/// Reservation cards use only the approved poster payload returned by their own endpoint.
+enum ReservationPresentation {
+    static func event(_ row: JSON) -> JSON {
+        var event = row["event"]
+        if event.id.isEmpty { event["id"] = row["eventId"] }
+        let poster = row["poster"].exists ? row["poster"] : event["poster"]
+        if poster.exists {
+            event["poster"] = poster
+            event["flyerUrl"] = poster["url"]
+            event["description"] = poster["description"]
+        }
+        return event
     }
-    private func load() async {
-        let id = eventID.isEmpty ? event.id : eventID
-        if !id.isEmpty { await detail.load("/api/events/\(id)") }
+    static func blocksBooking(_ row: JSON) -> Bool {
+        if row["payment"].exists { return row["payment"]["blocksNewBookings"].bool }
+        return !row["downPaymentAt"].exists && ["PENDING", "CONFIRMED"].contains(row["status"].text)
     }
 }
 
@@ -164,7 +208,7 @@ private struct ReservationDepositView: View {
     }
     var body: some View {
         Page(title: "ux.social.recordDeposit") {
-            if store.managing && store.can("reservation.manage") {
+            if store.managing && store.can("reservation.manage") && reservation["canRecordDeposit"].bool {
                 Panel {
                     Text(reservation["event"]["title"].text).font(Theme.title(20))
                     Text(reservation["slotCode"].text + " · " + reservation["member"]["fullName"].text)
@@ -174,11 +218,11 @@ private struct ReservationDepositView: View {
                     if let value = validAmount { Text(L.money(value)).fontWeight(.semibold) }
                     MutationState(mutation: mutation)
                     ConfirmAction(label: "ux.social.recordDeposit", message: L.t("ux.social.depositConfirm", ["amount": L.money(validAmount ?? 0), "member": reservation["member"]["fullName"].text, "event": reservation["event"]["title"].text, "slot": reservation["slotCode"].text]), disabled: mutation.busy || validAmount == nil) {
-                        guard store.managing, store.can("reservation.manage"), let value = validAmount else { return }
+                        guard store.managing, store.can("reservation.manage"), reservation["canRecordDeposit"].bool, let value = validAmount else { return }
                         store.operationInProgress = true
                         defer { store.operationInProgress = false }
                         await mutation.run {
-                            _ = try await APIClient.shared.call("POST", "/api/admin/payments", .object(["kind": .str("reservation"), "id": .str(reservation.id), "amount": .num(value)]))
+                            _ = try await APIClient.shared.call("POST", "/api/admin/reservations/\(reservation.id)/payment", .object(["amount": .num(value)]))
                             await reload(); dismiss()
                         }
                     }
@@ -190,6 +234,9 @@ private struct ReservationDepositView: View {
 
 private struct RoamingQueue: View {
     let rows: [JSON]
+    let focusID: String
+    let managing: Bool
+    let pending: Int
     @ObservedObject var mutation: Mutation
     var reload: () async -> Void
     @EnvironmentObject private var store: AppStore
@@ -204,7 +251,7 @@ private struct RoamingQueue: View {
         }
     }
     var body: some View {
-        Text(L.t("ux.social.pendingCount", ["count": L.count(rows.filter { $0["status"].text == "PENDING" }.count)])).font(Theme.body(13)).foregroundStyle(Theme.muted)
+        Text(L.t("ux.social.pendingCount", ["count": L.count(pending)])).font(Theme.body(13)).foregroundStyle(Theme.muted)
         Field(key: "ux.social.searchRequests", value: $search)
         Picker(L.t("ux.social.filter"), selection: $status) {
             Text(L.t("ux.social.allRecords")).tag("all")
@@ -226,11 +273,11 @@ private struct RoamingQueue: View {
                     decision("social.approve", value: "APPROVED", row: row)
                     decision("social.reject", value: "REJECTED", row: row)
                 }
-            }
+            }.overlay(RoundedRectangle(cornerRadius: Theme.radius).stroke(row.id == focusID ? Theme.accent : .clear, lineWidth: 2))
         }
     }
     private func canDecide(_ row: JSON) -> Bool {
-        store.managing && (row["type"].text == "ATTENDANCE" ? store.can("city.operations") : store.can("hq.manage"))
+        managing && (row["type"].text == "ATTENDANCE" ? store.can("city.operations") : store.can("hq.manage"))
     }
     private func decision(_ key: String, value: String, row: JSON) -> some View {
         ConfirmAction(label: key, message: L.t("ux.social.roamingDecision", ["event": row["event"]["title"].text, "member": row["member"]["fullName"].text, "type": L.status(row["type"].text)]), disabled: mutation.busy) {

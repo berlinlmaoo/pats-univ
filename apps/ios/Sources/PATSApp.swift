@@ -49,6 +49,7 @@ struct LoginView: View {
     @State private var email = ""
     @State private var code = ""
     @State private var otp: JSON = .null
+    @State private var cooldownEmail = ""
     @State private var resendAt = Date.distantPast
     @State private var expiresAt = Date.distantPast
     @State private var busy = false
@@ -71,6 +72,7 @@ struct LoginView: View {
             Text(L.t(otp.exists ? "ux.otp.sentTo" : "app.loginSubtitle", ["email": email])).foregroundStyle(Theme.muted)
             if let error { Notice(text: error, error: true) }
             if otp.exists {
+                Text(L.t("ux.otp.checkSpam")).font(Theme.body(13)).foregroundStyle(Theme.muted)
                 if sentAgain { Notice(text: L.t("ux.otp.resent")) }
                 if !otp["demoCode"].text.isEmpty { Notice(text: L.t("otp.demoCode", ["code": otp["demoCode"].text])) }
                 TextField(L.t("otp.codeLabel"), text: $code).textContentType(.oneTimeCode).keyboardType(.numberPad)
@@ -81,7 +83,7 @@ struct LoginView: View {
                     }
                 Button(L.t("otp.verify")) { Task { await verify() } }.buttonStyle(PATSButtonStyle(loading: busy)).disabled(busy || code.count != 6)
                 TimelineView(.periodic(from: .now, by: 1)) { time in
-                    let remaining = max(0, Int(ceil(resendAt.timeIntervalSince(time.date))))
+                    let remaining = cooldownEmail == normalizedEmail ? max(0, Int(ceil(resendAt.timeIntervalSince(time.date)))) : 0
                     if expiresAt > .distantPast { Text(L.t("ux.otp.expiresIn", ["seconds": L.count(max(0, Int(ceil(expiresAt.timeIntervalSince(time.date)))))] )).font(Theme.body(13)).foregroundStyle(Theme.muted) }
                     Button(remaining > 0 ? L.t("otp.resendIn", ["seconds": String(remaining)]) : L.t("otp.resend")) { Task { await request() } }.disabled(busy || remaining > 0)
                 }
@@ -89,7 +91,7 @@ struct LoginView: View {
             } else {
                 Field(key: "auth.emailLabel", value: $email, keyboard: .emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled()
                 TimelineView(.periodic(from: .now, by: 1)) { time in
-                    let remaining = max(0, Int(ceil(resendAt.timeIntervalSince(time.date))))
+                    let remaining = cooldownEmail == normalizedEmail ? max(0, Int(ceil(resendAt.timeIntervalSince(time.date)))) : 0
                     Button(remaining > 0 ? L.t("otp.resendIn", ["seconds": L.count(remaining)]) : L.t("auth.sendCode")) { Task { await request() } }.buttonStyle(PATSButtonStyle(loading: busy)).disabled(busy || remaining > 0)
                 }
                 Link(L.t("auth.joinLink"), destination: Config.url("/join"))
@@ -100,10 +102,11 @@ struct LoginView: View {
             #endif
         }
     }
+    private var normalizedEmail: String { email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
     private func request() async {
-        guard !busy, resendAt <= .now else { return }
+        guard !busy, cooldownEmail != normalizedEmail || resendAt <= .now else { return }
         guard email.contains("@"), email.contains(".") else { error = L.t("validation.emailInvalid"); return }
-        busy = true; error = nil; let resend = otp.exists; defer { busy = false }
+        busy = true; error = nil; let resend = otp.exists; cooldownEmail = normalizedEmail; defer { busy = false }
         do {
             otp = try await APIClient.shared.call("POST", "/api/auth/otp/request", .object(["email": .str(email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()), "locale": .str(store.locale), "audience": .str("app")]), auth: false)
             resendAt = Date().addingTimeInterval(Double(otp["resendAfter"].int)); code = ""; sentAgain = resend
@@ -191,70 +194,91 @@ struct StaffMemberState: View {
 struct MemberHomeView: View {
     @Environment(\.scenePhase) private var phase
     @EnvironmentObject private var store: AppStore
-    @StateObject private var events = Resource()
+    @StateObject private var home = Resource()
     var body: some View {
         Page(title: "ux.home.title") {
             if store.offline { Notice(text: L.t("native.offline")) }
             if store.member.exists {
-                ResourceState(resource: events) { await events.load("/api/events") }
-                if let event = events.data["upcoming"].rows.first {
-                    MemberJourneyView(event: event)
-                    NavigationRow(title: "ux.home.eventDetails", icon: "calendar") { EventDetailView(eventID: event.id) }
-                } else if events.data.exists { EmptyState(title: "app.eventsEmptyTitle", message: "ux.home.noEvent", icon: "calendar") }
+                ResourceState(resource: home) { await load() }
+                if home.data["blockingReservation"].exists {
+                    let booking = home.data["blockingReservation"]
+                    Panel {
+                        Notice(text: L.t("ux.reservation.blocked", ["event": booking["event"]["title"].text]))
+                        Button(L.t("ux.reservation.openBlocking")) { store.link = .personalReservation(booking["event"].id, booking.id) }
+                    }
+                }
+                let next = home.data["next"]
+                if next["event"].exists {
+                    if next["national"].bool { Notice(text: L.t("ux.events.otherCity")) }
+                    MemberJourneyView(event: next["event"], initialJourney: next["journey"], initialReservation: next["myReservation"])
+                    NavigationRow(title: "ux.home.eventDetails", icon: "calendar") { EventDetailView(eventID: next["event"].id) }
+                } else if home.data.exists {
+                    EmptyState(title: "app.eventsEmptyTitle", message: "ux.home.noEvent", icon: "calendar")
+                    Button(L.t("ux.home.browseNational")) { store.tab = "events" }.buttonStyle(PATSButtonStyle(variant: .secondary))
+                }
+                if home.data["card"].exists {
+                    Panel {
+                        CardHeading(key: "ux.card.digitalTitle")
+                        Text(L.t(home.data["card"]["digital"]["ready"].bool ? "ux.card.digitalReady" : "ux.card.digitalInactive")).fontWeight(.semibold)
+                        if home.data["card"]["physical"].exists {
+                            DetailRow(key: "ux.card.physicalTitle", value: L.t("ux.card.stage." + home.data["card"]["physical"]["stage"].text, ["city": store.member["city"]["name"].text]))
+                        }
+                        Button(L.t("ktm.show")) { store.tab = "card" }.buttonStyle(PATSButtonStyle(variant: .maroon))
+                    }
+                } else { Button(L.t("ktm.show")) { store.tab = "card" }.buttonStyle(PATSButtonStyle(variant: .maroon)) }
                 ProfileXPView(memberID: store.member.id)
-                Button(L.t("ktm.show")) { store.tab = "card" }.buttonStyle(PATSButtonStyle(variant: .maroon))
                 Panel {
                     NavigationRow(title: "app.tabRewards", icon: "gift") { WalletView() }
                     NavigationRow(title: "app.notificationsTitle", icon: "bell") { NotificationsView() }
                 }
             } else { StaffMemberState() }
-        }.task { if store.member.exists { await events.load("/api/events") } }.onChange(of: phase) { _, p in if p == .active && store.member.exists { Task { await events.load("/api/events") } } }.refreshable { if store.member.exists { await events.load("/api/events") }; await store.reload() }
+        }.task { await load() }.onChange(of: phase) { _, p in if p == .active { Task { await load() } } }.refreshable { await load(); await store.reload() }
     }
+    private func load() async { if store.member.exists { await home.load("/api/me/home") } }
 }
 struct AdminHomeView: View {
     @Environment(\.scenePhase) private var phase
     @EnvironmentObject private var store: AppStore
-    @StateObject private var events = Resource()
-    @StateObject private var operations = Resource()
-    @StateObject private var claims = Resource()
-    private var today: JSON? {
-        (events.data["upcoming"].rows + events.data["past"].rows).first { event in
-            guard let date = Dates.parse(event["startsAt"].text) else { return false }
-            var calendar = Calendar(identifier: .gregorian)
-            calendar.timeZone = TimeZone(identifier: event["city"]["timezone"].text) ?? .current
-            return calendar.isDateInToday(date)
-        }
-    }
+    @StateObject private var home = Resource()
+    private let queues = ["claims", "reservations", "deposits", "roaming", "recapsDue", "hubAccess", "reencode", "regionChanges", "content", "myContent"]
     var body: some View {
         Page(title: "ux.home.adminTitle") {
-            ResourceState(resource: events) { await load() }
-            if let event = today {
+            ResourceState(resource: home) { await load() }
+            if !home.data["openEvents"].rows.isEmpty {
                 Text(L.t("ux.home.today")).font(Theme.title(20))
-                NavigationLink { EventDetailView(eventID: event.id, admin: true) } label: { EventPanel(event: event) }.buttonStyle(.plain)
-            } else if events.data.exists { EmptyState(title: "ux.home.noToday", message: "ux.home.chooseEvent", icon: "calendar") }
+                ForEach(home.data["openEvents"].rows) { event in
+                    NavigationLink { EventDetailView(eventID: event.id, admin: true) } label: { EventPanel(event: event) }.buttonStyle(.plain)
+                }
+            } else if home.data.exists {
+                Notice(text: L.t("ux.workspace.noOpenEvent"))
+                if home.data["nextEvent"].exists {
+                    let event = home.data["nextEvent"]
+                    Text(L.t("ux.workspace.nextOpens", ["event": event["title"].text, "time": L.date(event["timing"]["checkInOpensAt"].text, zone: event["timing"]["timezone"].text)])).font(Theme.body(14))
+                    NavigationLink { EventDetailView(eventID: event.id, admin: true) } label: { EventPanel(event: event) }.buttonStyle(.plain)
+                } else { EmptyState(title: "ux.home.noToday", message: "ux.home.chooseEvent", icon: "calendar") }
+            }
             NavigationRow(title: "app.adminScan", subtitle: L.t("ux.home.scanContext"), icon: "qrcode.viewfinder") { ScanEventPicker() }
             NavigationRow(title: "app.adminEvents", icon: "calendar") { EventsView(admin: true) }
-            Panel {
-                Text(L.t("ux.home.pendingQueues")).font(Theme.title(20))
-                ResourceState(resource: operations) { await operations.load("/api/social/operations") }
-                NavigationRow(title: "social.reservations", subtitle: pending(operations.data["reservations"].rows, status: "PENDING", available: operations.data.exists && operations.error == nil), icon: "list.bullet.rectangle") { SocialOperationsView() }
-                NavigationRow(title: "social.roaming", subtitle: pending(operations.data["roaming"].rows, status: "PENDING", available: operations.data.exists && operations.error == nil), icon: "globe.asia.australia") { SocialOperationsView(initialSection: "roaming") }
-                if store.can("promoter.manage") {
-                    ResourceState(resource: claims) { await claims.load("/api/admin/loyalty/claims") }
-                    NavigationRow(title: "phase5.claimReview", subtitle: pending(claims.data["claims"].rows, status: "PENDING", available: claims.data.exists && claims.error == nil), icon: "doc.text.magnifyingglass") { ClaimsReviewView() }
+            if home.data["pending"].exists {
+                Panel {
+                    Text(L.t("ux.home.pendingQueues")).font(Theme.title(20))
+                    ForEach(queues.filter { home.data["pending"][$0].exists }, id: \.self) { key in
+                        let queue = home.data["pending"][key]
+                        Button {
+                            if key == "recapsDue" { store.link = .recap("") }
+                            else if key == "regionChanges" { store.link = .dashboard("/regional?tab=region", "ux.workspace.pending.regionChanges") }
+                            else if key == "reencode" { store.link = .dashboard("/cards?tab=requests", "ux.workspace.pending.reencode") }
+                            else { store.routeNotification(queue["target"]) }
+                        } label: {
+                            HStack { Text(L.t("ux.workspace.pending." + key)); Spacer(); CountChip(count: queue["count"].int); Image(systemName: "chevron.right").font(.caption) }.frame(minHeight: 44)
+                        }.buttonStyle(.plain)
+                    }
                 }
             }
             NavigationRow(title: "ux.home.moreTools", icon: "square.grid.2x2") { AdminToolsView() }
         }.task { await load() }.onChange(of: phase) { _, p in if p == .active { Task { await load() } } }.refreshable { await load(); await store.reload() }
     }
-    private func pending(_ rows: [JSON], status: String, available: Bool) -> String { available ? L.t("ux.home.pendingCount", ["count": L.count(rows.filter { $0["status"].text == status }.count)]) : L.t("ux.home.countUnavailable") }
-    private func load() async {
-        async let a: Void = events.load("/api/admin/events")
-        async let b: Void = operations.load("/api/social/operations")
-        async let c: Void = loadClaims()
-        _ = await (a, b, c)
-    }
-    private func loadClaims() async { if store.can("promoter.manage") { await claims.load("/api/admin/loyalty/claims") } }
+    private func load() async { if store.managing { await home.load("/api/admin/home") } }
 }
 struct ProfileView: View {
     @EnvironmentObject private var store: AppStore
@@ -349,6 +373,11 @@ struct LinkDestination: View {
     @EnvironmentObject private var store: AppStore
     var body: some View {
         switch link {
+        case .dashboard(let path, let title): AdminModeRequired(capability: "checkin.scan") { DashboardTaskView(path: path, title: title, message: "ux.tools.approvalTask") }
+        case .task(let payload):
+            if payload["requiresAdminMode"].bool { AdminModeRequired(capability: "checkin.scan") { NotificationTaskDestination(payload: payload) } }
+            else { NotificationTaskDestination(payload: payload) }
+        case .personalReservation(let event, let reservation): if store.member.exists { SocialOperationsView(eventID: event, initialReservationID: reservation, personal: true) } else { StaffMemberState() }
         case .card(let token): PublicCardView(token: token)
         case .event(let id): EventDetailView(eventID: id, admin: store.managing)
         case .channel(let id): ChannelView(room: Room(kind: "channel", id: id))
@@ -365,6 +394,64 @@ struct LinkDestination: View {
         case .roaming(let id): SocialOperationsView(initialSection: "roaming", eventID: id)
         case .regionChange: if store.member.exists { RegionChangeView() } else { StaffMemberState() }
         case .wallet: if store.member.exists { WalletView() } else { StaffMemberState() }
+        }
+    }
+}
+struct NotificationTaskDestination: View {
+    let payload: JSON
+    @EnvironmentObject private var store: AppStore
+    private var eventID: String { payload["eventId"].text }
+    var body: some View {
+        switch payload["screen"].text {
+        case "event":
+            if store.member.exists { EventDetailView(eventID: eventID) }
+            else { AdminModeRequired(capability: "checkin.scan") { EventDetailView(eventID: eventID, admin: true) } }
+        case "adminEvent":
+            if eventID.isEmpty { EventsView(admin: true) } else { EventDetailView(eventID: eventID, admin: true) }
+        case "attendance":
+            if payload["requiresAdminMode"].bool { AttendanceView(eventID: eventID) }
+            else if !store.member.exists { StaffMemberState() }
+            else if eventID.isEmpty { HistoryView() }
+            else { MemberAttendanceTaskView(eventID: eventID) }
+        case "card": MemberCardView()
+        case "reservation": if store.member.exists { SocialOperationsView(eventID: eventID, initialReservationID: payload["reservationId"].text, personal: true) } else { StaffMemberState() }
+        case "adminReservations": SocialOperationsView(eventID: eventID, initialReservationID: payload["reservationId"].text)
+        case "roaming": if store.member.exists { SocialOperationsView(initialSection: "roaming", eventID: eventID, initialRequestID: payload["requestId"].text, personal: true) } else { StaffMemberState() }
+        case "adminRoaming": SocialOperationsView(initialSection: "roaming", eventID: eventID, initialRequestID: payload["requestId"].text)
+        case "claims":
+            if store.member.exists { ClaimsView(initialEventID: eventID, initialClaimID: payload["claimId"].text) } else { StaffMemberState() }
+        case "adminClaims":
+            if payload["claimId"].text.isEmpty { ClaimsReviewView(initialEventID: eventID) } else { ClaimReviewDetail(claimID: payload["claimId"].text) }
+        case "adminMemberCard":
+            if payload["memberId"].text.isEmpty && store.can("hq.manage") { DashboardTaskView(path: "/cards?tab=requests", title: "ux.workspace.pending.reencode", message: "ux.tools.approvalTask") }
+            else if payload["memberId"].text.isEmpty { MemberCardsView() } else { MemberCardsDetail(memberID: payload["memberId"].text) }
+        case "adminEventContent": DashboardTaskView(path: "/events/" + eventID, title: "ux.content.title", message: "ux.tools.contentTask")
+        case "adminContentQueue": DashboardTaskView(path: store.can("hq.manage") ? "/regional?tab=posters" : "/events", title: "ux.content.queueTitle", message: "ux.tools.contentTask")
+        case "conversation": ChannelView(room: Room(kind: "conversation", id: payload["conversationId"].text))
+        case "hub":
+            if payload["channelId"].text.isEmpty { SocialHubView() } else { ChannelView(room: Room(kind: "channel", id: payload["channelId"].text)) }
+        default: NotificationsView()
+        }
+    }
+}
+struct MemberAttendanceTaskView: View {
+    let eventID: String
+    var body: some View {
+        DataPage(title: "ux.events.attendance", path: "/api/events/\(eventID)", poll: true, pinLoadedEvent: true) { data, _ in
+            AttendanceOutcome(event: data["event"])
+            NavigationRow(title: "ux.home.eventDetails", icon: "calendar") { EventDetailView(eventID: eventID) }
+        }
+    }
+}
+struct DashboardTaskView: View {
+    let path: String
+    let title: String
+    let message: String
+    var body: some View {
+        Page(title: title) {
+            Notice(text: L.t(message))
+            Link(L.t("ux.tools.openDashboard"), destination: Config.url(path)).buttonStyle(PATSButtonStyle(variant: .maroon))
+            Text(L.t("ux.tools.webReturn")).font(Theme.body(14)).foregroundStyle(Theme.muted)
         }
     }
 }

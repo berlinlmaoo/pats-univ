@@ -155,12 +155,24 @@ struct Skeleton: View {
 }
 struct Page<Content: View>: View {
     let title: String
+    var eventContext: JSON = .null
     @ViewBuilder var content: Content
     var body: some View {
-        ScrollView { VStack(alignment: .leading, spacing: Theme.padding) { content }.padding(Theme.padding).frame(maxWidth: 720).frame(maxWidth: .infinity) }
+        ScrollView { VStack(alignment: .leading, spacing: Theme.padding) { content }.padding(Theme.padding).padding(.bottom, Theme.padding).frame(maxWidth: 720).frame(maxWidth: .infinity) }
             .background(Theme.bg).navigationTitle("").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .principal) { VarsityText(text: L.t(title)).accessibilityAddTraits(.isHeader) } }
             .bandNavigation()
+            .safeAreaInset(edge: .top, spacing: 0) { if eventContext.exists { EventScopeBar(event: eventContext) } }
+    }
+}
+struct EventScopeBar: View {
+    let event: JSON
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(event["title"].text).font(Theme.body(14)).bold().lineLimit(1)
+            Text(event["city"]["name"].text + " · " + L.date(event["startsAt"].text, zone: event["city"]["timezone"].text.isEmpty ? "Asia/Jakarta" : event["city"]["timezone"].text)).font(Theme.body(12)).foregroundStyle(Theme.muted).lineLimit(1)
+        }.frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, Theme.padding).padding(.vertical, 8).background(Theme.surface)
+            .overlay(alignment: .bottom) { Theme.border.frame(height: 1) }.accessibilityElement(children: .combine)
     }
 }
 struct Field: View {

@@ -3,19 +3,32 @@ import SwiftUI
 struct MemberCardView: View {
     @EnvironmentObject private var store: AppStore
     @StateObject private var state = Resource()
+    @StateObject private var cardState = Resource()
     @StateObject private var attendance = Resource()
     @State private var deadline: QRDeadline?
     @State private var enlarged = false
     @StateObject private var linkReader = NDEFLinkReader()
     @Environment(\.scenePhase) private var phase
     private var event: JSON { attendance.data["event"].exists ? attendance.data["event"] : store.cardEvent }
+    private var digitalReady: Bool { cardState.error == nil && cardState.data["digital"]["ready"].bool }
+    private var cardMember: JSON {
+        var value = store.member
+        if cardState.data["face"].exists {
+            value["fullName"] = cardState.data["face"]["name"]
+            value["favoriteDrink"] = cardState.data["face"]["favoriteDrink"]
+            value["quotes"] = cardState.data["face"]["quote"]
+        }
+        return value
+    }
     var body: some View {
         Page(title: "ux.card.heading") {
             if store.member.exists {
                 Panel {
-                    HStack { Text(L.t("ux.card.digital")).font(Theme.title(20)); Spacer(); if deadline != nil && state.error == nil { Badge(value: "ux.card.ready") } }
+                    HStack { Text(L.t("ux.card.digital")).font(Theme.title(20)); Spacer(); if digitalReady && deadline != nil && state.error == nil { Badge(value: "ux.card.ready") } }
                     Text(L.t("ux.card.digitalHint")).font(Theme.body(14)).foregroundStyle(Theme.muted)
+                    ResourceState(resource: cardState) { await refresh() }
                     ResourceState(resource: state) { await refresh() }
+                    if cardState.data.exists && !digitalReady { Notice(text: L.t("ux.card.digitalInactive")) }
                     if event.exists {
                         EventContextHeader(event: event)
                         AttendanceOutcome(event: event)
@@ -24,9 +37,9 @@ struct MemberCardView: View {
                     }
                     TimelineView(.periodic(from: .now, by: 1)) { time in
                         let remaining = deadline?.remaining(at: time.date) ?? 0
-                        let valid = remaining > 0 && phase == .active && state.error == nil
+                        let valid = digitalReady && remaining > 0 && phase == .active && state.error == nil
                         if valid, let deadline {
-                            Button(L.t("ux.card.showCrew"), systemImage: "qrcode") { enlarged = true }.buttonStyle(PATSButtonStyle(variant: .maroon)).disabled(event.exists && !EventJourneyPolicy.checkInOpen(event) && !event["myCheckIn"].exists)
+                            Button(L.t("ux.card.showCrew"), systemImage: "qrcode") { enlarged = true }.buttonStyle(PATSButtonStyle(variant: .maroon)).disabled(event.exists && !EventJourneyPolicy.actionAvailable("showQr", in: event) && !event["myCheckIn"].exists)
                             ProgressView(value: min(1, Double(remaining) / deadline.ttl)).tint(Theme.color("gold"))
                             Text(L.t("app.cardQrRefreshIn", ["seconds": L.count(remaining)])).font(Theme.body(13)).monospacedDigit()
                         } else if !state.loading && state.error == nil { Notice(text: L.t("native.expired")) }
@@ -34,14 +47,23 @@ struct MemberCardView: View {
                 }
                 // Official artwork stays inside KTMCard and can be replaced without changing the task UI.
                 TimelineView(.periodic(from: .now, by: 1)) { time in
-                    KTMCard(member: store.member, token: (deadline?.remaining(at: time.date) ?? 0) > 0 && phase == .active && state.error == nil ? deadline?.token : nil)
+                    KTMCard(member: cardMember, token: digitalReady && (deadline?.remaining(at: time.date) ?? 0) > 0 && phase == .active && state.error == nil ? deadline?.token : nil)
                 }
-                Panel {
-                    Text(L.t("ux.card.physical")).font(Theme.title(20))
-                    Text(L.t("ux.card.physical." + store.member["cardStatus"].text)).fontWeight(.semibold)
-                    Text(L.t("ux.card.physicalNext." + store.member["cardStatus"].text)).font(Theme.body(14)).foregroundStyle(Theme.muted)
-                    DetailRow(key: "app.nim", value: store.member["nim"].text)
-                    DetailRow(key: "app.city", value: store.member["city"]["name"].text)
+                if cardState.data["physical"].exists {
+                    let physical = cardState.data["physical"]
+                    Panel {
+                        Text(L.t("ux.card.physical")).font(Theme.title(20))
+                        Text(L.t("ux.card.stage." + physical["stage"].text, ["city": store.member["city"]["name"].text])).fontWeight(.semibold)
+                        if !physical["batchLabel"].text.isEmpty { Text(physical["batchLabel"].text).font(Theme.body(14)) }
+                        if physical["shippedToCityAt"].exists { DetailRow(key: "ux.card.shippedAt", value: L.date(physical["shippedToCityAt"].text)) }
+                        if physical["deliveredAt"].exists { DetailRow(key: "ux.card.deliveredAt", value: L.date(physical["deliveredAt"].text)) }
+                        if physical["replacementFee"].exists {
+                            let fee = physical["replacementFee"]
+                            Text(L.t(fee["paidAt"].exists ? "ux.card.feePaid" : "ux.card.feeDue", ["amount": L.money(fee["amount"].int), "date": L.date(fee["paidAt"].text)]))
+                        }
+                        DetailRow(key: "app.nim", value: store.member["nim"].text)
+                        DetailRow(key: "app.city", value: store.member["city"]["name"].text)
+                    }
                 }
                 if linkReader.available { Button(L.t("native.tap"), systemImage: "wave.3.right") { linkReader.complete = { store.open($0) }; linkReader.begin() }.buttonStyle(PATSButtonStyle(variant: .secondary)) }
                 Text(L.t("app.cardQrBody", ["seconds": String(Int(deadline?.ttl ?? 60))])).font(Theme.body(13)).foregroundStyle(Theme.muted)
@@ -68,6 +90,9 @@ struct MemberCardView: View {
         await attendance.load("/api/events/\(store.cardEventID)")
     }
     private func refresh() async {
+        guard store.member.exists else { return }
+        await cardState.load("/api/me/card")
+        guard digitalReady else { deadline = nil; return }
         await state.load("/api/me/card-token")
         deadline = state.error == nil && !state.data["token"].text.isEmpty ? QRDeadline(response: state.data, receivedAt: state.receivedAt, requestStartedAt: state.requestedAt) : nil
     }
@@ -86,7 +111,7 @@ struct EventsView: View {
                 if store.admin { Button(L.t("ux.events.openAccount")) { store.tab = "profile" }.buttonStyle(PATSButtonStyle(variant: .maroon)) }
             }
         } else {
-        DataPage(title: "events.title", path: managing ? "/api/admin/events" : "/api/events" + (all ? "?scope=all" : "")) { data, _ in
+        DataPage(title: "events.title", path: managing ? "/api/admin/events" : "/api/events" + (all ? "?scope=national" : "")) { data, _ in
             if !managing {
                 Toggle(L.t("ux.events.national"), isOn: $all)
                 Text(L.t(all ? "ux.events.allCities" : "ux.events.homeCity", ["city": store.member["city"]["name"].text])).font(Theme.body(14)).foregroundStyle(Theme.muted)
@@ -126,20 +151,21 @@ struct EventDetailView: View {
     @EnvironmentObject private var store: AppStore
     private var managing: Bool { admin && store.managing }
     var body: some View {
-        DataPage(title: managing ? "ux.workspace.title" : "events.details", path: "/api/\(managing ? "admin/" : "")events/\(eventID)", room: managing ? Room(kind: "attendance", id: eventID) : nil, poll: !managing) { data, reload in
+        DataPage(title: managing ? "ux.workspace.title" : "events.details", path: managing ? "/api/admin/events/\(eventID)/workspace" : "/api/events/\(eventID)", room: managing ? Room(kind: "attendance", id: eventID) : nil, poll: !managing, pinLoadedEvent: managing) { data, reload in
             let e = data["event"]
-            if managing { AdminEventWorkspace(event: e, reload: reload) }
+            if managing { AdminEventWorkspace(workspace: data, reload: reload) }
             else {
                 EventPanel(event: e)
                 EventTiming(event: e)
-                MemberJourneyView(event: e)
+                MemberJourneyView(event: e, initialJourney: data["journey"], initialReservation: data["myReservation"])
                 Panel {
                     Text(L.t("ux.events.attendance")).font(Theme.title(20))
                     AttendanceOutcome(event: e)
-                    if EventJourneyPolicy.claimEligible(e, memberCityID: store.member["city"].id) { NavigationRow(title: "ux.events.claimBonus", icon: "doc.text") { ClaimsView(initialEventID: eventID) } }
+                    if EventJourneyPolicy.actionAvailable("claimXp", in: e) { NavigationRow(title: "ux.events.claimBonus", icon: "doc.text") { ClaimsView(initialEventID: eventID) } }
                 }
-                if !e["description"].text.isEmpty { Panel { Text(L.t("app.eventAbout")).font(Theme.title(17)); Text(e["description"].text) } }
-                DrawView(eventID: eventID, ended: EventJourneyPolicy.ended(e))
+                if !e["poster"]["description"].text.isEmpty { Panel { Text(L.t("app.eventAbout")).font(Theme.title(17)); Text(e["poster"]["description"].text) } }
+                if EventJourneyPolicy.actionAvailable("draw", in: e) { DrawView(eventID: eventID, ended: EventJourneyPolicy.ended(e)) }
+                else if let reason = EventJourneyPolicy.actionReason("draw", in: e) { Text(L.t("ux.reason." + reason)).font(Theme.body(13)).foregroundStyle(Theme.muted) }
             }
         }
     }
@@ -220,8 +246,8 @@ struct WalletView: View {
         }
     }
 }
-/// Replaced only when the server publishes the staff-authorized read contract.
-private enum DrawStateContract { static let staffPath: String? = nil }
+/// Staff draw reads its authorized wrapper; member draw keeps the existing member endpoint.
+private enum DrawStateContract { static let staffPath = "/api/admin/draw" }
 struct DrawView: View {
     let eventID: String
     var ended = false
@@ -233,13 +259,12 @@ struct DrawView: View {
     var body: some View {
         Panel {
             Text(L.t("phase5.draw")).font(Theme.title(20))
-            if managesDraw && DrawStateContract.staffPath == nil { Notice(text: L.t("ux.draw.integrationPending")) }
             ResourceState(resource: state) { await load() }
             if state.data.exists {
-                let d = state.data
+                let d = managesDraw ? state.data["draw"] : state.data
                 Text(d["prize"].text.isEmpty ? L.t("phase5.notConfigured") : d["prize"].text).fontWeight(.semibold)
                 if ended && !d["winnerEntryId"].exists { Text(L.t("ktm.noDrawResult")) }
-                if !ended { Text(L.t("phase5.drawHint")).font(Theme.body(13)).foregroundStyle(Theme.muted)
+                if !ended { Text(L.t(managesDraw ? "ux.draw.runWhenFull" : "phase5.drawHint")).font(Theme.body(13)).foregroundStyle(Theme.muted)
                 Text("\(L.count(d["entries"].rows.count)) / \(L.count(d["capacity"].int)) · \(L.count(d["costXp"].int)) XP")
                 if d["peakStartsAt"].exists { Text(L.date(d["peakStartsAt"].text) + " — " + L.date(d["peakEndsAt"].text)).font(Theme.body(13)) }
                 if d["freeCredit"].exists { Notice(text: L.t("phase5.drawFree")) }
@@ -251,7 +276,7 @@ struct DrawView: View {
                 TimelineView(.periodic(from: .now, by: 1)) { time in
                     let inWindow = (Dates.parse(d["peakStartsAt"].text) ?? .distantFuture) <= time.date && (Dates.parse(d["peakEndsAt"].text) ?? .distantPast) >= time.date
                     if !ended && !d["startedAt"].exists {
-                        ConfirmAction(label: managesDraw ? "phase5.drawRun" : "phase5.drawEnter", message: L.t(managesDraw ? "phase5.drawConfirm" : "phase5.drawHint"), maroon: true, disabled: mutation.busy || !d["prize"].exists || (managesDraw ? d["entries"].rows.count != d["capacity"].int : (!inWindow || d["ownEntryId"].exists || d["entries"].rows.count >= d["capacity"].int))) {
+                        ConfirmAction(label: managesDraw ? "phase5.drawRun" : "phase5.drawEnter", message: L.t(managesDraw ? "phase5.drawConfirm" : "phase5.drawHint"), maroon: true, disabled: mutation.busy || !d["prize"].exists || (managesDraw ? !state.data["canRun"].bool : (!inWindow || d["ownEntryId"].exists || d["entries"].rows.count >= d["capacity"].int))) {
                             var body: [String: JSON] = ["eventId": .str(eventID)]
                             if managesDraw { body["action"] = .str("run") }
                             await mutation.send(managesDraw ? "/api/admin/draw" : "/api/loyalty/spin", body: .object(body), after: load)
@@ -261,7 +286,13 @@ struct DrawView: View {
             }
             MutationState(mutation: mutation)
         }
-        .task(id: eventID) { await load(); connect() }
+        .task(id: eventID) {
+            await load(); connect()
+            while !Task.isCancelled {
+                do { try await Task.sleep(for: .seconds(15)) } catch { break }
+                if phase == .active { await load() }
+            }
+        }
         .onDisappear { live.stop() }
         .onChange(of: phase) { _, p in if p == .active { connect(); Task { await load() } } else { live.stop() } }
         .onChange(of: store.managing) { _, _ in state.data = .null; Task { await load() } }
@@ -269,12 +300,10 @@ struct DrawView: View {
     private var managesDraw: Bool { store.managing && store.can("draw.manage") }
     private func load() async {
         if managesDraw {
-            guard let path = DrawStateContract.staffPath else { state.data = .null; state.error = nil; return }
-            await state.load(query(path, ["eventId": eventID]))
+            await state.load(query(DrawStateContract.staffPath, ["eventId": eventID]))
         } else { await state.load(query("/api/loyalty/draw", ["eventId": eventID])) }
     }
     private func connect() {
-        guard !managesDraw || DrawStateContract.staffPath != nil else { return }
         live.start(kind: "draw", id: eventID) { await load() }
     }
 }
@@ -371,9 +400,9 @@ struct NotificationsView: View {
                 Button {
                     Task {
                         if !row["readAt"].exists {
-                            await mutation.run { _ = try await APIClient.shared.call("POST", "/api/me/notifications/read", .object(["ids": .array([.str(row.id)])])); await reload() }
+                            await mutation.run { _ = try await APIClient.shared.call("POST", "/api/me/notifications/\(row.id)/read", .object([:])); await reload() }
                         }
-                        store.routeNotification(row["data"])
+                        store.routeNotification(row["target"].exists ? row["target"] : row["data"])
                     }
                 } label: {
                     Panel {
@@ -439,7 +468,7 @@ struct AttendanceOutcome: View {
 struct EventPosterHighlight: View {
     let event: JSON
     @State private var fullPoster = false
-    private var poster: String { event["posterUrl"].text.isEmpty ? event["flyerUrl"].text : event["posterUrl"].text }
+    private var poster: String { event["poster"].exists ? event["poster"]["url"].text : event["posterUrl"].text.isEmpty ? event["flyerUrl"].text : event["posterUrl"].text }
     var body: some View {
         if !poster.isEmpty {
             Button { fullPoster = true } label: {
@@ -455,12 +484,13 @@ struct EventPosterHighlight: View {
 struct EventPosterDetailView: View {
     let event: JSON
     @Environment(\.dismiss) private var dismiss
-    private var poster: String { event["posterUrl"].text.isEmpty ? event["flyerUrl"].text : event["posterUrl"].text }
+    private var poster: String { event["poster"].exists ? event["poster"]["url"].text : event["posterUrl"].text.isEmpty ? event["flyerUrl"].text : event["posterUrl"].text }
     var body: some View {
         Page(title: "ux.events.posterDetails") {
             EventContextHeader(event: event)
             if !poster.isEmpty { RemoteImage(url: poster) }
-            if !event["description"].text.isEmpty { Text(event["description"].text) }
+            let description = event["poster"]["description"].exists ? event["poster"]["description"].text : event["description"].text
+            if !description.isEmpty { Text(description) }
         }.toolbar { ToolbarItem(placement: .topBarTrailing) { Button(L.t("common.close")) { dismiss() } } }
     }
 }
@@ -482,80 +512,99 @@ struct PosterBlastStep: View {
 }
 struct MemberJourneyView: View {
     let event: JSON
+    var initialJourney: JSON = .null
+    var initialReservation: JSON = .null
     @EnvironmentObject private var store: AppStore
-    @StateObject private var operations = Resource()
-    @State private var progress = 0
-    private let steps = ["ux.journey.event", "ux.journey.poster", "ux.journey.reservation", "ux.journey.checkIn", "ux.journey.complete"]
-    private var key: String { "pats.journey.\(Config.baseURL.absoluteString).\(store.user.id).\(event.id)" }
-    private var reservation: JSON { operations.data["reservations"].rows.first { ($0["eventId"].text == event.id || $0["event"].id == event.id) && ($0["memberId"].text == store.member.id || $0["member"].id == store.member.id) && ["PENDING", "CONFIRMED"].contains($0["status"].text) } ?? .null }
-    private var visiting: Bool { !event["city"].id.isEmpty && event["city"].id != store.member["city"].id }
-    private var roaming: JSON { operations.data["roaming"].rows.first { ($0["eventId"].text == event.id || $0["event"].id == event.id) && ($0["memberId"].text == store.member.id || $0["member"].id == store.member.id) && $0["type"].text == "ATTENDANCE" } ?? .null }
-    private var access: Bool {
-        !visiting || (roaming["status"].text == "APPROVED" && (Dates.parse(roaming["accessExpiresAt"].text).map { $0 > .now } ?? false))
-    }
+    @Environment(\.scenePhase) private var phase
+    @StateObject private var detail = Resource()
+    @StateObject private var mutation = Mutation()
+    private var currentEvent: JSON { detail.data["event"].exists ? detail.data["event"] : event }
+    private var steps: [JSON] { detail.data["journey"].exists ? detail.data["journey"].rows : initialJourney.rows }
+    private var reservation: JSON { detail.data.exists ? detail.data["myReservation"] : initialReservation }
+    private var current: JSON { steps.first { $0["state"].text == "current" } ?? .null }
     var body: some View {
         Panel {
             Text(L.t("ux.journey.title")).font(Theme.title(20))
-            EventContextHeader(event: event)
-            ForEach(Array(steps.enumerated()), id: \.offset) { index, title in
+            EventContextHeader(event: currentEvent)
+            ResourceState(resource: detail) { await load() }
+            MutationState(mutation: mutation)
+            ForEach(Array(steps.enumerated()), id: \.offset) { _, step in
                 HStack(spacing: Theme.gap) {
-                    Image(systemName: progress > index ? "checkmark.circle.fill" : progress == index ? "circle.inset.filled" : "circle").foregroundStyle(progress >= index ? Theme.accent : Theme.muted)
-                    Text(L.t(title)).fontWeight(progress == index ? .bold : .regular)
+                    Image(systemName: step["state"].text == "done" ? "checkmark.circle.fill" : step["state"].text == "current" ? "circle.inset.filled" : "circle").foregroundStyle(step["state"].text == "upcoming" ? Theme.muted : Theme.accent)
+                    Text(L.t("ux.journey." + step["key"].text)).fontWeight(step["state"].text == "current" ? .bold : .regular)
                     Spacer()
-                    Text("\(index + 1)").font(Theme.body(12)).foregroundStyle(Theme.muted)
+                    if step["state"].text == "done" { Text(L.t("ux.journey.done")).font(Theme.body(12)).foregroundStyle(Theme.muted) }
                 }.accessibilityElement(children: .combine)
             }
-            ResourceState(resource: operations) { await operations.load("/api/social/operations") }
-            if !store.member.exists || store.member["status"].text != "ACTIVE" { Notice(text: L.t("ux.journey.activeMember")) }
-            else { currentStep }
+            if !store.member.exists { StaffMemberState() }
+            else if !steps.isEmpty {
+                currentStep.disabled(mutation.busy || detail.error != nil)
+            }
         }
-        .task(id: event.id) { progress = min(5, max(0, UserDefaults.standard.integer(forKey: key))); await operations.load("/api/social/operations") }
-        .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)) { _ in progress = min(5, max(0, UserDefaults.standard.integer(forKey: key))) }
+        .task(id: event.id) {
+            if detail.data["event"].id != event.id { detail.data = .null }
+            await load()
+            while !Task.isCancelled {
+                do { try await Task.sleep(for: .seconds(15)) } catch { break }
+                if phase == .active { await load() }
+            }
+        }
+        .onChange(of: phase) { _, value in if value == .active { Task { await load() } } }
     }
     @ViewBuilder private var currentStep: some View {
-        switch progress {
-        case 0:
-            Button(L.t("ux.journey.chooseEvent")) { advance() }.buttonStyle(PATSButtonStyle(variant: .maroon))
-        case 1:
-            if EventJourneyPolicy.ended(event) {
-                Text(L.t("ux.journey.posterEnded")).foregroundStyle(Theme.muted)
-                Button(L.t("ux.journey.continue")) { advance() }.buttonStyle(PATSButtonStyle(variant: .secondary))
-            } else { PosterBlastStep(event: event) { advance() } }
-        case 2:
-            if EventJourneyPolicy.ended(event) {
-                Text(L.t("ux.journey.reservationEnded")).foregroundStyle(Theme.muted)
-                Button(L.t("ux.journey.continue")) { advance() }.buttonStyle(PATSButtonStyle(variant: .secondary))
+        switch current["key"].text {
+        case "event":
+            Button(L.t("ux.journey.chooseEvent")) { Task { await record("event") } }.buttonStyle(PATSButtonStyle(variant: .maroon))
+        case "poster":
+            PosterBlastStep(event: currentEvent) { Task { await record("poster") } }
+        case "reservation":
+            if current["bonusXp"].exists { Text(L.t("ux.journey.reservationBonus", ["xp": L.count(current["bonusXp"].int)])).font(Theme.body(14)).foregroundStyle(Theme.muted) }
+            if reservation.exists {
+                Badge(value: reservation["status"].text)
+                Text(reservation["slotCode"].text + " · " + L.count(reservation["pax"].int))
+                if reservation["status"].text == "PENDING" { Notice(text: L.t("ux.journey.reservationRequested")) }
+                if !reservation["conversationId"].text.isEmpty { NavigationRow(title: "social.chat", icon: "bubble.left") { ChannelView(room: Room(kind: "conversation", id: reservation["conversationId"].text)) } }
+                NavigationRow(title: "ux.reservation.mine", icon: "list.bullet.rectangle") { SocialOperationsView(eventID: event.id) }
             } else {
-                Text(L.t("ux.journey.reservationBonus")).font(Theme.body(14)).foregroundStyle(Theme.muted)
-                NavigationRow(title: "ux.journey.reservation", icon: "square.grid.3x3") { ReservationView(eventID: event.id) }
-                if reservation.exists {
-                    Badge(value: reservation["status"].text)
-                    Button(L.t("ux.journey.continue")) { advance() }.buttonStyle(PATSButtonStyle(variant: .maroon))
-                }
-                Button(L.t("ux.journey.skipReservation")) { advance() }.buttonStyle(PATSButtonStyle(variant: .secondary))
-                Button(L.t("ux.journey.refreshReservation")) { Task { await operations.load("/api/social/operations") } }.buttonStyle(.plain).frame(minHeight: 44)
+                if EventJourneyPolicy.actionAvailable("reserve", in: currentEvent) {
+                    NavigationRow(title: "ux.events.reservation", icon: "square.grid.3x3") { ReservationView(eventID: event.id) }
+                } else { actionReason("reserve") }
+                Button(L.t("ux.journey.reservationSkip")) { Task { await record("reservation") } }.buttonStyle(PATSButtonStyle(variant: .secondary))
             }
-        case 3:
-            AttendanceOutcome(event: event)
-            if event["myCheckIn"].exists {
-                Button(L.t("ux.journey.confirmAttendance")) { advance() }.buttonStyle(PATSButtonStyle(variant: .maroon))
-            } else if EventJourneyPolicy.ended(event) {
-                Button(L.t("ux.journey.finishWithoutCheckIn")) { advance() }.buttonStyle(PATSButtonStyle(variant: .secondary))
-            } else if visiting && !access {
-                if roaming.exists { Badge(value: roaming["status"].text) }
-                Text(L.t("ux.journey.visitingAccess")).font(Theme.body(14))
-                NavigationRow(title: "social.roaming", icon: "globe.asia.australia") { RoamingView(initialEventID: event.id) }
-                Button(L.t("common.retry")) { Task { await operations.load("/api/social/operations") } }.buttonStyle(PATSButtonStyle(variant: .secondary))
-            } else if EventJourneyPolicy.checkInOpen(event) {
-                Button(L.t("app.eventShowQr"), systemImage: "qrcode") { store.selectCard(event: event) }.buttonStyle(PATSButtonStyle(variant: .maroon))
-            } else { Text(L.t("ux.journey.checkInWait", ["time": L.date(event["checkInOpensAt"].text, zone: event["city"]["timezone"].text)])).font(Theme.body(14)) }
-        case 4:
-            Button(L.t("ux.journey.finish")) { advance() }.buttonStyle(PATSButtonStyle(variant: .maroon))
+            Button(L.t("ux.journey.refreshReservation")) { Task { await load() } }.buttonStyle(.plain).frame(minHeight: 44)
+        case "checkIn":
+            AttendanceOutcome(event: currentEvent)
+            if EventJourneyPolicy.actionAvailable("showQr", in: currentEvent) {
+                Button(L.t("app.eventShowQr"), systemImage: "qrcode") { store.selectCard(event: currentEvent) }.buttonStyle(PATSButtonStyle(variant: .maroon))
+            } else {
+                actionReason("showQr")
+                if EventJourneyPolicy.actionAvailable("roaming", in: currentEvent) { NavigationRow(title: "social.roaming", icon: "globe.asia.australia") { RoamingView(initialEventID: event.id) } }
+            }
+        case "completed":
+            AttendanceOutcome(event: currentEvent)
+            Text(L.t("ux.journey.waitForEnd")).font(Theme.body(14)).foregroundStyle(Theme.muted)
         default:
-            Label(L.t("ux.journey.completed"), systemImage: "checkmark.seal.fill").font(Theme.title(17))
-            AttendanceOutcome(event: event)
-            if EventJourneyPolicy.claimEligible(event, memberCityID: store.member["city"].id) { NavigationRow(title: "ux.events.claimBonus", icon: "doc.text") { ClaimsView(initialEventID: event.id) } }
+            if !steps.isEmpty && steps.allSatisfy({ $0["state"].text == "done" }) { Label(L.t("ux.journey.completed"), systemImage: "checkmark.seal.fill").font(Theme.title(17)) }
+            AttendanceOutcome(event: currentEvent)
+        }
+        if EventJourneyPolicy.actionAvailable("claimXp", in: currentEvent) {
+            NavigationRow(title: "ux.events.claimBonus", icon: "doc.text") { ClaimsView(initialEventID: event.id) }
+        } else if EventJourneyPolicy.actionReason("claimXp", in: currentEvent) == "claimSubmitted" {
+            NavigationRow(title: "phase5.claimTitle", subtitle: L.t("ux.reason.claimSubmitted"), icon: "doc.text") { ClaimsView(initialEventID: event.id) }
         }
     }
-    private func advance() { progress = min(5, progress + 1); UserDefaults.standard.set(progress, forKey: key) }
+    @ViewBuilder private func actionReason(_ key: String) -> some View {
+        if let reason = EventJourneyPolicy.actionReason(key, in: currentEvent) { Text(L.t("ux.reason." + reason)).font(Theme.body(14)).foregroundStyle(Theme.muted) }
+    }
+    private func load() async {
+        guard store.member.exists else { return }
+        await detail.load("/api/events/\(event.id)")
+    }
+    private func record(_ step: String) async {
+        await mutation.run {
+            let result = try await APIClient.shared.call("POST", "/api/me/journey", .object(["eventId": .str(event.id), "step": .str(step)]))
+            detail.data = result; detail.error = nil
+            await detail.load("/api/events/\(event.id)")
+        }
+    }
 }

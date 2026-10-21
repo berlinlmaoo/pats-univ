@@ -26,8 +26,9 @@ struct RewardValidationView: View {
     @State private var camera = false
     @StateObject private var mutation = Mutation()
     var body: some View {
-        DataPage(title: "loyalty.validateReward", path: "/api/admin/loyalty/operations") { data, _ in
-            OperationEventContext(events: data["events"].rows, selection: $eventID, fixed: !initialEventID.isEmpty).onChange(of: eventID) { _, _ in preview = .null; previewEventID = "" }
+        DataPage(title: "loyalty.validateReward", path: "/api/admin/loyalty/operations", pinEventID: eventID) { data, _ in
+            if initialEventID.isEmpty { OperationEventContext(events: data["events"].rows, selection: $eventID) }
+            else if !data["events"].rows.contains(where: { $0.id == eventID }) { Notice(text: L.t("ux.operations.eventUnavailable"), error: true) }
             Notice(text: L.t("ux.reward.eligibility"))
             Field(key: "loyalty.code", value: $code).textInputAutocapitalization(.characters).autocorrectionDisabled().onChange(of: code) { _, v in code = String(v.uppercased().filter { $0.isASCII && ($0.isLetter || $0.isNumber) }.prefix(6)); preview = .null }
             Button(L.t("loyalty.lookup")) { Task { await lookup(code) } }.buttonStyle(PATSButtonStyle(loading: mutation.busy)).disabled(mutation.busy || code.count != 6 || !data["events"].rows.contains(where: { $0.id == eventID }))
@@ -48,6 +49,7 @@ struct RewardValidationView: View {
                 }
             }
         }.onAppear { if !initialEventID.isEmpty { eventID = initialEventID } }
+        .onChange(of: eventID) { _, _ in preview = .null; previewEventID = "" }
         .sheet(isPresented: $camera) { ScannerSheet { value in code = value; Task { await lookup(value) } } }
     }
     private func lookup(_ value: String) async {
@@ -71,11 +73,10 @@ struct ClaimsReviewView: View {
     @State private var recentOnly = false
     @StateObject private var context = Resource()
     var body: some View {
-        DataPage(title: "phase5.claimReview", path: "/api/admin/loyalty/claims", poll: true) { data, _ in
+        DataPage(title: "phase5.claimReview", path: "/api/admin/loyalty/claims", poll: true, eventContext: context.data["event"].id == eventID ? context.data["event"] : .null) { data, _ in
             let scoped = data["claims"].rows.filter { eventID.isEmpty || $0["eventId"].text == eventID }
             if !eventID.isEmpty {
                 ResourceState(resource: context) { await context.load("/api/admin/events/\(eventID)") }
-                if context.data["event"].id == eventID { OperationEventContext(events: [context.data["event"]], selection: .constant(eventID), fixed: true) }
             }
             if initialEventID.isEmpty { Choice(label: "loyalty.event", options: claimEvents(data["claims"].rows), selection: $eventID, allowEmpty: true) }
             Field(key: "ux.claim.searchMember", value: $search)
@@ -120,11 +121,10 @@ struct ClaimReviewDetail: View {
     let claimID: String
     @StateObject private var context = Resource()
     var body: some View {
-        DataPage(title: "ux.claim.review", path: "/api/admin/loyalty/claims", poll: true) { data, reload in
+        DataPage(title: "ux.claim.review", path: "/api/admin/loyalty/claims", poll: true, eventContext: context.data["event"]) { data, reload in
             if let claim = data["claims"].rows.first(where: { $0.id == claimID }) {
                 VStack(alignment: .leading, spacing: Theme.padding) {
-                    if context.data["event"].exists { OperationEventContext(events: [context.data["event"]], selection: .constant(claim["eventId"].text), fixed: true) }
-                    ClaimReviewCard(claim: claim, reload: reload).id(claim.id + claim["status"].text)
+                    ClaimReviewCard(claim: claim, rules: data["rules"], reload: reload).id(claim.id + claim["status"].text)
                 }.task(id: claim["eventId"].text) { await context.load("/api/admin/events/\(claim["eventId"].text)") }
             } else { EmptyState(title: "phase5.claimEmpty") }
         }
@@ -133,42 +133,49 @@ struct ClaimReviewDetail: View {
 
 struct ClaimReviewCard: View {
     let claim: JSON
-    // Bound to the documented server rule once the redesign contract is available.
-    var allowMemberGl: Bool? = nil
+    var rules: JSON = .null
     let reload: () async -> Void
     @State private var guests = "0"
     @State private var reservations = "0"
     @State private var reason = ""
     @StateObject private var mutation = Mutation()
-    private var glAllowed: Bool { claim["formType"].text == "PR" || allowMemberGl == true }
-    private var glKnown: Bool { claim["formType"].text == "PR" || allowMemberGl != nil }
-    private var valid: Bool { (!glAllowed || (Int(guests).map { (0...1_000_000).contains($0) } ?? false)) && (Int(reservations).map { (0...1_000_000).contains($0) } ?? false) }
+    private var glAllowed: Bool { claim["glAllowed"].exists ? claim["glAllowed"].bool : claim["formType"].text == "PR" || rules["allowMemberGl"].bool }
+    private var glKnown: Bool { claim["glAllowed"].exists || claim["formType"].text == "PR" || rules["allowMemberGl"].exists }
+    private func editable(_ field: String) -> Bool { !claim["editableFields"].exists || claim["editableFields"].rows.contains(.str(field)) }
+    private var guestEditable: Bool { glAllowed && editable("guestCount") }
+    private var reservationEditable: Bool { editable("reservationCount") }
+    private var minimumReason: Int { rules["rejectReasonMin"].exists ? max(3, min(1000, rules["rejectReasonMin"].int)) : 3 }
+    private var valid: Bool { (!guestEditable || (Int(guests).map { (0...1_000_000).contains($0) } ?? false)) && (!reservationEditable || (Int(reservations).map { (0...1_000_000).contains($0) } ?? false)) }
     var body: some View {
         Panel {
             ClaimSummary(claim: claim)
             if !claim["receiptUrl"].text.isEmpty { PrivateReceiptButton(path: "/api/loyalty/claims/\(claim.id)/receipt?format=json") }
             if claim["status"].text == "PENDING" {
                 Text(L.t("phase5.claimAdjustHint")).font(Theme.body(13)).foregroundStyle(Theme.muted)
-                if glAllowed { Field(key: "phase5.guestCount", value: $guests, keyboard: .numberPad) }
+                if guestEditable { Field(key: "phase5.guestCount", value: $guests, keyboard: .numberPad) }
+                else if glAllowed { Text(L.t("ux.claim.countReadOnly")) .font(Theme.body(13)).foregroundStyle(Theme.muted) }
                 else { Notice(text: L.t(glKnown ? "ux.claim.glDisallowed" : "ux.claim.glUnavailable")) }
-                Field(key: "phase5.reservationCount", value: $reservations, keyboard: .numberPad)
+                if reservationEditable { Field(key: "phase5.reservationCount", value: $reservations, keyboard: .numberPad) }
                 if !valid { Notice(text: L.t("ux.claim.countValidation"), error: true) }
                 Notice(text: L.t("ux.claim.awardServer"))
                 Field(key: "ux.claim.rejectReason", value: $reason)
                 Text(L.t("ux.claim.rejectRequired")).font(Theme.body(13)).foregroundStyle(Theme.muted)
                 if reason.trimmingCharacters(in: .whitespacesAndNewlines).count > 1000 { Notice(text: L.t("ux.claim.reasonTooLong"), error: true) }
                 ConfirmAction(label: "phase5.approve", message: approvalSummary, disabled: mutation.busy || !valid || reason.trimmingCharacters(in: .whitespacesAndNewlines).count > 1000 || (!glKnown && claim["guestCount"].int > 0)) { await decide("APPROVED") }
-                ConfirmAction(label: "phase5.reject", message: reason, destructive: true, disabled: mutation.busy || !(3...1000).contains(reason.trimmingCharacters(in: .whitespacesAndNewlines).count)) { await decide("REJECTED") }
+                ConfirmAction(label: "phase5.reject", message: reason, destructive: true, disabled: mutation.busy || !(minimumReason...1000).contains(reason.trimmingCharacters(in: .whitespacesAndNewlines).count)) { await decide("REJECTED") }
             }
             MutationState(mutation: mutation)
         }.onAppear { guests = claim["guestCount"].text; reservations = claim["reservationCount"].text }
     }
     private var approvalSummary: String {
-        claim["event"]["title"].text + "\n" + claim["member"]["fullName"].text + "\n" + L.t("phase5.guestCount") + ": " + (glAllowed ? guests : "0") + " · " + L.t("phase5.reservationCount") + ": " + reservations + "\n" + L.t("ux.claim.awardServer")
+        claim["event"]["title"].text + "\n" + claim["member"]["fullName"].text + "\n" + L.t("phase5.guestCount") + ": " + (glAllowed ? guestEditable ? guests : claim["guestCount"].text : "0") + " · " + L.t("phase5.reservationCount") + ": " + (reservationEditable ? reservations : claim["reservationCount"].text) + "\n" + L.t("ux.claim.awardServer")
     }
     private func decide(_ decision: String) async {
         var body: [String: JSON] = ["id": .str(claim.id), "decision": .str(decision), "reason": .str(reason)]
-        if decision == "APPROVED" { body["guestCount"] = .num(glAllowed ? Int(guests) ?? 0 : 0); body["reservationCount"] = .num(Int(reservations) ?? 0) }
+        if decision == "APPROVED" {
+            if guestEditable { body["guestCount"] = .num(Int(guests) ?? 0) }
+            if reservationEditable { body["reservationCount"] = .num(Int(reservations) ?? 0) }
+        }
         await mutation.send("/api/admin/loyalty/claims", body: .object(body), after: reload)
     }
 }
@@ -240,10 +247,9 @@ struct LegacyPromoterArchiveView: View {
 struct EventRecapView: View {
     let eventID: String
     var body: some View {
-        DataPage(title: "loyalty.recap", path: "/api/admin/loyalty/operations") { data, reload in
+        DataPage(title: "loyalty.recap", path: "/api/admin/loyalty/operations", pinEventID: eventID) { data, reload in
             if let event = data["events"].rows.first(where: { $0.id == eventID }) {
-                OperationEventContext(events: [event], selection: .constant(eventID), fixed: true)
-                RecapEditor(eventID: eventID, recap: event["recap"], canLock: data["canLockRecap"].bool, reload: reload).id(eventID + event["recap"]["updatedAt"].text + event["recap"]["lockedAt"].text)
+                RecapEditor(eventID: eventID, recap: event["recap"], reservationsSold: event["reservationsSold"], fdcSold: event["fdcSold"], canLock: data["canLockRecap"].bool, reload: reload).id(eventID + event["recap"]["updatedAt"].text + event["recap"]["lockedAt"].text)
             } else { EmptyState(title: "ux.operations.eventUnavailable") }
         }
     }
@@ -252,6 +258,8 @@ struct EventRecapView: View {
 struct RecapEditor: View {
     let eventID: String
     let recap: JSON
+    var reservationsSold: JSON = .null
+    var fdcSold: JSON = .null
     var canLock = false
     let reload: () async -> Void
     @State private var values: [String: String] = [:]
@@ -261,10 +269,15 @@ struct RecapEditor: View {
         Panel {
             Text(L.t(recap["lockedAt"].exists ? "ux.recap.locked" : recap.exists ? "ux.recap.saved" : "ux.recap.unsaved")).fontWeight(.semibold)
             if recap["lockedAt"].exists { Text(L.date(recap["lockedAt"].text)).font(Theme.body(13)) }
-            Text(L.t("ux.recap.sales")).font(Theme.title(20))
-            ForEach(["tableCount", "sofaCount"], id: \.self) { key in Field(key: "loyalty.\(key)", value: binding(key), keyboard: .numberPad).disabled(recap["lockedAt"].exists) }
-            LabeledContent(L.t("ux.recap.fdcSold"), value: "—")
-            Text(L.t("ux.recap.fdcPending")).font(Theme.body(13)).foregroundStyle(Theme.muted)
+            Text(L.t("ux.recap.sold")).font(Theme.title(20))
+            LabeledContent(L.t("ux.recap.soldTable"), value: reservationsSold["table"].exists ? L.count(reservationsSold["table"].int) : "—")
+            LabeledContent(L.t("ux.recap.soldSofa"), value: reservationsSold["sofa"].exists ? L.count(reservationsSold["sofa"].int) : "—")
+            Text(L.t("ux.recap.soldHint")).font(Theme.body(13)).foregroundStyle(Theme.muted)
+            LabeledContent(L.t("ux.recap.fdcSold"), value: fdcSold["status"].text == "definitionPending" || !fdcSold["value"].exists ? "—" : L.count(fdcSold["value"].int))
+            if fdcSold["status"].text == "definitionPending" || !fdcSold["value"].exists { Text(L.t("ux.recap.fdcPending")).font(Theme.body(13)).foregroundStyle(Theme.muted) }
+            Text(L.t("ux.recap.manualCounts")).font(Theme.title(20))
+            Text(L.t("ux.recap.manualCountsHint")).font(Theme.body(13)).foregroundStyle(Theme.muted)
+            ForEach(["tableCount", "sofaCount", "fdcCount"], id: \.self) { key in Field(key: "loyalty.\(key)", value: binding(key), keyboard: .numberPad).disabled(recap["lockedAt"].exists) }
             Text(L.t("ux.recap.attendance")).font(Theme.title(20))
             Field(key: "loyalty.paxCount", value: binding("paxCount"), keyboard: .numberPad).disabled(recap["lockedAt"].exists)
             Text(L.t("ux.recap.revenue")).font(Theme.title(20))

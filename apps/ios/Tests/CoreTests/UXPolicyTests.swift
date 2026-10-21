@@ -47,4 +47,28 @@ final class UXPolicyTests: XCTestCase {
         XCTAssertEqual(UXNotificationTarget.resolve(.object(["screen": .str("roaming"), "eventId": .str("e")])), .roaming("e"))
         XCTAssertEqual(UXNotificationTarget.resolve(.null), .notifications)
     }
+    func testContractPushKindPreservesExactBookingAndStaffModeRequirement() {
+        let data: JSON = .object(["kind": .str("reservationRequested"), "screen": .str("social-operations"), "eventId": .str("e"), "reservationId": .str("r")])
+        guard case .task(let target) = UXNotificationTarget.resolve(data) else { return XCTFail("Expected a canonical task") }
+        XCTAssertEqual(target["screen"].text, "adminReservations")
+        XCTAssertEqual(target["reservationId"].text, "r")
+        XCTAssertEqual(target["eventId"].text, "e")
+        XCTAssertTrue(target["requiresAdminMode"].bool)
+    }
+    func testCanonicalTaskPreservesPersonalAttendanceAndCannotDowngradeAdminTarget() {
+        let attendance: JSON = .object(["screen": .str("attendance"), "eventId": .str("e"), "requiresAdminMode": .bool(false)])
+        XCTAssertEqual(UXNotificationTarget.resolve(.object(["target": attendance, "eventId": .str("other")])), .task(attendance))
+        let staff: JSON = .object(["screen": .str("adminClaims"), "claimId": .str("c"), "requiresAdminMode": .bool(false)])
+        guard case .task(let target) = UXNotificationTarget.resolve(staff) else { return XCTFail("Expected a canonical task") }
+        XCTAssertTrue(target["requiresAdminMode"].bool)
+        XCTAssertEqual(target["claimId"].text, "c")
+    }
+
+    func testPersonalEventPushKeepsMemberContextAcrossEveryReminderKind() {
+        for kind in ["eventBroadcast", "reminder3d", "reminder1d", "reminderToday", "thankYou", "fomo"] {
+            guard case .task(let target) = UXNotificationTarget.resolve(.object(["kind": .str(kind), "screen": .str("event"), "eventId": .str("e")])) else { return XCTFail("Missing event task") }
+            XCTAssertEqual(target["screen"].text, "event"); XCTAssertFalse(target["requiresAdminMode"].bool)
+        }
+    }
+
 }

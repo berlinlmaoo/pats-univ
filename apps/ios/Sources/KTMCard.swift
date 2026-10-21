@@ -149,7 +149,7 @@ struct EnlargedQRView: View {
                     Text(L.date(event["myCheckIn"]["checkedInAt"].text, zone: event["city"]["timezone"].text))
                     Text(L.t("ux.events.xpInWallet")).font(Theme.body(14)).multilineTextAlignment(.center)
                     Button(L.t("ux.card.returnJourney")) { dismiss(); store.tab = "events" }.buttonStyle(.plain).frame(minHeight: 44)
-                } else if event.exists && !EventJourneyPolicy.checkInOpen(event) {
+                } else if event.exists && !EventJourneyPolicy.actionAvailable("showQr", in: event) {
                     Text(L.t("ux.card.eventClosed")).font(Theme.title(20)).multilineTextAlignment(.center)
                     Button(L.t("ux.card.returnJourney")) { dismiss(); store.tab = "events" }.buttonStyle(.plain).frame(minHeight: 44)
                 } else {

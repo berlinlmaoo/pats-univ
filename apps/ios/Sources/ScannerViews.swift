@@ -94,18 +94,19 @@ struct ScannerSheet: View {
 }
 struct ScanEventPicker: View {
     var body: some View {
-        DataPage(title: "app.scanPickTitle", path: "/api/admin/events") { data, _ in
-            let events = (data["upcoming"].rows + data["past"].rows).filter { EventJourneyPolicy.checkInOpen($0) }
+        DataPage(title: "app.scanPickTitle", path: "/api/admin/home") { data, _ in
+            let events = data["openEvents"].rows
             if events.isEmpty {
-                EmptyState(title: "app.scanNoOpenTitle", message: "ux.scan.chooseToOpen", icon: "qrcode.viewfinder")
-                ForEach(data["upcoming"].rows.filter { !EventJourneyPolicy.ended($0) }) { event in
+                EmptyState(title: "ux.workspace.noOpenEvent", message: "ux.scan.chooseToOpen", icon: "qrcode.viewfinder")
+                if data["nextEvent"].exists {
+                    let next = data["nextEvent"]
                     Panel {
-                        EventContextHeader(event: event)
-                        DetailRow(key: "ux.events.opens", value: L.date(event["checkInOpensAt"].text, zone: event["city"]["timezone"].text))
-                        NavigationRow(title: "ux.scan.manageEvent", icon: "calendar.badge.clock") { EventDetailView(eventID: event.id, admin: true) }
+                        EventContextHeader(event: next)
+                        Text(L.t("ux.workspace.nextOpens", ["event": next["title"].text, "time": L.date(next["timing"]["checkInOpensAt"].text, zone: next["timing"]["timezone"].text)]))
+                        NavigationRow(title: "ux.scan.manageEvent", icon: "calendar.badge.clock") { EventDetailView(eventID: next.id, admin: true) }
                     }
                 }
-                if data["upcoming"].rows.isEmpty { NavigationRow(title: "events.title", icon: "calendar") { EventsView(admin: true) } }
+                NavigationRow(title: "events.title", icon: "calendar") { EventsView(admin: true) }
             }
             ForEach(events) { event in
                 Panel {
@@ -132,16 +133,15 @@ struct ScanView: View {
     @StateObject private var mutation = Mutation()
     @Environment(\.scenePhase) private var phase
     private var event: JSON { context.data["event"] }
-    private var canScan: Bool { store.managing && context.error == nil && EventJourneyPolicy.checkInOpen(event) }
+    private var canScan: Bool { store.managing && context.error == nil && context.data["lifecycle"]["canScan"].bool && EventJourneyPolicy.checkInOpen(event) }
     private var manualReason: String { reason.trimmingCharacters(in: .whitespacesAndNewlines) }
     private var manualReasonValid: Bool { (3...200).contains(manualReason.utf16.count) }
     var body: some View {
-        Page(title: "app.adminScan") {
+        Page(title: "app.adminScan", eventContext: event) {
             ResourceState(resource: context) { await loadEvent() }
             if !store.managing { Notice(text: L.t("ux.workspace.enableAdmin")) }
             else if event.exists {
                 Panel {
-                    EventContextHeader(event: event)
                     NavigationRow(title: "ux.scan.changeEvent", icon: "arrow.left.arrow.right") { ScanEventPicker() }
                 }
                 if !canScan {
@@ -212,16 +212,6 @@ struct ScanView: View {
                 if phase == .active && store.managing { await loadEvent() }
             }
         }
-        .toolbar {
-            ToolbarItem(placement: .principal) {
-                if event.exists {
-                    VStack(spacing: 2) {
-                        Text(event["title"].text + " · " + L.status(event["phase"].text)).font(Theme.body(13)).bold().lineLimit(1)
-                        Text(event["city"]["name"].text + " · " + L.date(event["startsAt"].text, zone: event["city"]["timezone"].text)).font(Theme.body(10)).lineLimit(1)
-                    }
-                }
-            }
-        }
         .onChange(of: mutation.busy) { _, busy in store.operationInProgress = busy }
         .navigationBarBackButtonHidden(mutation.busy)
         .interactiveDismissDisabled(mutation.busy)
@@ -231,7 +221,7 @@ struct ScanView: View {
         }
         .onDisappear { reader.cancel(); if !mutation.busy { store.operationInProgress = false } }
     }
-    private func loadEvent() async { guard store.managing else { return }; await context.load("/api/admin/events/\(eventID)") }
+    private func loadEvent() async { guard store.managing else { return }; await context.load("/api/admin/events/\(eventID)/workspace") }
     private func identify(_ subject: JSON) async throws {
         preview = .null; result = .null; reason = ""; self.subject = subject
         await loadEvent(); guard canScan else { throw ScanUnavailable() }
@@ -249,8 +239,7 @@ struct ManualMemberPicker: View {
     @State private var term = ""
     @StateObject private var state = Resource()
     var body: some View {
-        Page(title: "app.manualTitle") {
-            EventContextHeader(event: event)
+        Page(title: "app.manualTitle", eventContext: event) {
             Field(key: "native.search", value: $term)
             if term.count < 2 { Notice(text: L.t("app.cardsSearchHint")) }
             ResourceState(resource: state) { await search() }

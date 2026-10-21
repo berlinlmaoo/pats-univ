@@ -14,4 +14,12 @@ enum EventJourneyPolicy {
         ended(event, at: now) && event["status"].text != "DRAFT" && !memberCityID.isEmpty &&
         (event["city"].id == memberCityID || event["myCheckIn"].exists)
     }
+    static func actionAvailable(_ key: String, in event: JSON) -> Bool {
+        event["actions"].rows.first { $0["key"].text == key }?["available"].bool ?? false
+    }
+    static func actionReason(_ key: String, in event: JSON) -> String? {
+        guard let action = event["actions"].rows.first(where: { $0["key"].text == key }), !action["available"].bool else { return nil }
+        let reason = action["reason"].text
+        return reason.isEmpty ? nil : reason
+    }
 }

@@ -34,4 +34,16 @@ final class EventJourneyPolicyTests: XCTestCase {
         XCTAssertTrue(EventJourneyPolicy.claimEligible(event(phase: "ended", city: "visit", attended: true), memberCityID: "home", at: now))
         XCTAssertFalse(EventJourneyPolicy.claimEligible(event(phase: "ended", attended: true), memberCityID: "", at: now))
     }
+    func testMemberActionsFollowServerAvailabilityWithoutLocalOverride() {
+        let value: JSON = .object(["actions": .array([
+            .object(["key": .str("showQr"), "available": .bool(false), "reason": .str("roamingRequired")]),
+            .object(["key": .str("claimXp"), "available": .bool(true), "reason": .null])
+        ])])
+        XCTAssertFalse(EventJourneyPolicy.actionAvailable("showQr", in: value))
+        XCTAssertEqual(EventJourneyPolicy.actionReason("showQr", in: value), "roamingRequired")
+        XCTAssertTrue(EventJourneyPolicy.actionAvailable("claimXp", in: value))
+        XCTAssertNil(EventJourneyPolicy.actionReason("claimXp", in: value))
+        XCTAssertFalse(EventJourneyPolicy.actionAvailable("reserve", in: value))
+        XCTAssertFalse(EventJourneyPolicy.actionAvailable("showQr", in: .null))
+    }
 }

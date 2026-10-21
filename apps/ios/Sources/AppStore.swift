@@ -36,9 +36,12 @@ import UserNotifications
     private var deferredNotification: JSON?
     var user: JSON { me["user"] }
     var member: JSON { me["member"] }
-    var admin: Bool { can("checkin.scan") || can("dashboard.access") }
+    var admin: Bool {
+        if user.object.keys.contains("adminScope") { return user["adminScope"].exists }
+        return can("checkin.scan") || can("dashboard.access")
+    }
     var managing: Bool { admin && adminMode }
-    var scope: String { can("hq.manage") ? L.t("ux.mode.allCities") : user["city"]["name"].text }
+    var scope: String { user["adminScope"]["kind"].text == "HQ" || can("hq.manage") ? L.t("ux.mode.allCities") : (user["adminScope"]["city"]["name"].text.isEmpty ? user["city"]["name"].text : user["adminScope"]["city"]["name"].text) }
     private var owner: String { AdminModePreferences.owner(origin: Config.baseURL.absoluteString, userID: user.id) }
     private var welcomeKey: String { "pats.ux.welcome." + owner }
     func can(_ capability: String) -> Bool { user["capabilities"].rows.contains { $0.text == capability } }
@@ -90,16 +93,30 @@ import UserNotifications
         if let token = CardLink.token(url.absoluteString) { link = .card(token); return true }
         guard [Config.baseURL.host, Config.production.host].contains(url.host) else { return false }
         let parts = url.pathComponents.filter { $0 != "/" }
-        if parts.first == "events", parts.count > 1 { link = .event(parts[1]); return true }
-        if parts.first == "notifications" { link = .notifications; return true }
+        if parts.first == "events", parts.count > 1 {
+            guard signedIn else { deferredURL = url; return true }
+            link = .event(parts[1]); return true
+        }
+        if parts.first == "notifications" {
+            guard signedIn else { deferredURL = url; return true }
+            link = .notifications; return true
+        }
         return false
     }
     func routeNotification(_ data: JSON) {
         guard !operationInProgress, !loading, signedIn, !showWelcome else { deferredNotification = data; deferredURL = nil; return }
         let target = UXNotificationTarget.resolve(data)
         if target == .notifications, let url = URL(string: data["url"].text), !data["url"].text.isEmpty, open(url) { return }
+        if !data["notificationId"].text.isEmpty {
+            let id = data["notificationId"].text
+            Task { _ = try? await APIClient.shared.call("POST", "/api/me/notifications/\(id)/read", .object([:])) }
+        }
         switch target {
-        case .personalCard: tab = "card"; link = nil
+        case .task(let payload):
+            if payload["screen"].text == "card" { cardEvent = .null; cardEventID = ""; tab = "card"; link = nil }
+            else if payload["screen"].text == "hub" && payload["channelId"].text.isEmpty && !payload["requiresAdminMode"].bool { tab = "hub"; link = nil }
+            else { link = .task(payload) }
+        case .personalCard: cardEvent = .null; cardEventID = ""; tab = "card"; link = nil
         case .event(let id): link = .event(id)
         case .claims(let id): link = admin && !member.exists ? .claimReview(id) : .claims(id)
         case .claimReview(let id): link = .claimReview(id)
@@ -121,9 +138,13 @@ import UserNotifications
 }
 enum AppLink: Identifiable {
     case card(String), event(String), channel(String), conversation(String), claims(String), claimReview(String)
+    case task(JSON), personalReservation(String, String), dashboard(String, String)
     case cardRequest(String), payments(String), recap(String), scan(String), requests(String), adminRequests(String), roaming(String), regionChange, wallet, notifications
     var id: String {
         switch self {
+        case .dashboard(let path, _): return "dashboard:" + path
+        case .task(let p): return "task:" + ["screen", "eventId", "reservationId", "claimId", "memberId", "requestId", "conversationId", "channelId"].map { p[$0].text }.joined(separator: ":")
+        case .personalReservation(let event, let reservation): return "personalReservation:" + event + ":" + reservation
         case .card(let s): return "card:" + s
         case .event(let s): return "event:" + s
         case .channel(let s): return "channel:" + s

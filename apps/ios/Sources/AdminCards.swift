@@ -104,13 +104,32 @@ struct MemberCardsDetail: View {
                     Text(card["nfcUid"].text).monospaced(); Text(card["chipType"].text)
                     Text(card["batch"]["label"].text).foregroundStyle(Theme.muted)
                     if card["deliveredAt"].exists { Text(L.date(card["deliveredAt"].text)) }
-                    if card["isReplacement"].bool {
+                    if card["isReplacement"].bool || card["replacementFee"].exists {
                         Notice(text: L.t("ux.card.replacementNext"))
-                        if store.managing && store.can("dashboard.access") {
+                        if card["replacementFee"].exists {
+                            let fee = card["replacementFee"]
+                            LabeledContent(L.t("ux.card.feeAmount"), value: L.money(fee["amount"].int))
+                            if fee["paidAt"].exists {
+                                Label(L.t("ux.card.feePaid", ["date": L.date(fee["paidAt"].text)]), systemImage: "checkmark.circle.fill")
+                            } else {
+                                Notice(text: L.t("ux.card.feeOffApp"))
+                                if store.managing && store.can("card.reportLost") {
+                                    ConfirmAction(label: "ux.card.recordFee", message: L.t("ux.card.recordFeeConfirm", ["amount": L.money(fee["amount"].int), "member": data["member"]["fullName"].text, "nim": data["member"]["nim"].text]), disabled: mutation.busy) {
+                                        guard store.managing, store.can("card.reportLost") else { return }
+                                        store.operationInProgress = true
+                                        defer { store.operationInProgress = false }
+                                        await mutation.run {
+                                            _ = try await APIClient.shared.call("POST", "/api/admin/payments", .object(["kind": .str("card"), "id": .str(card.id)]))
+                                            await reload(); mutation.message = L.t("ux.card.feeRecorded")
+                                        }
+                                    }
+                                }
+                            }
+                        } else if store.managing && store.can("dashboard.access") {
                             Link(L.t("ux.card.recordReplacementPayment"), destination: Config.baseURL.appendingPathComponent("regional").appending(queryItems: [URLQueryItem(name: "tab", value: "payments")]))
                             Text(L.t("ux.card.paymentRefresh")).font(Theme.body(13)).foregroundStyle(Theme.muted)
-                            Button(L.t("ux.operations.refresh")) { Task { await reload() } }.buttonStyle(PATSButtonStyle(variant: .secondary)).disabled(mutation.busy)
                         }
+                        Button(L.t("ux.operations.refresh")) { Task { await reload() } }.buttonStyle(PATSButtonStyle(variant: .secondary)).disabled(mutation.busy)
                     }
                     if store.managing && card["status"].text != "REVOKED" && card["status"].text != "NOT_PRINTED" && !action.isEmpty {
                         Notice(text: L.t(action == "replace" ? "ux.card.replaceConsequences" : "ux.card.repairConsequences"), error: action == "replace")

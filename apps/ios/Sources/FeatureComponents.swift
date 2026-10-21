@@ -7,12 +7,15 @@ struct Room: Equatable { var kind: String; var id: String }
     let path: String
     var room: Room?
     var poll = false
+    var pinLoadedEvent = false
+    var pinEventID = ""
+    var eventContext: JSON = .null
     @ViewBuilder var content: @MainActor (JSON, @escaping @MainActor () async -> Void) -> Content
     @StateObject private var resource = Resource()
     @StateObject private var live = RealtimeRoom()
     @Environment(\.scenePhase) private var phase
     var body: some View {
-        Page(title: title) {
+        Page(title: title, eventContext: pinnedEvent) {
             ResourceState(resource: resource) { await load() }
             if live.accessLost { Notice(text: L.t("native.accessLost"), error: true) }
             else if resource.data.exists { content(resource.data, { await load() }) }
@@ -29,6 +32,12 @@ struct Room: Equatable { var kind: String; var id: String }
         .refreshable { await load() }
         .onDisappear { live.stop() }
         .onChange(of: phase) { _, p in if p == .active { connect(); Task { await load() } } else { live.stop() } }
+    }
+    private var pinnedEvent: JSON {
+        if eventContext.exists { return eventContext }
+        if pinLoadedEvent { return resource.data["event"] }
+        if !pinEventID.isEmpty { return resource.data["events"].rows.first { $0.id == pinEventID } ?? .null }
+        return .null
     }
     private func load() async { await resource.load(path) }
     private func connect() { if let room, phase == .active { live.start(kind: room.kind, id: room.id) { await load() } } }
