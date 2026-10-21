@@ -13,6 +13,150 @@ except the two rules marked **Behaviour change** below (both owner decisions).
   Native dictionaries copy the keys they use; keys are stable.
 - Dates are ISO 8601 UTC; show them in `timing.timezone` / the city's zone (unchanged rule).
 
+---
+
+## Update 22 Oct 2026 (owner answers, Ariq)
+
+Read this section first; it overrides the parts of §1–§13 marked **Superseded 22 Oct**. Still additive:
+nothing older builds use changed shape. Removed: `JourneyStep.pending: "ownerDecision"` and the string
+`ux.journey.posterPending`; `FdcSold.status: "definitionPending"` and `FDC_PENDING`.
+
+### U1. Login (D7)
+Email + OTP stays (option A). No auth change; §9 unchanged.
+
+### U2. Blast poster: optional step with proof and +2 XP
+
+Journey `poster` step now:
+
+```jsonc
+{
+  "key": "poster", "completion": "review", "optional": true,
+  "state": "optional" | "done",            // never "current": skipping it never blocks later steps
+  "outcome": "submitted" | "approved" | "rejected" | "skipped" | undefined,
+  "rewardXp": 2,                            // setting posterShareXp (GLOBAL/CITY, default 2)
+  "proof": { "id", "status": "PENDING" | "APPROVED" | "REJECTED", "imageUrl", "submittedAt", "reviewedAt", "rejectReason", "xpAwarded" } | null,
+  "completedAt": "…" | null
+}
+```
+
+`JourneyStep.state` gains `"optional"`; `completion` gains `"review"`. "Current" is the first not-done
+**required** step. Copy: `ux.journey.optional`, `ux.journey.posterBody {xp}`, `ux.journey.posterSkip`.
+
+| Endpoint | Who | Body / query | Response |
+|---|---|---|---|
+| `POST /api/me/poster-proof` | member | multipart `eventId`, `image` (JPG/PNG/WebP ≤ 5 MB) | 201 `{ proof, event, journey, myReservation }` |
+| `POST /api/me/journey` `{ step: "poster" }` | member | — | skip (records the tap; `outcome: "skipped"`) |
+| `GET /api/poster-proofs/:id/image` | owner, crew of the city, HQ | — | the screenshot (private) |
+| `GET /api/admin/poster-proofs` | crew with `promoter.manage` (regional: own city, HQ: all) | `?status=PENDING\|APPROVED\|REJECTED&eventId=` | `{ proofs: [ PosterProofInfo + member {id, fullName, nim}, event {id, title, city, startsAt}, reviewedBy, rewardXp ] }` |
+| `POST /api/admin/poster-proofs/:id/decision` | same | `{ decision: "APPROVED" \| "REJECTED", reason }` | `{ proof }` |
+
+Rules: one proof per member and event (unique). Upload creates it, or replaces a PENDING/REJECTED one
+(back to PENDING, same id); after APPROVED → 409 `REQUEST_DECIDED` (`fields.image = "ux.posterProof.alreadyApproved"`).
+Event without a poster → 422 `fields.eventId = "ux.posterProof.noPoster"`; bad file → 422 `fields.image =
+"validation.flyerType" | "validation.flyerTooLarge" | "validation.flyerRequired"`. Reject needs `reason` ≥ 3
+(422 `fields.reason`). Deciding twice → 409. Approval credits `posterShareXp` once through the XP ledger
+(reason `POSTER_SHARE`, award key `poster:<proofId>`), refreshes the wallet room and pushes
+`posterProofDecided` (target `screen: "event"`, `eventId`, `proofId`, action `ux.notifAction.viewProof`).
+Admin home `pending.posterProofs` (target `adminPosterProofs`); workspace `posterProofs.byStatus`.
+Web: `/regional?tab=proofs` (regional + HQ).
+
+### U3. Event report (FDC = First Drink Charge / Free Drink Coupon)
+
+Seven required integers per event, `0…1 000 000`: `tablesSold`, `sofasSold`, `fdcSold`, `paxTotal`,
+`membersAttended`, `nonMembersAttended`, `newMembers` (labels `ux.report.<field>`; FDC hint `ux.report.fdcHint`).
+One report per event; regional admin of that city or HQ; editable; every save audited.
+
+| Endpoint | Response |
+|---|---|
+| `GET /api/admin/events/:id/report` | `{ eventId, report: EventReportInfo \| null, reference, history, canEdit }` |
+| `PUT /api/admin/events/:id/report` (also `POST`) body = the seven numbers | same as GET, after saving |
+| `GET /api/admin/event-reports?cityId=&from=YYYY-MM-DD&to=YYYY-MM-DD` | `{ fields, events: [{ event, report \| null }], totals: [{ city, events, reported, totals }], trend: [{ city, month: "YYYY-MM", events, reported, totals }] }` (HQ all cities, regional own city) |
+| same `&format=csv` | CSV, one row per event, blank = not reported |
+
+```jsonc
+EventReportInfo = { "id", "eventId", "tablesSold", "sofasSold", "fdcSold", "paxTotal", "membersAttended",
+                    "nonMembersAttended", "newMembers", "createdAt", "updatedAt", "updatedBy": "name" }
+reference = { "tablesSold", "sofasSold",           // confirmed reservations by slot kind
+              "membersAttended",                    // check-ins at the event
+              "newMembers",                         // city members registered between check-in opening and the end
+              "reservationPax" }                   // pax on confirmed reservations (shown next to paxTotal)
+history = [{ "at", "by", "changes": { "<field>": { "from": n | null, "to": n } } }]   // newest first
+```
+
+References are shown next to the inputs (`ux.report.reference {value}`) and never overwrite what the
+admin types. Missing/invalid field → 422 `fields.<field> = "validation.numberInvalid"`; other city → 403.
+Workspace: `report` (the GET above), `recap.fdcSold = { value, status: "reported" | "notReported" }`,
+`recap.reportDue`; admin home `pending.reportsDue` (ended in the last 30 days without a report).
+`GET /api/admin/loyalty/operations` `events[].fdcSold` uses the same shape. Web: "Event report" card on the
+event page; new dashboard page `/reports` (nav "Event reports"; totals per city, monthly trend, CSV).
+
+### U4. Strings added 22 Oct
+
+| Key | EN | ID |
+|---|---|---|
+| `ux.journey.optional` | Optional | Opsional |
+| `ux.journey.posterBody` | Share the event poster, then upload a screenshot as proof. +{xp} XP after the crew approves. | Bagikan poster event, lalu unggah screenshot sebagai bukti. +{xp} XP setelah crew menyetujui. |
+| `ux.journey.posterSkip` | Skip | Lewati |
+| `ux.posterProof.upload` | Upload proof | Unggah bukti |
+| `ux.posterProof.replace` | Send a new proof | Kirim bukti baru |
+| `ux.posterProof.hint` | A screenshot of your post or story with the poster (JPG, PNG or WebP, up to 5 MB). | Screenshot postingan atau story-mu yang memuat poster (JPG, PNG, atau WebP, maks. 5 MB). |
+| `ux.posterProof.submitted` | Proof sent. The crew reviews it. | Bukti terkirim. Crew akan meninjaunya. |
+| `ux.posterProof.statusPENDING` | Waiting for crew review | Menunggu tinjauan crew |
+| `ux.posterProof.statusAPPROVED` | Approved · +{xp} XP | Disetujui · +{xp} XP |
+| `ux.posterProof.statusREJECTED` | Rejected: {reason} | Ditolak: {reason} |
+| `ux.posterProof.noPoster` | This event has no poster to share yet. | Event ini belum punya poster untuk dibagikan. |
+| `ux.posterProof.alreadyApproved` | Your proof for this event is already approved. | Buktimu untuk event ini sudah disetujui. |
+| `ux.posterProof.queueTitle` | Poster shares | Bagikan poster |
+| `ux.posterProof.queueEmpty` | No poster proofs waiting | Tidak ada bukti poster yang menunggu |
+| `ux.posterProof.queueEmptyBody` | Screenshots members send after sharing an event poster appear here. | Screenshot yang dikirim member setelah membagikan poster event muncul di sini. |
+| `ux.posterProof.approve` | Approve (+{xp} XP) | Setujui (+{xp} XP) |
+| `ux.posterProof.reject` | Reject | Tolak |
+| `ux.posterProof.reason` | Reason (the member sees it) | Alasan (terlihat oleh member) |
+| `ux.posterProof.approved` | Approved. XP added. | Disetujui. XP ditambahkan. |
+| `ux.posterProof.rejected` | Rejected. | Ditolak. |
+| `ux.report.title` | Event report | Laporan event |
+| `ux.report.body` | One report per event. Fill in what happened; system numbers are shown for reference only. | Satu laporan per event. Isi sesuai kejadian; angka sistem hanya sebagai referensi. |
+| `ux.report.tablesSold` | Tables sold | Meja terjual |
+| `ux.report.sofasSold` | Sofas sold | Sofa terjual |
+| `ux.report.fdcSold` | FDC sold | FDC terjual |
+| `ux.report.fdcHint` | FDC = First Drink Charge / Free Drink Coupon | FDC = First Drink Charge / Free Drink Coupon |
+| `ux.report.paxTotal` | Pax (total guests) | Pax (total tamu) |
+| `ux.report.membersAttended` | Members attended | Member hadir |
+| `ux.report.nonMembersAttended` | Non-members attended | Non-member hadir |
+| `ux.report.newMembers` | New members registered | Member baru terdaftar |
+| `ux.report.reference` | System: {value} | Sistem: {value} |
+| `ux.report.save` | Save report | Simpan laporan |
+| `ux.report.saved` | Report saved. | Laporan disimpan. |
+| `ux.report.notFilled` | Not filled yet | Belum diisi |
+| `ux.report.lastEdit` | Last edited by {name} · {date} | Terakhir diubah oleh {name} · {date} |
+| `ux.report.history` | Edit history | Riwayat perubahan |
+| `ux.report.dashboardTitle` | Event reports | Laporan event |
+| `ux.report.dashboardBody` | Every event's numbers over time, with totals and the monthly trend per city. | Angka tiap event dari waktu ke waktu, dengan total dan tren bulanan per kota. |
+| `ux.report.colEvent` | Event | Event |
+| `ux.report.colCity` | City | Kota |
+| `ux.report.colDate` | Date | Tanggal |
+| `ux.report.totals` | Totals per city | Total per kota |
+| `ux.report.trend` | Monthly trend | Tren bulanan |
+| `ux.report.month` | Month | Bulan |
+| `ux.report.events` | Events | Event |
+| `ux.report.reported` | Reported | Dilaporkan |
+| `ux.report.exportCsv` | Download CSV | Unduh CSV |
+| `ux.report.empty` | No events in this period | Tidak ada event di periode ini |
+| `ux.report.emptyBody` | Change the city or dates, or create an event first. | Ubah kota atau tanggal, atau buat event dulu. |
+| `ux.report.allCities` | All cities | Semua kota |
+| `ux.report.from` | From | Dari |
+| `ux.report.to` | To | Sampai |
+| `ux.report.apply` | Apply | Terapkan |
+| `ux.notifAction.viewProof` | View proof | Lihat bukti |
+| `ux.workspace.pending.posterProofs` | Poster proofs to review | Bukti poster untuk ditinjau |
+| `ux.workspace.pending.reportsDue` | Event reports to fill | Laporan event untuk diisi |
+| `ux.workspace.report` | Report | Laporan |
+| `push.posterProofDecided` | Poster proof — {event}: {status}. | Bukti poster — {event}: {status}. |
+| `settings.keys.posterShareXp.label` | Blast poster share | Bagikan poster |
+| `loyalty.POSTER_SHARE` (XP ledger reason) | Poster share | Bagikan poster |
+
+---
+
 ## 0. Behaviour changes (owner decisions)
 
 | Change | Who sees it | Old builds |
@@ -36,7 +180,7 @@ participation follows membership, F03/UX01).
 | D5 posters / descriptions | `/api/admin/events/:id/content`, HQ queue `/api/admin/content-submissions` | §6 |
 | D5 Reservation cards, UX15, UX17, UX18, UX19, F26, F27, UX29 | reservation cards (poster highlight, slot kind, deposit), `POST /api/admin/reservations/:id/payment`, `RESERVATION_LIMIT` params, `counts` | §7 |
 | D6, UX23–UX26, F14–F18, F20, F21, F25 | `GET /api/admin/home`, `GET /api/admin/events/:id/workspace`, `GET /api/admin/events/:id/reservations` | §8 |
-| D6 FDC sold | `recap.fdcSold = { value: null, status: "definitionPending" }`; never derived | §8 |
+| D6 FDC sold | **Superseded 22 Oct**: FDC = First Drink Charge / Free Drink Coupon, reported on the event report (§U3); `recap.fdcSold = { value, status: "reported" \| "notReported" }` | §U3 |
 | D7, UX03, F02, F05 | OTP response `destination`, `channel`, `ttlSeconds`; web registration success copy | §9 |
 | D9 UX30 | `GET /api/admin/draw?eventId=` (staff, `draw.manage` + city). `GET /api/events/:id` stays member-only. | §8.4 |
 | D9 UX22, F32 | `target` on every notification; `POST /api/me/notifications/:id/read`; list GET never marks read | §10 |
@@ -125,7 +269,7 @@ Each section loads independently on the server; a missing event never hides card
 | key | completion | done when | label |
 |---|---|---|---|
 | `event` | `tap` | member tapped | `ux.journey.event` |
-| `poster` | `tap` | member tapped | `ux.journey.poster`; has `pending: "ownerDecision"` → show `ux.journey.posterPending`. **What "blast poster" asks is not decided**; the tap is only recorded (no XP, no share tracking). |
+| `poster` | `review` | **Superseded 22 Oct (§U2)**: optional; done when crew approves the proof (`outcome: "approved"`) or the member skips (tap → `outcome: "skipped"`). Never `current`. | `ux.journey.poster` |
 | `reservation` | `tap` | reservation CONFIRMED (`outcome: "reserved"`) or tapped "not this time" (`outcome: "skipped"`). PENDING → `outcome: "requested"`, still current. `bonusXp` = setting `reservationBonusXp` (shown as `ux.journey.reservationBonus {xp}`; awarded at check-in, unchanged rule). | `ux.journey.reservation` |
 | `checkIn` | `server` | crew recorded the check-in | `ux.journey.checkIn` |
 | `completed` | `server` | checked in **and** the event ended | `ux.journey.completed` |
@@ -332,7 +476,7 @@ only when the event list is really empty (UX24).
   "recap": {
     "saved": { …TrafficRecap fields…, "lockedAt": "…" | null } | null,
     "reservationsSold": { "table": 1, "sofa": 3, "other": 0, "total": 4, "pax": 17 },
-    "fdcSold": { "value": null, "status": "definitionPending" },
+    "fdcSold": { "value": 45, "status": "reported" },       // 22 Oct: from the event report; null + "notReported" until filled
     "due": true, "canLock": false
   },
   "content": EventContentResponse        // §6
@@ -345,9 +489,7 @@ only when the event list is really empty (UX24).
   `POST /api/admin/events/:id/actions`.
 - **Reservations sold** = confirmed reservations by the venue floor-plan slot kind (system count).
   Labels `ux.recap.sold|soldTable|soldSofa|soldHint`.
-- **FDC sold**: `value` is always `null` with `status: "definitionPending"` until the owner defines FDC —
-  show `ux.recap.fdcSold` + `ux.recap.fdcPending`. Do not compute it from anything (the manual recap
-  `fdcCount` is a separate, existing field).
+- **FDC sold** (22 Oct): the FDC number the admin typed on the event report (§U3); `{ value: null, status: "notReported" }` until a report exists. Never computed.
 - `GET /api/admin/loyalty/operations` (existing) adds per event `reservationsSold` and `fdcSold` (same shapes).
 
 ### 8.3 `GET /api/admin/events/:id/reservations[?status=PENDING|CONFIRMED|REJECTED|CANCELLED]`
@@ -474,7 +616,6 @@ All keys live under `ux.` in `packages/shared/src/i18n/{en,id}.ts`. Placeholders
 | `ux.home.browseNational` | Browse other cities | Lihat kota lain |
 | `ux.journey.event` | Check the next event | Cek event berikutnya |
 | `ux.journey.poster` | Blast the poster | Sebarkan poster |
-| `ux.journey.posterPending` | Details coming soon from HQ. | Detailnya segera dari HQ. |
 | `ux.journey.reservation` | Reserve a table or sofa | Reservasi meja atau sofa |
 | `ux.journey.reservationBonus` | +{xp} XP at check-in with a confirmed reservation | +{xp} XP saat check-in dengan reservasi terkonfirmasi |
 | `ux.journey.reservationSkip` | Not this time | Lain kali |
