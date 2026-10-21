@@ -100,15 +100,17 @@ struct Panel<Content: View>: View {
     }
 }
 struct SectionLabel: View {
+    @Environment(\.locale) private var locale
     let key: String
-    var body: some View { Text(L.t(key).uppercased()).font(Theme.label).tracking(0.66).foregroundStyle(Theme.muted) }
+    var body: some View { Text(L.t(key).uppercased()).id(locale.identifier).font(Theme.label).tracking(0.66).foregroundStyle(Theme.muted) }
 }
 struct CardHeading: View {
+    @Environment(\.locale) private var locale
     let key: String
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Theme.color("gold").frame(width: 24, height: 3).accessibilityHidden(true)
-            Text(L.t(key)).font(Theme.title(17))
+            Text(L.t(key)).id(locale.identifier).font(Theme.title(17))
         }
     }
 }
@@ -118,6 +120,7 @@ struct DetailRow: View {
     var body: some View { VStack(alignment: .leading, spacing: 4) { SectionLabel(key: key); Text(value).monospacedDigit() }.accessibilityElement(children: .combine) }
 }
 struct EmptyState: View {
+    @Environment(\.locale) private var locale
     var title = "native.empty"
     var message = "native.emptyBody"
     var icon = "tray"
@@ -126,8 +129,8 @@ struct EmptyState: View {
             Image(systemName: icon).font(.title2).foregroundStyle(Theme.color("bandText"))
                 .frame(width: 48, height: 48).background(Theme.color("band"), in: RoundedRectangle(cornerRadius: 6))
                 .overlay(alignment: .bottom) { Theme.color("gold").frame(height: 3) }.accessibilityHidden(true)
-            Text(L.t(title)).font(Theme.title(17))
-            Text(L.t(message)).font(Theme.body()).foregroundStyle(Theme.muted).multilineTextAlignment(.center)
+            Text(L.t(title)).id(locale.identifier).font(Theme.title(17))
+            Text(L.t(message)).id(locale.identifier).font(Theme.body()).foregroundStyle(Theme.muted).multilineTextAlignment(.center)
         }.frame(maxWidth: .infinity).padding(Theme.padding)
     }
 }
@@ -154,13 +157,14 @@ struct Skeleton: View {
     }
 }
 struct Page<Content: View>: View {
+    @Environment(\.locale) private var locale
     let title: String
     var eventContext: JSON = .null
     @ViewBuilder var content: Content
     var body: some View {
         ScrollView { VStack(alignment: .leading, spacing: Theme.padding) { content }.padding(Theme.padding).padding(.bottom, Theme.padding).frame(maxWidth: 720).frame(maxWidth: .infinity) }
             .background(Theme.bg).navigationTitle("").navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .principal) { VarsityText(text: L.t(title)).accessibilityAddTraits(.isHeader) } }
+            .toolbar { ToolbarItem(placement: .principal) { VarsityText(text: L.t(title)).id(locale.identifier).accessibilityAddTraits(.isHeader) } }
             .bandNavigation()
             .safeAreaInset(edge: .top, spacing: 0) { if eventContext.exists { EventScopeBar(event: eventContext) } }
     }
@@ -176,6 +180,7 @@ struct EventScopeBar: View {
     }
 }
 struct Field: View {
+    @Environment(\.locale) private var locale
     var key: String
     @Binding var value: String
     var keyboard: UIKeyboardType = .default
@@ -186,7 +191,7 @@ struct Field: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             SectionLabel(key: key)
-            input.keyboardType(keyboard).padding(Theme.gap).frame(minHeight: Theme.control)
+            input.id(locale.identifier).keyboardType(keyboard).padding(Theme.gap).frame(minHeight: Theme.control)
                 .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.controlRadius))
                 .overlay(RoundedRectangle(cornerRadius: Theme.controlRadius).stroke(Theme.color(isFocused ? "accent" : "borderStrong"), lineWidth: isFocused ? 2 : 1))
                 .accessibilityLabel(L.t(key))
@@ -207,6 +212,7 @@ struct Field: View {
 
 }
 struct Badge: View {
+    @Environment(\.locale) private var locale
     var value: String
     var member = false
     private var tone: String {
@@ -217,7 +223,7 @@ struct Badge: View {
         return "neutral"
     }
     var body: some View {
-        Text((member ? L.t("cardStatusMember.\(value)") : value.hasPrefix("ktm.") ? L.t(value) : L.status(value)).uppercased()).font(Theme.label).tracking(0.55)
+        Text((member ? L.t("cardStatusMember.\(value)") : value.hasPrefix("ktm.") ? L.t(value) : L.status(value)).uppercased()).id(locale.identifier).font(Theme.label).tracking(0.55)
             .padding(.horizontal, 8).padding(.vertical, 4).frame(minHeight: 24)
             .background(Theme.color(tone == "neutral" ? "surfaceMuted" : "\(tone)Subtle"), in: RoundedRectangle(cornerRadius: 4))
             .foregroundStyle(tone == "neutral" ? Theme.muted : Theme.color(tone == "accent" ? "accentSubtleText" : "\(tone)Text"))
@@ -228,6 +234,7 @@ struct CountChip: View {
     var body: some View { Text(L.count(count)).font(Theme.label).monospacedDigit().padding(4).background(Theme.color("secondary"), in: RoundedRectangle(cornerRadius: 4)).foregroundStyle(Theme.color("secondaryText")) }
 }
 struct Tabs: View {
+    @Environment(\.locale) private var locale
     let options: [(String, String)]
     @Binding var selection: String
     var counts: [String: Int] = [:]
@@ -236,7 +243,7 @@ struct Tabs: View {
             HStack(spacing: Theme.padding) {
                 ForEach(options, id: \.0) { value, key in
                     Button { selection = value } label: {
-                        HStack { Text(L.t(key).uppercased()).font(Theme.label).tracking(0.44); if let count = counts[value], count > 0 { CountChip(count: count) } }
+                        HStack { Text(L.t(key).uppercased()).id(locale.identifier).font(Theme.label).tracking(0.44); if let count = counts[value], count > 0 { CountChip(count: count) } }
                             .padding(.horizontal, 4).frame(minHeight: Theme.control)
                             .foregroundStyle(selection == value ? Theme.text : Theme.muted)
                             .overlay(alignment: .bottom) { if selection == value { Theme.color("gold").frame(height: 3) } }

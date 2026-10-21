@@ -75,6 +75,8 @@ struct MemberCardsDetail: View {
     @State private var reason = ""
     @State private var action = ""
     var body: some View {
+        let selectedAction = action
+        let reasonLength = reason.trimmingCharacters(in: .whitespacesAndNewlines).count
         DataPage(title: "app.adminCards", path: "/api/admin/cards/members/\(memberID)", poll: true) { data, reload in
             Panel { MemberIdentity(member: data["member"]) }
             Panel {
@@ -131,19 +133,23 @@ struct MemberCardsDetail: View {
                         }
                         Button(L.t("ux.operations.refresh")) { Task { await reload() } }.buttonStyle(PATSButtonStyle(variant: .secondary)).disabled(mutation.busy)
                     }
-                    if store.managing && card["status"].text != "REVOKED" && card["status"].text != "NOT_PRINTED" && !action.isEmpty {
-                        Notice(text: L.t(action == "replace" ? "ux.card.replaceConsequences" : "ux.card.repairConsequences"), error: action == "replace")
-                        Field(key: "phase5.reason", value: $reason)
-                        if action == "replace" && store.can("card.reportLost") {
-                            ConfirmAction(label: "ux.card.replace", message: data["member"]["fullName"].text + "\n" + L.t("ux.card.replaceConsequences"), destructive: true, disabled: mutation.busy || reason.trimmingCharacters(in: .whitespacesAndNewlines).count < 3) {
+                    if store.managing && card["status"].text != "REVOKED" && card["status"].text != "NOT_PRINTED" && !selectedAction.isEmpty {
+                        if selectedAction == "replace" || !store.can("card.encode") {
+                            Notice(text: L.t(selectedAction == "replace" ? "ux.card.replaceConsequences" : "ux.card.repairConsequences"), error: selectedAction == "replace")
+                            Field(key: "phase5.reason", value: $reason)
+                        }
+                        if selectedAction == "replace" && store.can("card.reportLost") {
+                            ConfirmAction(label: "ux.card.replace", message: data["member"]["fullName"].text + "\n" + L.t("ux.card.replaceConsequences"), destructive: true, disabled: mutation.busy || reasonLength < 3) {
                                 await mutation.send("/api/admin/cards/\(card.id)/revoke", body: .object(["reason": .str(reason)]), after: reload)
                             }
                         }
-                        if action == "repair" && store.can("card.requestReencode") && card["status"].text == "DELIVERED" {
-                            ConfirmAction(label: "app.cardsReencodeSend", message: data["member"]["fullName"].text + "\n" + L.t("ux.card.repairConsequences"), disabled: mutation.busy || reason.trimmingCharacters(in: .whitespacesAndNewlines).count < 3 || ["PENDING", "APPROVED"].contains(reencodeStatus(data["reencode"]))) {
+                        if selectedAction == "repair" && store.can("card.encode") && card["status"].text == "DELIVERED" {
+                            NavigationRow(title: "ux.encode.repairTitle", icon: "wave.3.right") { EncodeView(initialLookup: data["member"]["nim"].text, reencode: true) }
+                        } else if selectedAction == "repair" && store.can("card.requestReencode") && card["status"].text == "DELIVERED" {
+                            ConfirmAction(label: "app.cardsReencodeSend", message: data["member"]["fullName"].text + "\n" + L.t("ux.card.repairConsequences"), disabled: mutation.busy || reasonLength < 3 || ["PENDING", "APPROVED"].contains(reencodeStatus(data["reencode"]))) {
                                 await mutation.send("/api/admin/cards/\(card.id)/reencode-requests", body: .object(["reason": .str(reason)]), after: reload)
                             }
-                        } else if action == "repair" { Notice(text: L.t("ux.card.repairNotAvailable")) }
+                        } else if selectedAction == "repair" { Notice(text: L.t("ux.card.repairNotAvailable")) }
                     }
                 }
             }
@@ -199,11 +205,11 @@ struct PendingEncode: Codable {
     private let userID: String
     private var preparedBatchID = ""
     private var preparedBatchLabel = ""
-    private var preparedReencode = false
+    @Published private(set) var preparedReencode: Bool?
     private var account: String { "encode-report.\(userID)" }
     init(userID: String, reader: (any CardReader)? = nil) {
         self.userID = userID; self.reader = reader ?? CoreNFCCardReader()
-        if let d = Keychain.load("encode-report.\(userID)"), let report = try? JSONDecoder().decode(PendingEncode.self, from: d), report.userID == userID && report.origin == Config.baseURL.absoluteString { pending = report }
+        if let d = Keychain.load("encode-report.\(userID)"), let report = try? JSONDecoder().decode(PendingEncode.self, from: d), report.userID == userID && report.origin == Config.baseURL.absoluteString { pending = report; preparedReencode = report.reencode }
     }
     private var station: String {
         let key = "encode-station"
@@ -219,7 +225,12 @@ struct PendingEncode: Codable {
             if !batchID.isEmpty { body["batchId"] = .str(batchID) }
             if !grantID.isEmpty { body["grantId"] = .str(grantID) }
             claim = try await APIClient.shared.call("POST", "/api/hq/cards/prepare", .object(body))
-            preparedBatchID = batchID; preparedBatchLabel = batchLabel; preparedReencode = reencode
+            preparedBatchID = batchID; preparedBatchLabel = batchLabel
+            switch claim["lease"]["mode"].text {
+            case "encode": preparedReencode = false
+            case "reencode": preparedReencode = true
+            default: preparedReencode = reencode
+            }
         }
     }
     func write() async {
@@ -289,7 +300,7 @@ struct EncodeScreen: View {
             guard let repair = pending.reencode else { return "ux.encode.resumeTitle" }
             return repair ? "ux.encode.repairTitle" : (pending.batchID ?? "").isEmpty ? "ux.encode.anyTitle" : "ux.encode.batchTitle"
         }
-        return reencode ? "ux.encode.repairTitle" : batchID.isEmpty ? "ux.encode.anyTitle" : "ux.encode.batchTitle"
+        return (station.preparedReencode ?? reencode) ? "ux.encode.repairTitle" : batchID.isEmpty ? "ux.encode.anyTitle" : "ux.encode.batchTitle"
     }
     private func prepare() async { await station.prepare(lookup: lookup, batchID: batchID, batchLabel: batchLabel, grantID: grantID, reencode: reencode) }
 }
@@ -350,6 +361,6 @@ private struct EncodeStationContent: View {
             guard let repair = pending.reencode else { return "ux.encode.resumeTitle" }
             return repair ? "ux.encode.repairTitle" : (pending.batchID ?? "").isEmpty ? "ux.encode.anyTitle" : "ux.encode.batchTitle"
         }
-        return reencode ? "ux.encode.repairTitle" : batchID.isEmpty ? "ux.encode.anyTitle" : "ux.encode.batchTitle"
+        return (station.preparedReencode ?? reencode) ? "ux.encode.repairTitle" : batchID.isEmpty ? "ux.encode.anyTitle" : "ux.encode.batchTitle"
     }
 }

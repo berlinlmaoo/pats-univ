@@ -67,6 +67,7 @@ struct MutationState: View {
     }
 }
 struct ConfirmAction: View {
+    @Environment(\.locale) private var locale
     var label: String
     var message: String
     var destructive = false
@@ -75,7 +76,9 @@ struct ConfirmAction: View {
     var action: () async -> Void
     @State private var confirm = false
     var body: some View {
-        Button(L.t(label), role: destructive ? .destructive : nil) { confirm = true }
+        Button(role: destructive ? .destructive : nil) { confirm = true } label: {
+            Text(L.t(label)).id(locale.identifier)
+        }
             .buttonStyle(PATSButtonStyle(variant: destructive ? .danger : maroon ? .maroon : .secondary)).disabled(disabled)
             .alert(L.t(label), isPresented: $confirm) {
                 Button(L.t("common.cancel"), role: .cancel) {}
@@ -84,16 +87,18 @@ struct ConfirmAction: View {
     }
 }
 struct Choice: View {
+    @Environment(\.locale) private var locale
     var label: String
     var options: [JSON]
     @Binding var selection: String
     var allowEmpty = false
     var autoSelect = true
     var body: some View {
-        Picker(L.t(label), selection: $selection) {
+        Picker(selection: $selection) {
             if allowEmpty || (selection.isEmpty && !options.contains { $0.id.isEmpty }) { Text(L.t("common.notSet")).tag("") }
             ForEach(options) { option in Text(option["name"].text.isEmpty ? option["title"].text : option["name"].text).tag(option.id) }
-        }.pickerStyle(.menu).frame(minHeight: 44).frame(maxWidth: .infinity, alignment: .leading)
+        } label: { Text(L.t(label)).id(locale.identifier) }
+            .pickerStyle(.menu).frame(minHeight: 44).frame(maxWidth: .infinity, alignment: .leading)
             .onAppear { selectDefault() }.onChange(of: options) { _, _ in selectDefault() }
     }
     private func selectDefault() {
@@ -101,6 +106,7 @@ struct Choice: View {
     }
 }
 struct NavigationRow<Destination: View>: View {
+    @Environment(\.locale) private var locale
     let title: String
     var subtitle = ""
     var icon = "chevron.right"
@@ -110,7 +116,7 @@ struct NavigationRow<Destination: View>: View {
             HStack(spacing: Theme.gap) {
                 Image(systemName: icon).frame(width: 24).accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(L.t(title)).fontWeight(.semibold)
+                    Text(L.t(title)).id(locale.identifier).fontWeight(.semibold)
                     if !subtitle.isEmpty { Text(subtitle).font(Theme.body(13)).foregroundStyle(Theme.muted) }
                 }
                 Spacer(minLength: 0); Image(systemName: "chevron.right").font(.caption).foregroundStyle(Theme.muted)

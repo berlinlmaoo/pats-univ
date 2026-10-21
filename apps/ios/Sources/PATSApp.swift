@@ -270,7 +270,7 @@ struct AdminHomeView: View {
                             else if key == "reencode" { store.link = .dashboard("/cards?tab=requests", "ux.workspace.pending.reencode") }
                             else { store.routeNotification(queue["target"]) }
                         } label: {
-                            HStack { Text(L.t("ux.workspace.pending." + key)); Spacer(); CountChip(count: queue["count"].int); Image(systemName: "chevron.right").font(.caption) }.frame(minHeight: 44)
+                            HStack { Text(L.t("ux.workspace.pending." + key)); Spacer(); CountChip(count: queue["count"].int); Image(systemName: "chevron.right").font(.caption) }.frame(minHeight: 44).contentShape(Rectangle())
                         }.buttonStyle(.plain)
                     }
                 }

@@ -45,7 +45,7 @@
   "ux.card.stage.printing": "Sedang dicetak",
   "ux.card.stage.atHq": "Di HQ, sedang disiapkan",
   "ux.card.stage.encoded": "Siap di HQ, belum dikirim",
-  "ux.card.stage.shipped": "Sudah sampai di {city}: ambil di event berikutnya",
+  "ux.card.stage.shipped": "Dikirim ke {city}; kru akan mengonfirmasi pengambilan",
   "ux.card.stage.delivered": "Aktif: tempelkan di pintu masuk",
   "ux.card.stage.inactive": "Kartu fisik ini nonaktif. Tanyakan penggantinya ke crew.",
   "ux.card.fields.name": "NAME",
@@ -521,5 +521,6 @@
   "ux.social.approver": "Ditinjau oleh",
   "ux.social.reservationReview": "Kirim permintaan reservasi untuk {event}, slot {slot}, bagi {pax} orang? Minimum charge: {minimum}. Permintaan masih perlu disetujui kru.",
   "ux.tools.contentTask": "Lanjutkan pengajuan dan persetujuan poster di dashboard web.",
-  "ux.tools.approvalTask": "Tinjau dan putuskan pengajuan ini di dashboard web."
+  "ux.tools.approvalTask": "Tinjau dan putuskan pengajuan ini di dashboard web.",
+  "ux.events.staffNoUpcoming": "Buat atau kelola event untuk menyiapkan check-in."
 }

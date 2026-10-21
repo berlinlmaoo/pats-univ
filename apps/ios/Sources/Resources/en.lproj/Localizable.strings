@@ -1574,7 +1574,7 @@
 "ux.card.stage.inactive" = "This physical card is inactive. Ask the crew about a replacement.";
 "ux.card.stage.printing" = "Being printed";
 "ux.card.stage.queued" = "Queued for printing";
-"ux.card.stage.shipped" = "Arrived in {city}: pick it up at the next event";
+"ux.card.stage.shipped" = "Shipped to {city}; crew will confirm collection";
 "ux.card.subtitle" = "KTM — your PATS member card";
 "ux.card.title" = "Card";
 "ux.claim.allForms" = "All forms";
@@ -1667,6 +1667,7 @@
 "ux.events.publishConfirm" = "Make this event visible to members? This does not open check-in.";
 "ux.events.reservation" = "Reservation";
 "ux.events.staffAccess" = "Event management is available in Admin mode. Open Account to enable it. A member profile is required for the personal event journey.";
+"ux.events.staffNoUpcoming" = "Create or manage an event to prepare check-in.";
 "ux.events.starts" = "Starts";
 "ux.events.upcoming" = "Upcoming";
 "ux.events.viewEvent" = "View event";

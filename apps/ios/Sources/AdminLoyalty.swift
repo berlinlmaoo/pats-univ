@@ -26,23 +26,26 @@ struct RewardValidationView: View {
     @State private var camera = false
     @StateObject private var mutation = Mutation()
     var body: some View {
+        let enteredCode = code
+        let redemption = preview
+        let redemptionEventID = previewEventID
         DataPage(title: "loyalty.validateReward", path: "/api/admin/loyalty/operations", pinEventID: eventID) { data, _ in
             if initialEventID.isEmpty { OperationEventContext(events: data["events"].rows, selection: $eventID) }
             else if !data["events"].rows.contains(where: { $0.id == eventID }) { Notice(text: L.t("ux.operations.eventUnavailable"), error: true) }
             Notice(text: L.t("ux.reward.eligibility"))
             Field(key: "loyalty.code", value: $code).textInputAutocapitalization(.characters).autocorrectionDisabled().onChange(of: code) { _, v in code = String(v.uppercased().filter { $0.isASCII && ($0.isLetter || $0.isNumber) }.prefix(6)); preview = .null }
-            Button(L.t("loyalty.lookup")) { Task { await lookup(code) } }.buttonStyle(PATSButtonStyle(loading: mutation.busy)).disabled(mutation.busy || code.count != 6 || !data["events"].rows.contains(where: { $0.id == eventID }))
+            Button(L.t("loyalty.lookup")) { Task { await lookup(enteredCode) } }.buttonStyle(PATSButtonStyle(loading: mutation.busy)).disabled(mutation.busy || enteredCode.count != 6 || !data["events"].rows.contains(where: { $0.id == eventID }))
             Button(L.t("loyalty.scanCode"), systemImage: "qrcode.viewfinder") { camera = true }.buttonStyle(PATSButtonStyle(variant: .secondary)).disabled(mutation.busy || !data["events"].rows.contains(where: { $0.id == eventID }))
             MutationState(mutation: mutation)
-            if preview.exists {
-                let title = data["events"].rows.first(where: { $0.id == previewEventID })?["title"].text ?? ""
+            if redemption.exists {
+                let title = data["events"].rows.first(where: { $0.id == redemptionEventID })?["title"].text ?? ""
                 Panel {
                     Text(title).fontWeight(.semibold)
-                    Text(preview["reward"]["name"].text).font(Theme.title(20)); MemberIdentity(member: preview["member"])
-                    Text(preview["code"].text).font(Theme.title(26)).monospaced(); Badge(value: preview["status"].text)
-                    ConfirmAction(label: "loyalty.fulfill", message: title + "\n" + preview["reward"]["name"].text + " · " + preview["member"]["fullName"].text, disabled: mutation.busy || eventID != previewEventID) {
+                    Text(redemption["reward"]["name"].text).font(Theme.title(20)); MemberIdentity(member: redemption["member"])
+                    Text(redemption["code"].text).font(Theme.title(26)).monospaced(); Badge(value: redemption["status"].text)
+                    ConfirmAction(label: "loyalty.fulfill", message: title + "\n" + redemption["reward"]["name"].text + " · " + redemption["member"]["fullName"].text, disabled: mutation.busy || eventID != redemptionEventID) {
                         await mutation.run {
-                            _ = try await APIClient.shared.call("POST", "/api/admin/loyalty/codes/fulfill", .object(["eventId": .str(previewEventID), "code": preview["code"]]))
+                            _ = try await APIClient.shared.call("POST", "/api/admin/loyalty/codes/fulfill", .object(["eventId": .str(redemptionEventID), "code": redemption["code"]]))
                             preview = .null; code = ""; mutation.message = L.t("loyalty.fulfilled")
                         }
                     }
@@ -73,6 +76,10 @@ struct ClaimsReviewView: View {
     @State private var recentOnly = false
     @StateObject private var context = Resource()
     var body: some View {
+        let selectedSection = section
+        let selectedForm = form
+        let searchTerm = search
+        let onlyRecent = recentOnly
         DataPage(title: "phase5.claimReview", path: "/api/admin/loyalty/claims", poll: true, eventContext: context.data["event"].id == eventID ? context.data["event"] : .null) { data, _ in
             let scoped = data["claims"].rows.filter { eventID.isEmpty || $0["eventId"].text == eventID }
             if !eventID.isEmpty {
@@ -88,13 +95,13 @@ struct ClaimsReviewView: View {
             Toggle(L.t("ux.claim.recent"), isOn: $recentOnly)
             Tabs(options: [("pending", "ktm.pending"), ("history", "ktm.history")], selection: $section, counts: ["pending": scoped.filter { $0["status"].text == "PENDING" }.count])
             let rows = scoped.filter { claim in
-                (claim["status"].text == "PENDING") == (section == "pending") && (form.isEmpty || claim["formType"].text == form)
-                && (search.isEmpty || (claim["member"]["fullName"].text + " " + claim["member"]["nim"].text).localizedCaseInsensitiveContains(search))
-                && (!recentOnly || (Dates.parse(claim["createdAt"].text).map { $0 >= Date().addingTimeInterval(-7 * 24 * 3600) } ?? false))
+                (claim["status"].text == "PENDING") == (selectedSection == "pending") && (selectedForm.isEmpty || claim["formType"].text == selectedForm)
+                && (searchTerm.isEmpty || (claim["member"]["fullName"].text + " " + claim["member"]["nim"].text).localizedCaseInsensitiveContains(searchTerm))
+                && (!onlyRecent || (Dates.parse(claim["createdAt"].text).map { $0 >= Date().addingTimeInterval(-7 * 24 * 3600) } ?? false))
             }.sorted { a, b in
-                let aDate = Dates.parse((section == "pending" ? a["createdAt"] : a["reviewedAt"].exists ? a["reviewedAt"] : a["createdAt"]).text) ?? .distantPast
-                let bDate = Dates.parse((section == "pending" ? b["createdAt"] : b["reviewedAt"].exists ? b["reviewedAt"] : b["createdAt"]).text) ?? .distantPast
-                return section == "pending" ? aDate < bDate : aDate > bDate
+                let aDate = Dates.parse((selectedSection == "pending" ? a["createdAt"] : a["reviewedAt"].exists ? a["reviewedAt"] : a["createdAt"]).text) ?? .distantPast
+                let bDate = Dates.parse((selectedSection == "pending" ? b["createdAt"] : b["reviewedAt"].exists ? b["reviewedAt"] : b["createdAt"]).text) ?? .distantPast
+                return selectedSection == "pending" ? aDate < bDate : aDate > bDate
             }
             if rows.isEmpty { EmptyState(title: "phase5.claimEmpty", icon: "doc.text") }
             ForEach(rows) { claim in
@@ -184,6 +191,7 @@ struct CrewOperationsView: View {
     var initialEventID = ""
     @State private var eventID = ""
     var body: some View {
+        let selectedEventID = eventID
         DataPage(title: "loyalty.operations", path: "/api/admin/loyalty/operations") { data, _ in
             Panel {
                 ForEach(["members", "checkIns", "fulfilled", "revenue"], id: \.self) { key in
@@ -192,7 +200,7 @@ struct CrewOperationsView: View {
                 NavigationRow(title: "phase5.claimReview", icon: "doc.text") { ClaimsReviewView(initialEventID: initialEventID) }
             }
             OperationEventContext(events: data["events"].rows, selection: $eventID, fixed: !initialEventID.isEmpty)
-            if data["events"].rows.contains(where: { $0.id == eventID }) { NavigationRow(title: "loyalty.recap", icon: "chart.bar") { EventRecapView(eventID: eventID) } }
+            if data["events"].rows.contains(where: { $0.id == selectedEventID }) { NavigationRow(title: "loyalty.recap", icon: "chart.bar") { EventRecapView(eventID: selectedEventID) } }
             Panel {
                 NavigationRow(title: "ux.operations.memberManagement", icon: "person.badge.key") { PromoterManagementView() }
                 NavigationRow(title: "ux.operations.archive", subtitle: L.t("ux.operations.archiveBody"), icon: "archivebox") { LegacyPromoterArchiveView() }
@@ -206,10 +214,11 @@ struct PromoterManagementView: View {
     @State private var search = ""
     @StateObject private var mutation = Mutation()
     var body: some View {
+        let searchTerm = search
         DataPage(title: "ux.operations.memberManagement", path: "/api/admin/loyalty/operations") { data, reload in
             Field(key: "native.search", value: $search)
             MutationState(mutation: mutation)
-            ForEach(data["members"].rows.filter { search.isEmpty || ($0["fullName"].text + " " + $0["nim"].text).localizedCaseInsensitiveContains(search) }.prefix(30)) { member in
+            ForEach(data["members"].rows.filter { searchTerm.isEmpty || ($0["fullName"].text + " " + $0["nim"].text).localizedCaseInsensitiveContains(searchTerm) }.prefix(30)) { member in
                 Panel {
                     Text(member["fullName"].text + " · " + member["nim"].text)
                     if store.managing && store.can("promoter.manage") {

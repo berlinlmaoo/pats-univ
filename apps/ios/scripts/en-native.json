@@ -45,7 +45,7 @@
   "ux.card.stage.printing": "Being printed",
   "ux.card.stage.atHq": "At HQ, being prepared",
   "ux.card.stage.encoded": "Ready at HQ, not shipped yet",
-  "ux.card.stage.shipped": "Arrived in {city}: pick it up at the next event",
+  "ux.card.stage.shipped": "Shipped to {city}; crew will confirm collection",
   "ux.card.stage.delivered": "Active: tap it at the door",
   "ux.card.stage.inactive": "This physical card is inactive. Ask the crew about a replacement.",
   "ux.card.fields.name": "NAME",
@@ -521,5 +521,6 @@
   "ux.social.approver": "Reviewed by",
   "ux.social.reservationReview": "Send a reservation request for {event}, slot {slot}, for {pax} people? Minimum charge: {minimum}. The crew still needs to approve it.",
   "ux.tools.contentTask": "Continue with poster submissions and approvals in the web dashboard.",
-  "ux.tools.approvalTask": "Review and decide these requests in the web dashboard."
+  "ux.tools.approvalTask": "Review and decide these requests in the web dashboard.",
+  "ux.events.staffNoUpcoming": "Create or manage an event to prepare check-in."
 }

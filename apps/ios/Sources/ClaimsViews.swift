@@ -14,7 +14,17 @@ struct ClaimsView: View {
     @State private var notes = ""
     @State private var targetInitialized = false
     @StateObject private var mutation = Mutation()
+    init(initialEventID: String = "", initialClaimID: String = "") {
+        self.initialEventID = initialEventID; self.initialClaimID = initialClaimID
+        _eventID = State(initialValue: initialEventID)
+    }
     var body: some View {
+        // Read these here so this view observes changes used by DataPage's escaping content.
+        let selectedEventID = eventID
+        let selectedForm = form
+        let editingClaimID = editing
+        let selectedSection = section
+        let countsValid = validCounts
         DataPage(title: "ux.claims.bonusTitle", path: "/api/loyalty/claims", room: Room(kind: "wallet", id: store.member.id)) { data, reload in
             let related = data["claims"].rows.first { $0.id == initialClaimID }
             if !initialClaimID.isEmpty {
@@ -27,36 +37,36 @@ struct ClaimsView: View {
                 Tabs(options: [("MEMBER", "phase5.claimMember"), ("PR", "phase5.claimPr")], selection: $form)
                     .onChange(of: form) { _, _ in if data["claims"].rows.first(where: { $0.id == editing })?["formType"].text != form { clear() } }
             }
-            let existing = data["claims"].rows.first { $0["eventId"].text == eventID && $0["formType"].text == form }
-            if !eventID.isEmpty && (existing == nil || existing?.id == editing) {
+            let existingClaimID = data["claims"].rows.first { $0["eventId"].text == selectedEventID && $0["formType"].text == selectedForm }?["id"].text ?? ""
+            if !selectedEventID.isEmpty && (existingClaimID.isEmpty || existingClaimID == editingClaimID) {
                 Panel {
-                    if form == "PR" || data["allowMemberGl"].bool { Field(key: "phase5.guestCount", value: $guests, keyboard: .numberPad) }
+                    if selectedForm == "PR" || data["allowMemberGl"].bool { Field(key: "phase5.guestCount", value: $guests, keyboard: .numberPad) }
                     Field(key: "phase5.reservationCount", value: $reservations, keyboard: .numberPad)
                     Field(key: "phase5.reason", value: $notes)
                     ReceiptCaptureView(key: $receipt)
-                    Button(L.t(editing.isEmpty ? "phase5.claimSubmit" : "common.save")) {
+                    Button(L.t(editingClaimID.isEmpty ? "phase5.claimSubmit" : "common.save")) {
                         Task {
-                            var body: [String: JSON] = ["eventId": .str(eventID), "formType": .str(form), "reservationCount": .num(Int(reservations) ?? 0), "receiptUrl": .str(receipt), "notes": .str(notes)]
-                            if form == "PR" || data["allowMemberGl"].bool { body["guestCount"] = .num(Int(guests) ?? 0) }
-                            if !editing.isEmpty { body["id"] = .str(editing) }
+                            var body: [String: JSON] = ["eventId": .str(selectedEventID), "formType": .str(selectedForm), "reservationCount": .num(Int(reservations) ?? 0), "receiptUrl": .str(receipt), "notes": .str(notes)]
+                            if selectedForm == "PR" || data["allowMemberGl"].bool { body["guestCount"] = .num(Int(guests) ?? 0) }
+                            if !editingClaimID.isEmpty { body["id"] = .str(editingClaimID) }
                             await mutation.run {
-                                _ = try await APIClient.shared.call(editing.isEmpty ? "POST" : "PATCH", "/api/loyalty/claims", .object(body))
+                                _ = try await APIClient.shared.call(editingClaimID.isEmpty ? "POST" : "PATCH", "/api/loyalty/claims", .object(body))
                                 clear(); await reload(); mutation.message = L.t("phase5.claimPending")
                             }
                         }
-                    }.buttonStyle(PATSButtonStyle(loading: mutation.busy)).disabled(mutation.busy || !validCounts)
-                    if !editing.isEmpty { Button(L.t("common.cancel")) { clear() } }
+                    }.buttonStyle(PATSButtonStyle(loading: mutation.busy)).disabled(mutation.busy || !countsValid)
+                    if !editingClaimID.isEmpty { Button(L.t("common.cancel")) { clear() } }
                 }
             }
             MutationState(mutation: mutation)
                 .task(id: initialClaimID + (related?["status"].text ?? "")) {
                     if !targetInitialized, !initialClaimID.isEmpty, let related {
                         section = related["status"].text == "PENDING" ? "pending" : "history"
-                        eventID = related["eventId"].text; targetInitialized = true
+                        eventID = related["eventId"].text; form = related["formType"].text; targetInitialized = true
                     }
                 }
             Tabs(options: [("pending", "ktm.pending"), ("history", "ktm.history")], selection: $section, counts: ["pending": data["claims"].rows.filter { $0["status"].text == "PENDING" }.count])
-            let matchingRows = data["claims"].rows.filter { ($0["status"].text == "PENDING") == (section == "pending") && (initialEventID.isEmpty || $0["eventId"].text == eventID) }
+            let matchingRows = data["claims"].rows.filter { ($0["status"].text == "PENDING") == (selectedSection == "pending") && (initialEventID.isEmpty || $0["eventId"].text == selectedEventID) }
             let rows = matchingRows.filter { $0.id == initialClaimID } + matchingRows.filter { $0.id != initialClaimID }
             if rows.isEmpty { EmptyState(title: "phase5.claimEmpty") }
             ForEach(rows) { claim in
@@ -72,7 +82,7 @@ struct ClaimsView: View {
                     }
                 }
             }
-        }.onAppear { if !initialEventID.isEmpty { eventID = initialEventID } }
+        }
     }
     private var validCounts: Bool { (Int(guests).map { (0...1_000_000).contains($0) } ?? false) && (Int(reservations).map { (0...1_000_000).contains($0) } ?? false) && notes.count <= 2000 }
     private func clear() { editing = ""; guests = "0"; reservations = "0"; receipt = ""; notes = "" }

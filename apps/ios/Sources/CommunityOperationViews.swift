@@ -14,6 +14,8 @@ struct SocialOperationsView: View {
     private var managing: Bool { store.managing && !personal }
     private var contextPath: String { eventID.isEmpty ? "" : "/api/\(managing ? "admin/" : "")events/\(eventID)" }
     var body: some View {
+        // Observe the selection here, outside DataPage's escaping content builder.
+        let selectedSection = section
         DataPage(title: managing ? "social.operations" : "ux.social.myRequests", path: query("/api/social/operations", ["eventId": eventID]), poll: true, eventContext: context.data["event"]) { data, reload in
             let reservations = scoped(data["reservations"].rows)
             let roaming = scoped(data["roaming"].rows)
@@ -32,9 +34,9 @@ struct SocialOperationsView: View {
                     "roaming": counts["roamingPending"].int,
                     "moderation": data["muted"].rows.count
                 ])
-                if section == "reservations" {
+                if selectedSection == "reservations" {
                     ReservationQueue(rows: focused(reservations, id: initialReservationID), focusID: initialReservationID, managing: managing, pending: counts["reservationsPending"].int, unpaid: counts["depositsUnpaid"].int, mutation: mutation, reload: reload)
-                } else if section == "roaming" {
+                } else if selectedSection == "roaming" {
                     RoamingQueue(rows: focused(roaming, id: initialRequestID), focusID: initialRequestID, managing: managing, pending: counts["roamingPending"].int, mutation: mutation, reload: reload)
                 } else if managing {
                     CommunityModerationQueue(data: data, mutation: mutation, reload: reload)

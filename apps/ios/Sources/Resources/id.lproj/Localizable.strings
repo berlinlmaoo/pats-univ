@@ -1574,7 +1574,7 @@
 "ux.card.stage.inactive" = "Kartu fisik ini nonaktif. Tanyakan penggantinya ke crew.";
 "ux.card.stage.printing" = "Sedang dicetak";
 "ux.card.stage.queued" = "Dalam antrean cetak";
-"ux.card.stage.shipped" = "Sudah sampai di {city}: ambil di event berikutnya";
+"ux.card.stage.shipped" = "Dikirim ke {city}; kru akan mengonfirmasi pengambilan";
 "ux.card.subtitle" = "KTM — kartu member PATS-mu";
 "ux.card.title" = "Kartu";
 "ux.claim.allForms" = "Semua formulir";
@@ -1667,6 +1667,7 @@
 "ux.events.publishConfirm" = "Tampilkan event ini kepada anggota? Tindakan ini tidak membuka check-in.";
 "ux.events.reservation" = "Reservasi";
 "ux.events.staffAccess" = "Pengelolaan event tersedia dalam mode Admin. Buka Akun untuk mengaktifkannya. Profil anggota diperlukan untuk alur event pribadi.";
+"ux.events.staffNoUpcoming" = "Buat atau kelola event untuk menyiapkan check-in.";
 "ux.events.starts" = "Mulai";
 "ux.events.upcoming" = "Mendatang";
 "ux.events.viewEvent" = "Lihat event";

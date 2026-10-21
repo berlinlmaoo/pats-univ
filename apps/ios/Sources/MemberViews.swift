@@ -118,7 +118,7 @@ struct EventsView: View {
             }
             if managing { EventCreateLink() }
             if data["upcoming"].rows.isEmpty {
-                EmptyState(title: "ux.events.noUpcoming", message: all ? "ux.events.noNationalBody" : L.t("ux.events.noCityBody", ["city": store.member["city"]["name"].text]), icon: "calendar")
+                EmptyState(title: "ux.events.noUpcoming", message: managing ? "ux.events.staffNoUpcoming" : all ? "ux.events.noNationalBody" : L.t("ux.events.noCityBody", ["city": store.member["city"]["name"].text]), icon: "calendar")
                 if !managing && !all { Button(L.t("ux.events.browseCities")) { all = true }.buttonStyle(PATSButtonStyle(variant: .secondary)) }
             }
             ForEach(["upcoming", "past"], id: \.self) { section in
@@ -189,8 +189,9 @@ struct WalletView: View {
     @State private var eventID = ""
     @StateObject private var mutation = Mutation()
     var body: some View {
+        let selectedEventID = eventID
         DataPage(title: "loyalty.title", path: "/api/loyalty/wallet", room: Room(kind: "wallet", id: store.member.id)) { data, reload in
-            let event = data["events"].rows.first { $0.id == eventID } ?? .null
+            let event = data["events"].rows.first { $0.id == selectedEventID } ?? .null
             Panel {
                 Text(L.t("loyalty.balance")).foregroundStyle(Theme.muted)
                 Text(L.count(data["balance"].int) + " XP").font(Theme.title(32)).monospacedDigit()
@@ -316,6 +317,7 @@ struct LeaderboardView: View {
     @EnvironmentObject private var store: AppStore
     @State private var filter = ""
     var body: some View {
+        let selectedMonth = monthDate
         DataPage(title: "loyalty.leaderboard", path: query("/api/loyalty/leaderboard", ["cityId": scope == "national" ? "" : (city.isEmpty ? store.member["city"].id : city), "eventId": event, "month": filter])) { data, _ in
             Tabs(options: [("city", "loyalty.city"), ("national", "loyalty.national")], selection: $scope)
             if scope == "city" { Choice(label: "loyalty.city", options: data["cities"].rows, selection: $city) }
@@ -324,7 +326,7 @@ struct LeaderboardView: View {
             if ["MONTHLY", "QUARTERLY"].contains(data["mode"].text) {
                 DateTimeField(key: "loyalty.month", value: $monthDate)
                 Button(L.t("loyalty.apply")) {
-                    let f = DateFormatter(); f.locale = Locale(identifier: "en_GB"); f.timeZone = TimeZone(identifier: "Asia/Jakarta"); f.dateFormat = "yyyy-MM"; filter = f.string(from: monthDate)
+                    let f = DateFormatter(); f.locale = Locale(identifier: "en_GB"); f.timeZone = TimeZone(identifier: "Asia/Jakarta"); f.dateFormat = "yyyy-MM"; filter = f.string(from: selectedMonth)
                 }
             }
             if data["mode"].text == "EVENT" { Choice(label: "loyalty.event", options: data["events"].rows, selection: $event) }
@@ -350,12 +352,14 @@ struct RegionChangeView: View {
     @State private var reason = ""
     @StateObject private var mutation = Mutation()
     var body: some View {
+        let selectedCity = city
+        let requestReason = reason
         DataPage(title: "phase5.regionChange", path: "/api/me/region-change") { data, reload in
             Notice(text: L.t("phase5.regionHint"))
             Choice(label: "app.city", options: data["cities"].rows, selection: $city)
             Field(key: "phase5.reason", value: $reason)
-            Button(L.t("common.save")) { Task { await mutation.send("/api/me/region-change", body: .object(["cityId": .str(city), "reason": .str(reason)]), after: reload) } }
-                .buttonStyle(PATSButtonStyle(loading: mutation.busy)).disabled(city.isEmpty || reason.trimmingCharacters(in: .whitespacesAndNewlines).count < 3 || mutation.busy || data["requests"].rows.contains { $0["status"].text == "PENDING" })
+            Button(L.t("common.save")) { Task { await mutation.send("/api/me/region-change", body: .object(["cityId": .str(selectedCity), "reason": .str(requestReason)]), after: reload) } }
+                .buttonStyle(PATSButtonStyle(loading: mutation.busy)).disabled(selectedCity.isEmpty || requestReason.trimmingCharacters(in: .whitespacesAndNewlines).count < 3 || mutation.busy || data["requests"].rows.contains { $0["status"].text == "PENDING" })
             MutationState(mutation: mutation)
             if data["requests"].rows.isEmpty { EmptyState(title: "phase5.regionEmpty") }
             ForEach(data["requests"].rows) { row in Panel { Text(row["toCity"]["name"].text).fontWeight(.semibold); Badge(value: row["status"].text); Text(row["decisionNote"].text) } }
@@ -586,6 +590,16 @@ struct MemberJourneyView: View {
         default:
             if !steps.isEmpty && steps.allSatisfy({ $0["state"].text == "done" }) { Label(L.t("ux.journey.completed"), systemImage: "checkmark.seal.fill").font(Theme.title(17)) }
             AttendanceOutcome(event: currentEvent)
+        }
+        // Skipping a journey step never removes an onward action the server still permits.
+        if current["key"].text != "reservation" && EventJourneyPolicy.actionAvailable("reserve", in: currentEvent) {
+            NavigationRow(title: "ux.events.reservation", icon: "square.grid.3x3") { ReservationView(eventID: event.id) }
+        }
+        if current["key"].text != "checkIn" && EventJourneyPolicy.actionAvailable("showQr", in: currentEvent) {
+            Button(L.t("app.eventShowQr"), systemImage: "qrcode") { store.selectCard(event: currentEvent) }.buttonStyle(PATSButtonStyle(variant: .maroon))
+        }
+        if current["key"].text != "checkIn" && EventJourneyPolicy.actionAvailable("roaming", in: currentEvent) {
+            NavigationRow(title: "social.roaming", icon: "globe.asia.australia") { RoamingView(initialEventID: event.id) }
         }
         if EventJourneyPolicy.actionAvailable("claimXp", in: currentEvent) {
             NavigationRow(title: "ux.events.claimBonus", icon: "doc.text") { ClaimsView(initialEventID: event.id) }

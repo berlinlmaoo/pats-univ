@@ -294,6 +294,11 @@ struct RoamingView: View {
     private var selectedEvent: JSON { eligibility.data["event"] }
     private var canRequest: Bool { store.member.exists && selectedEvent.id == eventID && requestOriginID == eventID && option["available"].bool && !eligibility.loading && eligibility.error == nil }
     var body: some View {
+        // Register state dependencies before the escaping DataPage content runs.
+        let requestedType = kind
+        let currentOption = option
+        let currentEvent = selectedEvent
+        let requestAvailable = canRequest
         DataPage(title: "social.roaming", path: "/api/events?scope=all") { data, _ in
             if store.member.exists {
                 Notice(text: L.t("social.roamingHint"))
@@ -302,27 +307,27 @@ struct RoamingView: View {
                 if events.isEmpty { EmptyState(title: "ux.social.noVisitingEvents", message: "ux.social.noVisitingEventsBody", icon: "globe.asia.australia") }
                 if !eventID.isEmpty {
                     ResourceState(resource: eligibility) { await loadEligibility() }
-                    if selectedEvent.id == eventID {
+                    if currentEvent.id == eventID {
                         Panel {
-                            Text(selectedEvent["title"].text).font(Theme.title(17))
-                            Text(selectedEvent["city"]["name"].text).foregroundStyle(Theme.muted)
-                            if !initialEventID.isEmpty && initialEventID != eventID { Notice(text: L.t("ux.social.roamingChanged", ["event": selectedEvent["title"].text])) }
+                            Text(currentEvent["title"].text).font(Theme.title(17))
+                            Text(currentEvent["city"]["name"].text).foregroundStyle(Theme.muted)
+                            if !initialEventID.isEmpty && initialEventID != eventID { Notice(text: L.t("ux.social.roamingChanged", ["event": currentEvent["title"].text])) }
                             Picker(L.t("social.kind"), selection: $kind) {
                                 ForEach(Array(eligibility.data["options"].rows.enumerated()), id: \.offset) { _, choice in Text(L.status(choice["type"].text)).tag(choice["type"].text) }
                             }
-                            Text(L.t(kind == "ATTENDANCE" ? "ux.roaming.attendBody" : "ux.roaming.hubBody", ["city": selectedEvent["city"]["name"].text, "hours": eligibility.data["hubAccessHours"].text])).font(Theme.body(14)).foregroundStyle(Theme.muted)
-                            DetailRow(key: "ux.social.approver", value: option["approver"].text == "HQ" ? "HQ" : L.status("REGIONAL_ADMIN"))
-                            if !option["available"].bool { Notice(text: unavailableReason(option["reason"].text)) }
-                            if option["existing"].exists {
-                                Badge(value: option["existing"]["status"].text)
-                                if option["existing"]["accessExpiresAt"].exists { Text(L.t("ux.social.accessUntil", ["date": L.date(option["existing"]["accessExpiresAt"].text)])) }
+                            Text(L.t(requestedType == "ATTENDANCE" ? "ux.roaming.attendBody" : "ux.roaming.hubBody", ["city": currentEvent["city"]["name"].text, "hours": eligibility.data["hubAccessHours"].text])).font(Theme.body(14)).foregroundStyle(Theme.muted)
+                            DetailRow(key: "ux.social.approver", value: currentOption["approver"].text == "HQ" ? "HQ" : L.status("REGIONAL_ADMIN"))
+                            if !currentOption["available"].bool { Notice(text: unavailableReason(currentOption["reason"].text)) }
+                            if currentOption["existing"].exists {
+                                Badge(value: currentOption["existing"]["status"].text)
+                                if currentOption["existing"]["accessExpiresAt"].exists { Text(L.t("ux.social.accessUntil", ["date": L.date(currentOption["existing"]["accessExpiresAt"].text)])) }
                             }
                         }
                     }
                 }
-                ConfirmAction(label: "social.requestRoaming", message: L.t("ux.social.roamingConfirm", ["event": selectedEvent["title"].text, "city": selectedEvent["city"]["name"].text, "type": L.status(kind)]), disabled: !canRequest || mutation.busy) {
-                    guard canRequest else { return }
-                    await mutation.send("/api/social/roaming", body: .object(["eventId": .str(eventID), "originEventId": .str(requestOriginID), "type": .str(kind)]), after: loadEligibility)
+                ConfirmAction(label: "social.requestRoaming", message: L.t("ux.social.roamingConfirm", ["event": currentEvent["title"].text, "city": currentEvent["city"]["name"].text, "type": L.status(requestedType)]), disabled: !requestAvailable || mutation.busy) {
+                    guard requestAvailable else { return }
+                    await mutation.send("/api/social/roaming", body: .object(["eventId": .str(eventID), "originEventId": .str(requestOriginID), "type": .str(requestedType)]), after: loadEligibility)
                 }
                 MutationState(mutation: mutation)
                 NavigationRow(title: "social.review", icon: "list.bullet") { SocialOperationsView(initialSection: "roaming", eventID: eventID, personal: true) }
@@ -364,48 +369,54 @@ struct ReservationView: View {
     @State private var submitted: JSON = .null
     @StateObject private var mutation = Mutation()
     var body: some View {
+        // Read form/result state in this body so selector and validation changes redraw immediately.
+        let submittedRequest = submitted
+        let blockingReservation = blocking
+        let selectedSlot = slot
+        let enteredPax = pax
+        let enteredNote = note
         DataPage(title: "social.reserve", path: query("/api/social/slots", ["eventId": eventID])) { data, reload in
             if store.member.exists {
                 Text(data["eventTitle"].text).font(Theme.title(20)); Text(data["venueName"].text).foregroundStyle(Theme.muted)
                 EventPosterHighlight(event: .object(["id": .str(eventID), "title": data["eventTitle"], "poster": data["poster"], "description": data["poster"]["description"], "flyerUrl": data["poster"]["url"]]))
-                if submitted.exists {
+                if submittedRequest.exists {
                     Panel {
                         Text(L.t("ux.reservation.pendingTitle")).font(Theme.title(20))
-                        if !submitted["conversationId"].text.isEmpty { NavigationRow(title: "social.chat", icon: "bubble.left") { ChannelView(room: Room(kind: "conversation", id: submitted["conversationId"].text)) } }
-                        NavigationRow(title: "ux.reservation.mine", icon: "list.bullet") { SocialOperationsView(eventID: eventID, initialReservationID: submitted.id, personal: true) }
+                        if !submittedRequest["conversationId"].text.isEmpty { NavigationRow(title: "social.chat", icon: "bubble.left") { ChannelView(room: Room(kind: "conversation", id: submittedRequest["conversationId"].text)) } }
+                        NavigationRow(title: "ux.reservation.mine", icon: "list.bullet") { SocialOperationsView(eventID: eventID, initialReservationID: submittedRequest.id, personal: true) }
                     }
                 } else {
-                    reservationForm(data, reload: reload)
+                    reservationForm(data, selectedSlot: selectedSlot, enteredPax: enteredPax, enteredNote: enteredNote, blockingReservation: blockingReservation, reload: reload)
                 }
             } else { EmptyState(title: "ux.social.memberRequestsOnly", message: "ux.social.staffContext", icon: "person.crop.circle") }
         }
     }
-    @ViewBuilder private func reservationForm(_ data: JSON, reload: @escaping () async -> Void) -> some View {
+    @ViewBuilder private func reservationForm(_ data: JSON, selectedSlot: String, enteredPax: String, enteredNote: String, blockingReservation: JSON, reload: @escaping () async -> Void) -> some View {
         Notice(text: L.t("social.floorHint"))
         if data["slots"].rows.isEmpty { EmptyState(title: "social.noSlots", message: "social.noSlotsBody") }
         FloorPlan(slots: data["slots"].rows, taken: data["taken"].rows.map(\.text), selection: $slot)
         let available = data["slots"].rows.filter { !data["taken"].rows.contains($0["code"]) }
         Choice(label: "social.slot", options: available.map { .object(["id": $0["code"], "name": .str($0["code"].text + " · " + L.status($0["kind"].text) + " · " + $0["pax"].text)]) }, selection: $slot)
-        let selected = available.first { $0["code"].text == slot } ?? .null
+        let selected = available.first { $0["code"].text == selectedSlot } ?? .null
         let minimum = selected["minimumCharge"].exists ? selected["minimumCharge"] : data["venueMinimumCharge"]
         if minimum.exists { Text(L.t("phase5.minimumCharge") + ": " + L.money(minimum.int)) }
         if !selected["minimumSpend"].text.isEmpty { Text(selected["minimumSpend"].text) }
         Field(key: "social.pax", value: $pax, keyboard: .numberPad)
         Field(key: "social.note", value: $note)
         MutationState(mutation: mutation)
-        if blocking.exists {
+        if blockingReservation.exists {
             Panel {
-                Notice(text: L.t("ux.reservation.blocked", ["event": blocking["event"].text]))
-                if !blocking["conversationId"].text.isEmpty { NavigationRow(title: "social.chat", icon: "bubble.left") { ChannelView(room: Room(kind: "conversation", id: blocking["conversationId"].text)) } }
-                NavigationRow(title: "ux.reservation.openBlocking", icon: "list.bullet.rectangle") { SocialOperationsView(eventID: blocking["eventId"].text, initialReservationID: blocking["reservationId"].text, personal: true) }
+                Notice(text: L.t("ux.reservation.blocked", ["event": blockingReservation["event"].text]))
+                if !blockingReservation["conversationId"].text.isEmpty { NavigationRow(title: "social.chat", icon: "bubble.left") { ChannelView(room: Room(kind: "conversation", id: blockingReservation["conversationId"].text)) } }
+                NavigationRow(title: "ux.reservation.openBlocking", icon: "list.bullet.rectangle") { SocialOperationsView(eventID: blockingReservation["eventId"].text, initialReservationID: blockingReservation["reservationId"].text, personal: true) }
             }
         }
-        ConfirmAction(label: "ux.reservation.send", message: L.t("ux.social.reservationReview", ["event": data["eventTitle"].text, "slot": slot, "pax": pax, "minimum": minimum.exists ? L.money(minimum.int) : L.t("common.notSet")]), disabled: mutation.busy || !selected.exists || (Int(pax).map { $0 < 1 || $0 > min(100, selected["pax"].int) } ?? true) || note.count > 4000) {
+        ConfirmAction(label: "ux.reservation.send", message: L.t("ux.social.reservationReview", ["event": data["eventTitle"].text, "slot": selectedSlot, "pax": enteredPax, "minimum": minimum.exists ? L.money(minimum.int) : L.t("common.notSet")]), disabled: mutation.busy || !selected.exists || (Int(enteredPax).map { $0 < 1 || $0 > min(100, selected["pax"].int) } ?? true) || enteredNote.count > 4000) {
             guard store.member.exists else { return }
             blocking = .null
             await mutation.run {
                 do {
-                    submitted = try await APIClient.shared.call("POST", "/api/social/reserve", .object(["eventId": .str(eventID), "slotCode": .str(slot), "pax": .num(Int(pax) ?? 1), "note": .str(note)]))
+                    submitted = try await APIClient.shared.call("POST", "/api/social/reserve", .object(["eventId": .str(eventID), "slotCode": .str(selectedSlot), "pax": .num(Int(enteredPax) ?? 1), "note": .str(enteredNote)]))
                     await reload()
                 } catch let error as APIError where error.code == "RESERVATION_LIMIT" {
                     blocking = .object(error.params)
