@@ -5,28 +5,46 @@ struct SocialHubView: View {
     @State private var city = ""
     @State private var section = "TIMELINE"
     @State private var selectedChannel = ""
+    @StateObject private var hub = Resource()
     var body: some View {
-        DataPage(title: "social.title", path: "/api/social/hub") { data, _ in
-            Tabs(options: [("TIMELINE", "social.timeline"), ("CHAT", "social.chat"), ("RESERVATIONS", "social.reservations")], selection: $section)
-            if section == "RESERVATIONS" {
-                Panel {
-                    NavigationRow(title: store.admin ? "social.operations" : "social.reservations", icon: "list.bullet.rectangle") { SocialOperationsView() }
-                    if !store.admin { NavigationRow(title: "social.roaming", icon: "globe.asia.australia") { RoamingView() } }
+        Page(title: "social.title") {
+            if store.admin && !store.member.exists && hub.failureCode == "FORBIDDEN" {
+                EmptyState(title: "ux.social.staffHubUnavailable", message: "ux.social.staffContext", icon: "bubble.left.and.bubble.right")
+                if !store.managing {
+                    Button(L.t("ux.social.enableAdminMode")) { store.adminMode = true }.buttonStyle(PATSButtonStyle(variant: .secondary))
                 }
+                Button(L.t("common.retry")) { Task { await hub.load("/api/social/hub") } }.buttonStyle(PATSButtonStyle(variant: .secondary))
             } else {
-                let selected = data["cities"].rows.contains { $0.id == city } ? city : (data["homeCityId"].text.isEmpty ? data["cities"].rows.first?.id ?? "" : data["homeCityId"].text)
-                Choice(label: "social.city", options: data["cities"].rows, selection: $city)
-                if store.admin, !selected.isEmpty { NavigationRow(title: "social.newChannel", icon: "plus.bubble") { ChannelEditor(cityID: selected) } }
-                let channels = data["channels"].rows.filter { $0["cityId"].text == selected && $0["kind"].text == section }
-                if channels.isEmpty { EmptyState(title: "social.noChannels", message: "social.noChannelsBody", icon: "bubble.left.and.bubble.right") }
-                else { Text(L.t("ktm.chooseChannel")).foregroundStyle(Theme.muted) }
-                ForEach(channels) { channel in
-                    Panel {
-                        NavigationRow(title: channel["name"].text, subtitle: L.status(channel["kind"].text), icon: "bubble.left") { ChannelView(room: Room(kind: "channel", id: channel.id)) }
-                            .simultaneousGesture(TapGesture().onEnded { selectedChannel = channel.id })
-                    }.overlay(RoundedRectangle(cornerRadius: Theme.radius).stroke(selectedChannel == channel.id ? Theme.color("accent") : .clear, lineWidth: 2))
-                }
+                ResourceState(resource: hub) { await hub.load("/api/social/hub") }
+                if hub.data.exists { channels(hub.data) }
             }
+        }
+        .task { await hub.load("/api/social/hub") }
+        .refreshable { await hub.load("/api/social/hub") }
+    }
+    @ViewBuilder private func channels(_ data: JSON) -> some View {
+        Tabs(options: [("TIMELINE", "social.timeline"), ("CHAT", "social.chat")], selection: $section)
+        let selected = data["cities"].rows.contains { $0.id == city } ? city : (data["homeCityId"].text.isEmpty ? data["cities"].rows.first?.id ?? "" : data["homeCityId"].text)
+        Choice(label: "social.city", options: data["cities"].rows, selection: $city)
+        if !store.member.exists && !store.managing { Notice(text: L.t("ux.social.staffContext")) }
+        if store.managing, !selected.isEmpty {
+            NavigationRow(title: "social.newChannel", icon: "plus.bubble") { ChannelEditor(cityID: selected) }
+        }
+        let channels = data["channels"].rows.filter {
+            $0["cityId"].text == selected && $0["kind"].text == section &&
+            (store.managing || (!$0["archived"].bool && $0["visibility"].text != "ADMINS_ONLY"))
+        }
+        if channels.isEmpty { EmptyState(title: "social.noChannels", message: "social.noChannelsBody", icon: "bubble.left.and.bubble.right") }
+        else { Text(L.t("ktm.chooseChannel")).foregroundStyle(Theme.muted) }
+        ForEach(channels) { channel in
+            Panel {
+                NavigationRow(title: channel["name"].text, subtitle: L.status(channel["kind"].text), icon: "bubble.left") { ChannelView(room: Room(kind: "channel", id: channel.id)) }
+                    .simultaneousGesture(TapGesture().onEnded { selectedChannel = channel.id })
+            }.overlay(RoundedRectangle(cornerRadius: Theme.radius).stroke(selectedChannel == channel.id ? Theme.color("accent") : .clear, lineWidth: 2))
+        }
+        Panel {
+            NavigationRow(title: store.managing ? "social.operations" : "ux.social.myRequests", icon: "list.bullet.rectangle") { SocialOperationsView() }
+            if store.member.exists && !store.managing { NavigationRow(title: "social.roaming", icon: "globe.asia.australia") { RoamingView() } }
         }
     }
 }
@@ -36,6 +54,8 @@ struct ChannelView: View {
     @Environment(\.scenePhase) private var phase
     @StateObject private var hub = Resource()
     @StateObject private var feed = Resource()
+    @StateObject private var personalRequests = Resource()
+    @State private var ownershipChecked = false
     @StateObject private var live = RealtimeRoom()
     @StateObject private var mutation = Mutation()
     @State private var items: [JSON] = []
@@ -48,10 +68,40 @@ struct ChannelView: View {
     @State private var screenshotTaken = false
     private var channel: JSON { hub.data["channels"].rows.first { $0.id == room.id } ?? .null }
     private var timeline: Bool { channel["kind"].text == "TIMELINE" }
-    private var canPost: Bool { !channel["archived"].bool && (timeline ? channel["canPostTimeline"].bool : (store.admin || channel["memberPosting"] != .bool(false))) }
+    private var checkingOwnership: Bool {
+        room.kind == "conversation" && store.admin && !store.managing && !ownershipChecked
+    }
+    private var ownsConversation: Bool {
+        guard store.member.exists else { return false }
+        return personalRequests.data["reservations"].rows.contains {
+            $0["memberId"].text == store.member.id && $0["conversation"].id == room.id
+        }
+    }
+    private var needsAdminMode: Bool {
+        guard !store.managing else { return false }
+        if room.kind == "conversation" && store.admin { return ownershipChecked && !ownsConversation }
+        return room.kind == "channel" && channel.exists && (channel["archived"].bool || channel["visibility"].text == "ADMINS_ONLY")
+    }
+    private var canPost: Bool {
+        guard !needsAdminMode && !checkingOwnership else { return false }
+        if room.kind == "conversation" { return store.managing || store.member.exists }
+        guard !channel["archived"].bool else { return false }
+        return timeline ? store.managing && channel["canPostTimeline"].bool : (store.managing || (store.member.exists && channel["memberPosting"] != .bool(false)))
+    }
     var body: some View {
         Page(title: channel["name"].text.isEmpty ? "social.chat" : channel["name"].text) {
-            if lost || live.accessLost || (room.kind == "channel" && hub.data.exists && !channel.exists) { Notice(text: L.t("native.accessLost"), error: true) }
+            if checkingOwnership { Skeleton() }
+            else if lost || live.accessLost || (room.kind == "channel" && hub.data.exists && !channel.exists) { Notice(text: L.t("native.accessLost"), error: true) }
+            else if needsAdminMode {
+                Notice(text: L.t("ux.social.adminModeRequired"))
+                if room.kind == "conversation" && store.member.exists {
+                    ResourceState(resource: personalRequests) { await checkConversationOwnership(); await reload(); connect() }
+                }
+                if store.admin {
+                    Button(L.t("ux.social.enableAdminMode")) { store.adminMode = true }
+                        .buttonStyle(PATSButtonStyle(variant: .secondary))
+                }
+            }
             else if (captured || phase != .active) && room.kind == "channel" { Notice(text: L.t("native.captured")) }
             else {
                 ResourceState(resource: hub) { await hub.load("/api/social/hub") }
@@ -59,7 +109,7 @@ struct ChannelView: View {
                 Text(L.t(live.connected ? "social.live" : "social.offline")).font(Theme.body(13)).foregroundStyle(Theme.muted)
                 if room.kind == "channel" { Notice(text: L.t("social.secureHint")) }
                 if screenshotTaken { Notice(text: L.t("native.captured")) }
-                if store.admin && channel.exists { NavigationRow(title: "common.edit", icon: "pencil") { ChannelEditor(cityID: channel["cityId"].text, channel: channel) } }
+                if store.managing && channel.exists { NavigationRow(title: "common.edit", icon: "pencil") { ChannelEditor(cityID: channel["cityId"].text, channel: channel) } }
                 if items.isEmpty && !feed.loading && feed.error == nil { EmptyState(title: "social.emptyTitle", message: "social.emptyBody", icon: "bubble.left") }
                 ForEach(ordered) { item in
                     Panel {
@@ -67,12 +117,12 @@ struct ChannelView: View {
                         Text(L.date(item["createdAt"].text)).font(Theme.body(13)).foregroundStyle(Theme.muted)
                         if !item["body"].text.isEmpty { Text(item["body"].text).textSelection(.enabled) }
                         if !item["mediaUrl"].text.isEmpty { MediaPlayback(url: item["mediaUrl"].text, kind: item["mediaType"].text) }
-                        if timeline {
+                        if timeline && store.member.exists {
                             Button(L.t(item["reacted"].bool ? "phase5.reacted" : "phase5.react") + " · " + L.count(item["reactionCount"].int), systemImage: "heart") {
                                 Task { await mutate("react", .object(["postId": .str(item.id), "active": .bool(!item["reacted"].bool)])) }
                             }.buttonStyle(PATSButtonStyle(variant: .secondary)).disabled(mutation.busy)
                         }
-                        if store.admin && channel.exists {
+                        if store.managing && channel.exists {
                             if timeline {
                                 Button(L.t(item["pinned"].bool ? "social.unpin" : "social.pin")) { Task { await mutate("moderate", .object(["action": .str("pin"), "id": .str(item.id), "pinned": .bool(!item["pinned"].bool)])) } }.disabled(mutation.busy)
                             }
@@ -112,17 +162,22 @@ struct ChannelView: View {
             }
         }
         .task(id: room.id) {
+            await checkConversationOwnership()
             await hub.load("/api/social/hub"); await reload(); connect()
             while !Task.isCancelled {
                 do { try await Task.sleep(for: .seconds(15)) } catch { break }
                 if phase == .active && !lost && !live.accessLost { await reload() }
             }
         }
-        .refreshable { await hub.load("/api/social/hub"); await reload() }
+        .refreshable { await checkConversationOwnership(); await hub.load("/api/social/hub"); await reload() }
         .onDisappear { live.stop(); items = []; attachment = .null }
         .onChange(of: bodyText) { _, _ in sendKey.update(text: bodyText, attachment: attachment["mediaKey"].text) }
         .onChange(of: attachment) { _, _ in sendKey.update(text: bodyText, attachment: attachment["mediaKey"].text) }
         .onChange(of: room) { _, _ in sendKey.reset() }
+        .onChange(of: store.managing) { _, _ in
+            live.stop(); items = []
+            Task { await checkConversationOwnership(); await reload(); connect() }
+        }
         .onChange(of: phase) { _, p in if p == .active { connect() } else { live.stop() } }
         .onReceive(NotificationCenter.default.publisher(for: UIScreen.capturedDidChangeNotification)) { _ in captured = UIScreen.main.isCaptured }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.userDidTakeScreenshotNotification)) { _ in
@@ -140,7 +195,15 @@ struct ChannelView: View {
         }
     }
     private var path: String { query("/api/social/feed", ["kind": room.kind, "id": room.id]) }
+    private func checkConversationOwnership() async {
+        ownershipChecked = false
+        if room.kind == "conversation" && store.admin && !store.managing && store.member.exists {
+            await personalRequests.load("/api/social/operations")
+        }
+        ownershipChecked = true
+    }
     private func reload() async {
+        guard !checkingOwnership && !needsAdminMode else { items = []; live.stop(); return }
         await feed.load(path)
         if feed.error == nil {
             // A full refresh replaces stale rows, including deleted messages.
@@ -150,15 +213,23 @@ struct ChannelView: View {
         if ["FORBIDDEN", "UNAUTHENTICATED", "ACCOUNT_DISABLED"].contains(feed.failureCode ?? "") || !authenticated { lost = true; items = []; live.stop() }
     }
     private func more() async {
+        guard !checkingOwnership && !needsAdminMode else { return }
         await mutation.run {
             let data = try await APIClient.shared.call("GET", query("/api/social/feed", ["kind": room.kind, "id": room.id, "cursor": nextCursor]))
             var seen = Set(items.map(\.id))
             items += data["items"].rows.filter { seen.insert($0.id).inserted }; nextCursor = data["nextCursor"].text
         }
     }
-    private func connect() { live.start(kind: room.kind, id: room.id) { await reload() } }
-    private func mutate(_ action: String, _ body: JSON) async { await mutation.send("/api/social/\(action)", body: body, after: reload) }
+    private func connect() {
+        guard !checkingOwnership && !needsAdminMode else { return }
+        live.start(kind: room.kind, id: room.id) { await reload() }
+    }
+    private func mutate(_ action: String, _ body: JSON) async {
+        guard action == "react" ? store.member.exists : store.managing else { return }
+        await mutation.send("/api/social/\(action)", body: body, after: reload)
+    }
     private func send() async {
+        guard canPost && !needsAdminMode else { return }
         await mutation.run {
             var body = attachment.object
             body["body"] = .str(bodyText); body[room.kind == "channel" ? "channelId" : "conversationId"] = .str(room.id)
@@ -175,6 +246,7 @@ struct ChannelView: View {
 }
 
 struct ChannelEditor: View {
+    @EnvironmentObject private var store: AppStore
     let cityID: String
     var channel: JSON = .null
     @Environment(\.dismiss) private var dismiss
@@ -186,21 +258,24 @@ struct ChannelEditor: View {
     @StateObject private var mutation = Mutation()
     var body: some View {
         Page(title: channel.exists ? "common.edit" : "social.newChannel") {
-            Field(key: "social.channelName", value: $name)
-            Tabs(options: [("CHAT", "social.chat"), ("TIMELINE", "social.timeline")], selection: $kind)
-            Picker(L.t("social.visibility"), selection: $visibility) { Text(L.status("MEMBERS")).tag("MEMBERS"); Text(L.status("ADMINS_ONLY")).tag("ADMINS_ONLY") }
-            Picker(L.t("social.posting"), selection: $posting) {
-                Text(L.t("common.notSet")).tag("default"); Text(L.t("common.yes")).tag("yes"); Text(L.t("common.no")).tag("no")
-            }
-            Toggle(L.t("social.archived"), isOn: $archived)
-            MutationState(mutation: mutation)
-            Button(L.t("common.save")) {
-                Task { await mutation.run {
-                    var body: [String: JSON] = ["cityId": .str(cityID), "name": .str(name), "kind": .str(kind), "visibility": .str(visibility), "memberPosting": posting == "default" ? .null : .bool(posting == "yes"), "archived": .bool(archived)]
-                    if channel.exists { body["id"] = .str(channel.id) }
-                    _ = try await APIClient.shared.call("POST", "/api/social/channels", .object(body)); dismiss()
-                } }
-            }.buttonStyle(PATSButtonStyle(loading: mutation.busy)).disabled(mutation.busy || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || name.count > 80)
+            if store.managing {
+                Field(key: "social.channelName", value: $name)
+                Tabs(options: [("CHAT", "social.chat"), ("TIMELINE", "social.timeline")], selection: $kind)
+                Picker(L.t("social.visibility"), selection: $visibility) { Text(L.status("MEMBERS")).tag("MEMBERS"); Text(L.status("ADMINS_ONLY")).tag("ADMINS_ONLY") }
+                Picker(L.t("social.posting"), selection: $posting) {
+                    Text(L.t("common.notSet")).tag("default"); Text(L.t("common.yes")).tag("yes"); Text(L.t("common.no")).tag("no")
+                }
+                Toggle(L.t("social.archived"), isOn: $archived)
+                MutationState(mutation: mutation)
+                Button(L.t("common.save")) {
+                    Task { await mutation.run {
+                        guard store.managing else { return }
+                        var body: [String: JSON] = ["cityId": .str(cityID), "name": .str(name), "kind": .str(kind), "visibility": .str(visibility), "memberPosting": posting == "default" ? .null : .bool(posting == "yes"), "archived": .bool(archived)]
+                        if channel.exists { body["id"] = .str(channel.id) }
+                        _ = try await APIClient.shared.call("POST", "/api/social/channels", .object(body)); dismiss()
+                    } }
+                }.buttonStyle(PATSButtonStyle(loading: mutation.busy)).disabled(mutation.busy || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || name.count > 80)
+            } else { Notice(text: L.t("ux.social.adminModeRequired")) }
         }.onAppear {
             if channel.exists { name = channel["name"].text; kind = channel["kind"].text; visibility = channel["visibility"].text; archived = channel["archived"].bool; posting = channel["memberPosting"].exists ? (channel["memberPosting"].bool ? "yes" : "no") : "default" }
         }
@@ -211,17 +286,77 @@ struct RoamingView: View {
     var initialEventID = ""
     @EnvironmentObject private var store: AppStore
     @State private var eventID = ""
+    @State private var requestOriginID = ""
     @State private var kind = "ATTENDANCE"
+    @StateObject private var eligibility = Resource()
     @StateObject private var mutation = Mutation()
+    private var option: JSON { eligibility.data["options"].rows.first { $0["type"].text == kind } ?? .null }
+    private var selectedEvent: JSON { eligibility.data["event"] }
+    private var canRequest: Bool { store.member.exists && selectedEvent.id == eventID && requestOriginID == eventID && option["available"].bool && !eligibility.loading && eligibility.error == nil }
     var body: some View {
+        // Register state dependencies before the escaping DataPage content runs.
+        let requestedType = kind
+        let currentOption = option
+        let currentEvent = selectedEvent
+        let requestAvailable = canRequest
         DataPage(title: "social.roaming", path: "/api/events?scope=all") { data, _ in
-            Notice(text: L.t("social.roamingHint"))
-            Choice(label: "social.event", options: data["upcoming"].rows.filter { $0["city"].id != store.member["city"].id }, selection: $eventID)
-            Picker(L.t("social.kind"), selection: $kind) { Text(L.status("ATTENDANCE")).tag("ATTENDANCE"); Text(L.status("SOCIAL_HUB")).tag("SOCIAL_HUB") }
-            Button(L.t("social.requestRoaming")) { Task { await mutation.send("/api/social/roaming", body: .object(["eventId": .str(eventID), "type": .str(kind)])) } }.buttonStyle(PATSButtonStyle(loading: mutation.busy)).disabled(eventID.isEmpty || mutation.busy)
-            MutationState(mutation: mutation)
-            NavigationRow(title: "social.review", icon: "list.bullet") { SocialOperationsView() }
-        }.onAppear { if eventID.isEmpty { eventID = initialEventID } }
+            if store.member.exists {
+                Notice(text: L.t("social.roamingHint"))
+                let events = data["upcoming"].rows.filter { $0["city"].id != store.member["city"].id }
+                Choice(label: "social.event", options: pickerOptions(events), selection: $eventID, allowEmpty: true, autoSelect: false)
+                if events.isEmpty { EmptyState(title: "ux.social.noVisitingEvents", message: "ux.social.noVisitingEventsBody", icon: "globe.asia.australia") }
+                if !eventID.isEmpty {
+                    ResourceState(resource: eligibility) { await loadEligibility() }
+                    if currentEvent.id == eventID {
+                        Panel {
+                            Text(currentEvent["title"].text).font(Theme.title(17))
+                            Text(currentEvent["city"]["name"].text).foregroundStyle(Theme.muted)
+                            if !initialEventID.isEmpty && initialEventID != eventID { Notice(text: L.t("ux.social.roamingChanged", ["event": currentEvent["title"].text])) }
+                            Picker(L.t("social.kind"), selection: $kind) {
+                                ForEach(Array(eligibility.data["options"].rows.enumerated()), id: \.offset) { _, choice in Text(L.status(choice["type"].text)).tag(choice["type"].text) }
+                            }
+                            Text(L.t(requestedType == "ATTENDANCE" ? "ux.roaming.attendBody" : "ux.roaming.hubBody", ["city": currentEvent["city"]["name"].text, "hours": eligibility.data["hubAccessHours"].text])).font(Theme.body(14)).foregroundStyle(Theme.muted)
+                            DetailRow(key: "ux.social.approver", value: currentOption["approver"].text == "HQ" ? "HQ" : L.status("REGIONAL_ADMIN"))
+                            if !currentOption["available"].bool { Notice(text: unavailableReason(currentOption["reason"].text)) }
+                            if currentOption["existing"].exists {
+                                Badge(value: currentOption["existing"]["status"].text)
+                                if currentOption["existing"]["accessExpiresAt"].exists { Text(L.t("ux.social.accessUntil", ["date": L.date(currentOption["existing"]["accessExpiresAt"].text)])) }
+                            }
+                        }
+                    }
+                }
+                ConfirmAction(label: "social.requestRoaming", message: L.t("ux.social.roamingConfirm", ["event": currentEvent["title"].text, "city": currentEvent["city"]["name"].text, "type": L.status(requestedType)]), disabled: !requestAvailable || mutation.busy) {
+                    guard requestAvailable else { return }
+                    await mutation.send("/api/social/roaming", body: .object(["eventId": .str(eventID), "originEventId": .str(requestOriginID), "type": .str(requestedType)]), after: loadEligibility)
+                }
+                MutationState(mutation: mutation)
+                NavigationRow(title: "social.review", icon: "list.bullet") { SocialOperationsView(initialSection: "roaming", eventID: eventID, personal: true) }
+            } else { EmptyState(title: "ux.social.memberRequestsOnly", message: "ux.social.staffContext", icon: "person.crop.circle") }
+        }
+        .onAppear { if eventID.isEmpty { requestOriginID = initialEventID; eventID = initialEventID } }
+        .onChange(of: eventID) { _, selected in
+            // Choice never defaults: changing the picker explicitly starts a request for that event.
+            requestOriginID = selected
+        }
+        .task(id: eventID) { eligibility.data = .null; await loadEligibility() }
+    }
+    private func loadEligibility() async {
+        guard store.member.exists, !eventID.isEmpty else { return }
+        await eligibility.load(query("/api/social/roaming-options", ["eventId": eventID]))
+    }
+    private func unavailableReason(_ reason: String) -> String {
+        switch reason {
+        case "homeCity": return L.t("ux.roaming.homeCityError")
+        case "eventEnded": return L.t("ux.reason.eventEnded")
+        case "requestExists": return L.t("ux.roaming.requestExists")
+        case "monthlyLimit": return L.t("ux.roaming.monthlyLimit")
+        default: return L.t("ux.social.roamingUnavailable")
+        }
+    }
+    private func pickerOptions(_ events: [JSON]) -> [JSON] {
+        guard !eventID.isEmpty, !events.contains(where: { $0.id == eventID }) else { return events }
+        let title = selectedEvent.id == eventID ? selectedEvent["title"].text : L.t("ux.social.originEvent")
+        return [.object(["id": .str(eventID), "name": .str(title)])] + events
     }
 }
 struct ReservationView: View {
@@ -230,25 +365,62 @@ struct ReservationView: View {
     @State private var slot = ""
     @State private var pax = "1"
     @State private var note = ""
+    @State private var blocking: JSON = .null
+    @State private var submitted: JSON = .null
     @StateObject private var mutation = Mutation()
     var body: some View {
+        // Read form/result state in this body so selector and validation changes redraw immediately.
+        let submittedRequest = submitted
+        let blockingReservation = blocking
+        let selectedSlot = slot
+        let enteredPax = pax
+        let enteredNote = note
         DataPage(title: "social.reserve", path: query("/api/social/slots", ["eventId": eventID])) { data, reload in
-            Text(data["eventTitle"].text).font(Theme.title(20)); Text(data["venueName"].text).foregroundStyle(Theme.muted)
-            Notice(text: L.t("social.floorHint"))
-            if data["slots"].rows.isEmpty { EmptyState(title: "social.noSlots", message: "social.noSlotsBody") }
-            FloorPlan(slots: data["slots"].rows, taken: data["taken"].rows.map(\.text), selection: $slot)
-            let available = data["slots"].rows.filter { !data["taken"].rows.contains($0["code"]) }
-            Choice(label: "social.slot", options: available.map { .object(["id": $0["code"], "name": .str($0["code"].text + " · " + L.status($0["kind"].text) + " · " + $0["pax"].text)]) }, selection: $slot)
-            let selected = available.first { $0["code"].text == slot } ?? .null
-            if selected["minimumCharge"].exists { Text(L.t("phase5.minimumCharge") + ": " + L.money(selected["minimumCharge"].int)) }
-            if !selected["minimumSpend"].text.isEmpty { Text(selected["minimumSpend"].text) }
-            Field(key: "social.pax", value: $pax, keyboard: .numberPad)
-            Field(key: "social.note", value: $note)
-            MutationState(mutation: mutation)
-            ConfirmAction(label: "social.reserve", message: L.t("social.floorHint"), disabled: mutation.busy || !selected.exists || (Int(pax).map { $0 < 1 || $0 > min(100, selected["pax"].int) } ?? true) || note.count > 4000) {
-                await mutation.run {
-                    let result = try await APIClient.shared.call("POST", "/api/social/reserve", .object(["eventId": .str(eventID), "slotCode": .str(slot), "pax": .num(Int(pax) ?? 1), "note": .str(note)]))
-                    await reload(); if !result["conversationId"].text.isEmpty { store.link = .conversation(result["conversationId"].text) }
+            if store.member.exists {
+                Text(data["eventTitle"].text).font(Theme.title(20)); Text(data["venueName"].text).foregroundStyle(Theme.muted)
+                EventPosterHighlight(event: .object(["id": .str(eventID), "title": data["eventTitle"], "poster": data["poster"], "description": data["poster"]["description"], "flyerUrl": data["poster"]["url"]]))
+                if submittedRequest.exists {
+                    Panel {
+                        Text(L.t("ux.reservation.pendingTitle")).font(Theme.title(20))
+                        if !submittedRequest["conversationId"].text.isEmpty { NavigationRow(title: "social.chat", icon: "bubble.left") { ChannelView(room: Room(kind: "conversation", id: submittedRequest["conversationId"].text)) } }
+                        NavigationRow(title: "ux.reservation.mine", icon: "list.bullet") { SocialOperationsView(eventID: eventID, initialReservationID: submittedRequest.id, personal: true) }
+                    }
+                } else {
+                    reservationForm(data, selectedSlot: selectedSlot, enteredPax: enteredPax, enteredNote: enteredNote, blockingReservation: blockingReservation, reload: reload)
+                }
+            } else { EmptyState(title: "ux.social.memberRequestsOnly", message: "ux.social.staffContext", icon: "person.crop.circle") }
+        }
+    }
+    @ViewBuilder private func reservationForm(_ data: JSON, selectedSlot: String, enteredPax: String, enteredNote: String, blockingReservation: JSON, reload: @escaping () async -> Void) -> some View {
+        Notice(text: L.t("social.floorHint"))
+        if data["slots"].rows.isEmpty { EmptyState(title: "social.noSlots", message: "social.noSlotsBody") }
+        FloorPlan(slots: data["slots"].rows, taken: data["taken"].rows.map(\.text), selection: $slot)
+        let available = data["slots"].rows.filter { !data["taken"].rows.contains($0["code"]) }
+        Choice(label: "social.slot", options: available.map { .object(["id": $0["code"], "name": .str($0["code"].text + " · " + L.status($0["kind"].text) + " · " + $0["pax"].text)]) }, selection: $slot)
+        let selected = available.first { $0["code"].text == selectedSlot } ?? .null
+        let minimum = selected["minimumCharge"].exists ? selected["minimumCharge"] : data["venueMinimumCharge"]
+        if minimum.exists { Text(L.t("phase5.minimumCharge") + ": " + L.money(minimum.int)) }
+        if !selected["minimumSpend"].text.isEmpty { Text(selected["minimumSpend"].text) }
+        Field(key: "social.pax", value: $pax, keyboard: .numberPad)
+        Field(key: "social.note", value: $note)
+        MutationState(mutation: mutation)
+        if blockingReservation.exists {
+            Panel {
+                Notice(text: L.t("ux.reservation.blocked", ["event": blockingReservation["event"].text]))
+                if !blockingReservation["conversationId"].text.isEmpty { NavigationRow(title: "social.chat", icon: "bubble.left") { ChannelView(room: Room(kind: "conversation", id: blockingReservation["conversationId"].text)) } }
+                NavigationRow(title: "ux.reservation.openBlocking", icon: "list.bullet.rectangle") { SocialOperationsView(eventID: blockingReservation["eventId"].text, initialReservationID: blockingReservation["reservationId"].text, personal: true) }
+            }
+        }
+        ConfirmAction(label: "ux.reservation.send", message: L.t("ux.social.reservationReview", ["event": data["eventTitle"].text, "slot": selectedSlot, "pax": enteredPax, "minimum": minimum.exists ? L.money(minimum.int) : L.t("common.notSet")]), disabled: mutation.busy || !selected.exists || (Int(enteredPax).map { $0 < 1 || $0 > min(100, selected["pax"].int) } ?? true) || enteredNote.count > 4000) {
+            guard store.member.exists else { return }
+            blocking = .null
+            await mutation.run {
+                do {
+                    submitted = try await APIClient.shared.call("POST", "/api/social/reserve", .object(["eventId": .str(eventID), "slotCode": .str(selectedSlot), "pax": .num(Int(enteredPax) ?? 1), "note": .str(enteredNote)]))
+                    await reload()
+                } catch let error as APIError where error.code == "RESERVATION_LIMIT" {
+                    blocking = .object(error.params)
+                    throw error
                 }
             }
         }
@@ -273,56 +445,5 @@ struct FloorPlan: View {
                 }
             }.clipShape(RoundedRectangle(cornerRadius: Theme.controlRadius))
         }.aspectRatio(1, contentMode: .fit).accessibilityHidden(true)
-    }
-}
-struct SocialOperationsView: View {
-    @EnvironmentObject private var store: AppStore
-    @StateObject private var mutation = Mutation()
-    var body: some View {
-        DataPage(title: store.admin ? "social.operations" : "social.reservations", path: "/api/social/operations", poll: true) { data, reload in
-            MutationState(mutation: mutation)
-            Text(L.t("social.reservations")).font(Theme.title(20))
-            if data["reservations"].rows.isEmpty { EmptyState(title: "social.noRequests", message: "social.noRequestsBody") }
-            ForEach(data["reservations"].rows) { r in
-                Panel {
-                    Text(r["event"]["title"].text + " · " + r["slotCode"].text).font(Theme.title(17))
-                    Text(r["member"]["fullName"].text + " · " + L.count(r["pax"].int)); Badge(value: r["status"].text)
-                    Text(r["note"].text)
-                    if r["minimumCharge"].exists { Text(L.t("phase5.minimumCharge") + ": " + L.money(r["minimumCharge"].int)) }
-                    Badge(value: r["downPaymentAt"].exists ? "paid" : "unpaid")
-                    if r["conversation"].exists { NavigationRow(title: "social.chat", icon: "bubble.left") { ChannelView(room: Room(kind: "conversation", id: r["conversation"].id)) } }
-                    if r["canDecide"].bool && r["status"].text == "PENDING" {
-                        decision("social.confirm", action: "reservation-decision", body: .object(["id": .str(r.id), "status": .str("CONFIRMED")]), reload: reload)
-                        decision("social.reject", action: "reservation-decision", body: .object(["id": .str(r.id), "status": .str("REJECTED")]), reload: reload)
-                    }
-                    if (!store.admin || r["canDecide"].bool) && ["PENDING", "CONFIRMED"].contains(r["status"].text) {
-                        decision("social.cancelReservation", action: "reservation-decision", body: .object(["id": .str(r.id), "status": .str("CANCELLED")]), reload: reload)
-                    }
-                }
-            }
-            Text(L.t("social.roaming")).font(Theme.title(20))
-            ForEach(data["roaming"].rows) { r in
-                Panel {
-                    Text(r["member"]["fullName"].text + " · " + r["event"]["title"].text).fontWeight(.semibold)
-                    Badge(value: r["status"].text); Text(L.status(r["type"].text))
-                    if r["accessExpiresAt"].exists { Text(L.date(r["accessExpiresAt"].text)) }
-                    if r["status"].text == "PENDING" && (r["type"].text == "ATTENDANCE" ? store.can("city.operations") : store.can("hq.manage")) {
-                        decision("social.approve", action: "roaming-decision", body: .object(["id": .str(r.id), "decision": .str("APPROVED")]), reload: reload)
-                        decision("social.reject", action: "roaming-decision", body: .object(["id": .str(r.id), "decision": .str("REJECTED")]), reload: reload)
-                    }
-                }
-            }
-            if store.admin {
-                Text(L.t("social.muted")).font(Theme.title(20))
-                ForEach(Array(data["muted"].rows.enumerated()), id: \.offset) { _, m in
-                    Panel { Text(m["name"].text); decision("social.unmute", action: "moderate", body: .object(["action": .str("mute"), "cityId": m["cityId"], "userId": m["userId"], "muted": .bool(false)]), reload: reload) }
-                }
-                Text(L.t("social.screenshots")).font(Theme.title(20))
-                ForEach(Array(data["screenshots"].rows.enumerated()), id: \.offset) { _, row in Text(row["name"].text + " · " + L.count(row["count"].int)) }
-            }
-        }
-    }
-    private func decision(_ key: String, action: String, body: JSON, reload: @escaping () async -> Void) -> some View {
-        ConfirmAction(label: key, message: L.t("social.decisionBody"), disabled: mutation.busy) { await mutation.send("/api/social/\(action)", body: body, after: reload) }
     }
 }

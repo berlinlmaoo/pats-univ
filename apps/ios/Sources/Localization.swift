@@ -44,6 +44,7 @@ enum L {
         return t("ktm.periodReset", ["period": period, "date": f.string(from: reset)])
     }
     static func status(_ raw: String) -> String {
+        let explicit = t(raw); if explicit != raw { return explicit }
         let publicKeys = ["ACTIVE": "cardPage.statusActive", "INACTIVE": "cardPage.statusDeactivated", "active": "cardPage.active", "pending": "cardPage.pending", "revoked": "cardPage.revokedTitle", "inactive": "cardPage.inactiveTitle", "paid": "phase5.paid", "unpaid": "phase5.unpaid"]
         if let key = publicKeys[raw] { return t(key) }
         for key in ["cardStatus.\(raw)", "eventPhase.\(raw)", "checkInMethod.\(raw)", "role.\(raw)", "phase5.\(raw)", "social.\(raw)", "loyalty.\(raw)", "events.\(raw)"] {

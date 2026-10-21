@@ -3,23 +3,34 @@ import SwiftUI
 struct AdminToolsView: View {
     @EnvironmentObject private var store: AppStore
     var body: some View {
-        Page(title: "app.adminTitle") {
-            if store.offline { Notice(text: L.t("native.offline")) }
-            Text(store.user["city"]["name"].text.isEmpty ? L.t("app.adminSubtitleHq") : L.t("app.adminSubtitle", ["city": store.user["city"]["name"].text])).foregroundStyle(Theme.muted)
-            Panel {
-                if store.can("checkin.scan") {
-                    NavigationRow(title: "app.adminScan", subtitle: L.t("app.adminScanBody"), icon: "qrcode.viewfinder") { ScanEventPicker() }
-                    NavigationRow(title: "app.adminEvents", subtitle: L.t("app.adminEventsBody"), icon: "calendar") { EventsView(admin: true) }
+        AdminModeRequired(capability: "checkin.scan") {
+            Page(title: "ux.tools.title") {
+                if store.offline { Notice(text: L.t("native.offline")) }
+                Text(store.scope).font(Theme.title(20))
+                Panel {
+                    CardHeading(key: "ux.tools.eventWork")
+                    NavigationRow(title: "app.adminEvents", subtitle: L.t("ux.tools.eventWorkBody"), icon: "calendar") { EventsView(admin: true) }
+                    NavigationRow(title: "app.adminScan", icon: "qrcode.viewfinder") { ScanEventPicker() }
+                    NavigationRow(title: "social.operations", icon: "list.bullet.rectangle") { SocialOperationsView() }
+                    if store.can("reward.validate") { NavigationRow(title: "loyalty.validateReward", icon: "gift") { RewardValidationView() } }
+                    if store.can("promoter.manage") { NavigationRow(title: "phase5.claimReview", icon: "doc.text.magnifyingglass") { ClaimsReviewView() } }
+                    if store.can("city.operations") { NavigationRow(title: "loyalty.operations", icon: "chart.bar") { CrewOperationsView() } }
                 }
-                if store.can("reward.validate") { NavigationRow(title: "loyalty.validateReward", icon: "gift") { RewardValidationView() } }
-                if store.can("promoter.manage") { NavigationRow(title: "phase5.claimReview", icon: "doc.text.magnifyingglass") { ClaimsReviewView() } }
-                if store.can("city.operations") { NavigationRow(title: "loyalty.operations", icon: "chart.bar") { CrewOperationsView() } }
-                if store.can("card.encode") { NavigationRow(title: "app.adminEncode", icon: "wave.3.right") { EncodingBatchesView() } }
-                if store.can("card.handover") { NavigationRow(title: "app.adminHandover", icon: "person.crop.rectangle") { HandoverView() } }
-                if store.can("card.reportLost") { NavigationRow(title: "app.adminCards", icon: "creditcard") { MemberCardsView() } }
-                NavigationRow(title: "social.title", icon: "bubble.left.and.bubble.right") { SocialHubView() }
-                NavigationRow(title: "social.operations", icon: "list.bullet.rectangle") { SocialOperationsView() }
-                NavigationRow(title: "app.notificationsTitle", icon: "bell") { NotificationsView() }
+                Panel {
+                    CardHeading(key: "ux.tools.cardWork")
+                    if store.can("card.encode") { NavigationRow(title: "app.adminEncode", icon: "wave.3.right") { EncodingBatchesView() } }
+                    if store.can("card.handover") { NavigationRow(title: "app.adminHandover", icon: "person.crop.rectangle") { HandoverView() } }
+                    if store.can("card.reportLost") { NavigationRow(title: "app.adminCards", icon: "creditcard") { MemberCardsView() } }
+                }
+                if store.can("dashboard.access") {
+                    Panel {
+                        CardHeading(key: "ux.tools.web")
+                        Text(L.t(store.can("hq.manage") ? "ux.tools.webHqBody" : "ux.tools.webRegionalBody")).font(Theme.body(14)).foregroundStyle(Theme.muted)
+                        Link(L.t("ux.tools.openDashboard"), destination: Config.url(store.can("hq.manage") ? "/overview" : "/regional"))
+                            .buttonStyle(PATSButtonStyle(variant: .maroon))
+                        Text(L.t("ux.tools.webReturn")).font(Theme.body(13)).foregroundStyle(Theme.muted)
+                    }
+                }
             }
         }
     }

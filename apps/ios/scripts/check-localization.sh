@@ -13,12 +13,14 @@ for locale in ('en', 'id'):
 if tables[0] != tables[1]: sys.exit(f'Locale mismatch: {tables[0] ^ tables[1]}')
 missing = []
 patterns = [r'L\.t\("([^"\\]+)"',
+            r'"(ux\.[A-Za-z][A-Za-z0-9_.]+)"',
             r'(?:Field|DateTimeField|SectionLabel|DetailRow|CardHeading)\(key: "([^"\\]+)"',
             r'(?:Page|DataPage|NavigationRow|EmptyState|ConfirmAction)\((?:title|label): "([A-Za-z]+\.[^"\\]+)"']
 for source in pathlib.Path('Sources').glob('*.swift'):
     text = source.read_text()
     for pattern in patterns:
         for key in re.findall(pattern, text):
+            if key.endswith('.') and any(k.startswith(key) for k in tables[0]): continue
             if key not in tables[0]: missing.append(f'{source.name}: {key}')
 if missing: sys.exit('Missing localization keys: ' + ', '.join(missing))
 print(f'Localization: {len(tables[0])} keys per language; no duplicates or missing literal UI keys')

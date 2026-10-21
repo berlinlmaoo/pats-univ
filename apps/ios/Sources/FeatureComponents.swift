@@ -7,12 +7,15 @@ struct Room: Equatable { var kind: String; var id: String }
     let path: String
     var room: Room?
     var poll = false
+    var pinLoadedEvent = false
+    var pinEventID = ""
+    var eventContext: JSON = .null
     @ViewBuilder var content: @MainActor (JSON, @escaping @MainActor () async -> Void) -> Content
     @StateObject private var resource = Resource()
     @StateObject private var live = RealtimeRoom()
     @Environment(\.scenePhase) private var phase
     var body: some View {
-        Page(title: title) {
+        Page(title: title, eventContext: pinnedEvent) {
             ResourceState(resource: resource) { await load() }
             if live.accessLost { Notice(text: L.t("native.accessLost"), error: true) }
             else if resource.data.exists { content(resource.data, { await load() }) }
@@ -28,7 +31,13 @@ struct Room: Equatable { var kind: String; var id: String }
         }
         .refreshable { await load() }
         .onDisappear { live.stop() }
-        .onChange(of: phase) { _, p in if p == .active { connect() } else { live.stop() } }
+        .onChange(of: phase) { _, p in if p == .active { connect(); Task { await load() } } else { live.stop() } }
+    }
+    private var pinnedEvent: JSON {
+        if eventContext.exists { return eventContext }
+        if pinLoadedEvent { return resource.data["event"] }
+        if !pinEventID.isEmpty { return resource.data["events"].rows.first { $0.id == pinEventID } ?? .null }
+        return .null
     }
     private func load() async { await resource.load(path) }
     private func connect() { if let room, phase == .active { live.start(kind: room.kind, id: room.id) { await load() } } }
@@ -58,6 +67,7 @@ struct MutationState: View {
     }
 }
 struct ConfirmAction: View {
+    @Environment(\.locale) private var locale
     var label: String
     var message: String
     var destructive = false
@@ -66,7 +76,9 @@ struct ConfirmAction: View {
     var action: () async -> Void
     @State private var confirm = false
     var body: some View {
-        Button(L.t(label), role: destructive ? .destructive : nil) { confirm = true }
+        Button(role: destructive ? .destructive : nil) { confirm = true } label: {
+            Text(L.t(label)).id(locale.identifier)
+        }
             .buttonStyle(PATSButtonStyle(variant: destructive ? .danger : maroon ? .maroon : .secondary)).disabled(disabled)
             .alert(L.t(label), isPresented: $confirm) {
                 Button(L.t("common.cancel"), role: .cancel) {}
@@ -75,22 +87,26 @@ struct ConfirmAction: View {
     }
 }
 struct Choice: View {
+    @Environment(\.locale) private var locale
     var label: String
     var options: [JSON]
     @Binding var selection: String
     var allowEmpty = false
+    var autoSelect = true
     var body: some View {
-        Picker(L.t(label), selection: $selection) {
+        Picker(selection: $selection) {
             if allowEmpty || (selection.isEmpty && !options.contains { $0.id.isEmpty }) { Text(L.t("common.notSet")).tag("") }
             ForEach(options) { option in Text(option["name"].text.isEmpty ? option["title"].text : option["name"].text).tag(option.id) }
-        }.pickerStyle(.menu).frame(minHeight: 44).frame(maxWidth: .infinity, alignment: .leading)
+        } label: { Text(L.t(label)).id(locale.identifier) }
+            .pickerStyle(.menu).frame(minHeight: 44).frame(maxWidth: .infinity, alignment: .leading)
             .onAppear { selectDefault() }.onChange(of: options) { _, _ in selectDefault() }
     }
     private func selectDefault() {
-        if !allowEmpty, !options.contains(where: { $0.id == selection }), let first = options.first { selection = first.id }
+        if autoSelect, !allowEmpty, !options.contains(where: { $0.id == selection }), let first = options.first { selection = first.id }
     }
 }
 struct NavigationRow<Destination: View>: View {
+    @Environment(\.locale) private var locale
     let title: String
     var subtitle = ""
     var icon = "chevron.right"
@@ -100,7 +116,7 @@ struct NavigationRow<Destination: View>: View {
             HStack(spacing: Theme.gap) {
                 Image(systemName: icon).frame(width: 24).accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(L.t(title)).fontWeight(.semibold)
+                    Text(L.t(title)).id(locale.identifier).fontWeight(.semibold)
                     if !subtitle.isEmpty { Text(subtitle).font(Theme.body(13)).foregroundStyle(Theme.muted) }
                 }
                 Spacer(minLength: 0); Image(systemName: "chevron.right").font(.caption).foregroundStyle(Theme.muted)
