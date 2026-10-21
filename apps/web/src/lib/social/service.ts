@@ -34,6 +34,8 @@ import {
 } from "./access";
 import { publish } from "./realtime";
 import { assertMedia, mediaReadUrl } from "./media";
+import { posterUrlOf } from "../events/content";
+import { paymentOf, recorderNames, slotKindOf } from "../ux/reservations";
 
 const authorSelect = { id: true, name: true } as const;
 const memberSelect = { fullName: true } as const;
@@ -350,12 +352,16 @@ export async function moderate(user: AuthUser, raw: unknown) {
 }
 export async function requestRoaming(user: AuthUser, raw: unknown) {
   const input = roamingSchema.parse(raw);
+  // F11: the request is for the event the member started from; never a silently substituted one.
+  if (input.originEventId && input.originEventId !== input.eventId)
+    throw new AppError("VALIDATION", 422, "Event changed", { fields: { eventId: "ux.roaming.eventChanged" } });
   const row = await atomic(async (tx) => {
     const m = await memberFor(user, tx);
     const event = await tx.event.findUnique({ where: { id: input.eventId } });
     if (!event || event.status === "DRAFT" || event.endsAt <= new Date())
       throw new AppError("EVENT_ENDED", 409);
-    if (event.cityId === m.cityId) throw new AppError("VALIDATION", 422);
+    if (event.cityId === m.cityId)
+      throw new AppError("VALIDATION", 422, "Home city", { fields: { eventId: "ux.roaming.homeCityError" } });
     const existing = await tx.roamingRequest.findFirst({
       where: {
         memberId: m.id,
@@ -404,7 +410,7 @@ export async function requestRoaming(user: AuthUser, raw: unknown) {
   await notifyUsers(recipients, {
     kind: "roamingRequested",
     values: { sender: user.name, event: row.event.title },
-    data: { screen: "social-operations" },
+    data: { screen: "social-operations", eventId: row.eventId, requestId: row.id },
   });
   return { id: row.id };
 }
@@ -462,7 +468,7 @@ export async function decideRoaming(user: AuthUser, raw: unknown) {
             ? "ditolak"
             : "rejected",
     },
-    data: { screen: "roaming" },
+    data: { screen: "roaming", eventId: row.eventId, requestId: row.id },
   });
   return { ok: true };
 }
@@ -484,6 +490,9 @@ export async function reservationOptions(user: AuthUser, eventId: string) {
     taken: taken.map((r) => r.slotCode),
     eventTitle: event.title,
     venueName: event.venue.name,
+    /** D5: the approved poster + description shown on the reservation card. */
+    poster: { url: posterUrlOf(event), description: event.description },
+    venueMinimumCharge: event.venue.minimumCharge,
   };
 }
 export async function reserve(user: AuthUser, raw: unknown) {
@@ -511,16 +520,25 @@ export async function reserve(user: AuthUser, raw: unknown) {
     )
       throw new AppError("SLOT_TAKEN", 409);
     await tx.$queryRaw`SELECT id FROM "Member" WHERE id = ${m.id} FOR UPDATE`;
-    if (
-      (await tx.reservation.count({
-        where: {
-          memberId: m.id,
-          downPaymentAt: null,
-          status: { in: ["PENDING", "CONFIRMED"] },
+    const blocking = await tx.reservation.findFirst({
+      where: {
+        memberId: m.id,
+        downPaymentAt: null,
+        status: { in: ["PENDING", "CONFIRMED"] },
+      },
+      include: { event: { select: { id: true, title: true } }, conversation: { select: { id: true } } },
+      orderBy: { createdAt: "desc" },
+    });
+    // UX19: point the member at the unpaid booking that blocks this one.
+    if (blocking)
+      throw new AppError("RESERVATION_LIMIT", 409, "Unpaid reservation", {
+        params: {
+          reservationId: blocking.id,
+          eventId: blocking.event.id,
+          event: blocking.event.title,
+          conversationId: blocking.conversation?.id ?? "",
         },
-      })) > 0
-    )
-      throw new AppError("RESERVATION_LIMIT", 409);
+      });
     return tx.reservation.create({
       data: {
         ...input,
@@ -549,7 +567,7 @@ export async function reserve(user: AuthUser, raw: unknown) {
   await notifyUsers(recipients, {
     kind: "reservationRequested",
     values: { sender: user.name, event: row.event.title, slot: row.slotCode },
-    data: { screen: "social-operations" },
+    data: { screen: "social-operations", eventId: row.eventId, reservationId: row.id, conversationId: row.conversation!.id },
   });
   return { id: row.id, conversationId: row.conversation!.id };
 }
@@ -626,7 +644,12 @@ export async function decideReservation(user: AuthUser, raw: unknown) {
           CANCELLED: locale === "id" ? "dibatalkan" : "cancelled",
         })[input.status],
     },
-    data: { screen: "reservations" },
+    data: {
+      screen: "reservations",
+      eventId: row.eventId,
+      reservationId: row.id,
+      conversationId: row.conversation?.id ?? "",
+    },
   });
   if (row.conversation)
     await publish({ kind: "conversation", id: row.conversation.id });
@@ -671,22 +694,24 @@ export async function saveLayout(user: AuthUser, raw: unknown) {
   });
   return { ok: true };
 }
-export async function operations(user: AuthUser) {
+export async function operations(user: AuthUser, filters: { eventId?: string | null } = {}) {
   const member = user.role === "MEMBER" ? await memberFor(user) : null;
   const city = can(user.role, 'hq.manage') ? undefined : user.cityId!;
+  const eventFilter = filters.eventId ? { eventId: filters.eventId } : {};
   const [reservations, roaming, venues, events] = await Promise.all([
     db.reservation.findMany({
-      where: member ? { memberId: member.id } : { event: { cityId: city } },
+      where: { ...(member ? { memberId: member.id } : { event: { cityId: city } }), ...eventFilter },
       include: {
         member: { select: memberSelect },
-        event: { select: { title: true, cityId: true } },
+        event: { select: { title: true, cityId: true, description: true, flyerUrl: true, updatedAt: true, startsAt: true } },
+        venue: { select: { layout: true, name: true } },
         conversation: { select: { id: true } },
       },
       orderBy: { createdAt: "desc" },
       take: 100,
     }),
     db.roamingRequest.findMany({
-      where: member ? { memberId: member.id } : { targetCityId: city },
+      where: { ...(member ? { memberId: member.id } : { targetCityId: city }), ...eventFilter },
       include: {
         member: { select: memberSelect },
         event: { select: { title: true } },
@@ -744,15 +769,24 @@ export async function operations(user: AuthUser) {
       })),
     );
   }
+  const recorders = await recorderNames(reservations);
   return {
-    reservations: await Promise.all(
-      reservations.map(async (r) => ({
-        ...r,
-        canDecide:
-          !member &&
-          user.role !== "MEMBER",
-      })),
-    ),
+    reservations: reservations.map(({ venue, ...r }) => ({
+      ...r,
+      canDecide: !member && user.role !== "MEMBER",
+      // UX redesign: slot kind, deposit and the event poster highlight on every reservation card.
+      slotKind: slotKindOf(venue.layout, r.slotCode),
+      venueName: venue.name,
+      payment: paymentOf({ ...r, downPaymentBy: r.downPaymentById ? { name: recorders.get(r.downPaymentById) ?? "" } : null }),
+      poster: { url: posterUrlOf({ id: r.eventId, flyerUrl: r.event.flyerUrl, updatedAt: r.event.updatedAt }), description: r.event.description },
+      canRecordDeposit: !member && can(user.role, "reservation.manage") && !r.downPaymentAt && (r.status === "PENDING" || r.status === "CONFIRMED"),
+    })),
+    /** Pending work per queue (UX29, F27). */
+    counts: {
+      reservationsPending: reservations.filter((r) => r.status === "PENDING").length,
+      depositsUnpaid: reservations.filter((r) => !r.downPaymentAt && (r.status === "PENDING" || r.status === "CONFIRMED")).length,
+      roamingPending: roaming.filter((r) => r.status === "PENDING").length,
+    },
     roaming: roaming.map((r) => ({
       ...r,
       status:
@@ -823,4 +857,47 @@ export async function reactToPost(user: AuthUser, raw: unknown) {
   });
   await publish({ kind: 'channel', id: channelId });
   return { saved: true };
+}
+
+
+/**
+ * What a member may request for an event they opened (UX07, F11): attendance at, and/or temporary
+ * Community access to, that event's city. The event stays fixed; nothing is substituted.
+ */
+export async function roamingOptions(user: AuthUser, eventId: string) {
+  const m = await memberFor(user);
+  const event = await db.event.findUnique({ where: { id: eventId }, include: { city: { select: { id: true, name: true } } } });
+  if (!event || event.status === "DRAFT") throw new AppError("NOT_FOUND", 404);
+  const now = new Date();
+  const [existing, limit, hours] = await Promise.all([
+    db.roamingRequest.findMany({ where: { memberId: m.id, eventId, status: { in: ["PENDING", "APPROVED"] } }, orderBy: { createdAt: "desc" } }),
+    getSetting(db, "roamingMaxPerMonth"),
+    getSetting(db, "roamingHubExpiryHours"),
+  ]);
+  const month = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  const option = async (type: "ATTENDANCE" | "SOCIAL_HUB") => {
+    const mine = existing.find((r) => r.type === type) ?? null;
+    const usedThisMonth = limit
+      ? (await db.roamingRequest.count({ where: { memberId: m.id, type, status: { not: "REJECTED" }, createdAt: { gte: month } } })) > 0
+      : false;
+    const reason =
+      event.cityId === m.cityId ? "homeCity"
+        : event.endsAt <= now ? "eventEnded"
+          : mine ? "requestExists"
+            : usedThisMonth ? "monthlyLimit"
+              : null;
+    return {
+      type,
+      available: reason === null,
+      reason,
+      approver: type === "ATTENDANCE" ? ("REGIONAL_ADMIN" as const) : ("HQ" as const),
+      existing: mine ? { id: mine.id, status: mine.status, accessExpiresAt: mine.accessExpiresAt?.toISOString() ?? null } : null,
+    };
+  };
+  return {
+    event: { id: event.id, title: event.title, city: event.city, endsAt: event.endsAt.toISOString() },
+    homeCityId: m.cityId,
+    hubAccessHours: hours,
+    options: [await option("ATTENDANCE"), await option("SOCIAL_HUB")],
+  };
 }

@@ -27,6 +27,14 @@ import java.time.Instant
         Text(dateTime(checkIn.text("checkedInAt"),language,zone) + " · " + tr("checkInMethod." + checkIn.text("method")), color = tone("bandText"), style = MaterialTheme.typography.bodySmall)
     }
 }
+@Composable fun CheckInWindow(event: JsonObject, language: String) {
+    if (event.text("checkInOpensAt").isNotBlank() || event.text("checkInClosesAt").isNotBlank()) {
+        SectionLabel(tr("events.window"))
+        listOf("checkInOpensAt", "checkInClosesAt").forEach { key ->
+            if (event.text(key).isNotBlank()) Text(dateTime(event.text(key), language, event.obj("city").text("timezone", "Asia/Jakarta")))
+        }
+    }
+}
 
 @Composable fun Qr(value: String) {
     val bitmap = remember(value) {
@@ -94,6 +102,7 @@ import java.time.Instant
         Tile {
             Text(dateTime(e.text("startsAt"), language, e.obj("city").text("timezone", "Asia/Jakarta")))
             Text(dateTime(e.text("endsAt"), language, e.obj("city").text("timezone", "Asia/Jakarta")))
+            CheckInWindow(e, language)
             Text(e.obj("venue").text("name")); Text(e.obj("venue").text("address")); Text(e.text("description"))
             Badge(tr("eventPhase." + e.text("phase")), e.text("phase"))
             if(e.obj("myCheckIn").isNotEmpty()) CheckInStrip(e.obj("myCheckIn"), language, e.obj("city").text("timezone", "Asia/Jakarta"))

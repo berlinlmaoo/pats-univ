@@ -161,7 +161,7 @@ export default async function MemberPage({ params }: Params) {
               <KtmCard
                 name={member.fullName}
                 drink={member.favoriteDrink}
-                genre={member.favoriteGenre}
+                quote={member.quotes}
                 qrValue={liveCard?.ndefToken ? cardUrl(liveCard.ndefToken) : null}
               />
               <div className="flex items-center gap-3">

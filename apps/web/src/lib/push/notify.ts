@@ -146,6 +146,6 @@ export async function deliverStoredNotification(id: string) {
   if (!row || !prefsOf(row.user.notificationPrefs).activity) return;
   try {
     await sendPush(row.user.devices.map(d => ({ to: d.pushToken, title: row.title, body: row.body,
-      sound: 'default' as const, data: { notificationId: row.id, screen: 'claims' } })));
+      sound: 'default' as const, data: { ...(row.data && typeof row.data === 'object' && !Array.isArray(row.data) ? (row.data as Record<string, string>) : {}), notificationId: row.id, screen: 'claims', kind: row.kind } })));
   } catch { console.warn('[push] claim notification delivery pending', id); }
 }

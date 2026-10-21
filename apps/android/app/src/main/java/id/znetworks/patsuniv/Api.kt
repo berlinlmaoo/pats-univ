@@ -16,6 +16,8 @@ import java.net.URI
 class ApiFailure(val code: String, val details: JsonObject = body()) : IOException(code)
 
 class Api(private val store: SessionStore, private val base: String = BuildConfig.API_URL) {
+    internal val origin get() = base
+    internal val userId get() = store.current?.me?.obj("user")?.text("id").orEmpty()
     val joinUrl get() = base.trimEnd('/') + "/join"
     internal val http = OkHttpClient.Builder().callTimeout(30, TimeUnit.SECONDS).followRedirects(false).apply {
         if (BuildConfig.DEBUG && BuildConfig.DEV_IP.isNotBlank()) dns { host ->

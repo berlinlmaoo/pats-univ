@@ -7,7 +7,6 @@ struct MemberCardView: View {
     @StateObject private var attendance = Resource()
     @State private var deadline: QRDeadline?
     @State private var enlarged = false
-    @StateObject private var linkReader = NDEFLinkReader()
     @Environment(\.scenePhase) private var phase
     private var event: JSON { attendance.data["event"].exists ? attendance.data["event"] : store.cardEvent }
     private var digitalReady: Bool { cardState.error == nil && cardState.data["digital"]["ready"].bool }
@@ -65,7 +64,6 @@ struct MemberCardView: View {
                         DetailRow(key: "app.city", value: store.member["city"]["name"].text)
                     }
                 }
-                if linkReader.available { Button(L.t("native.tap"), systemImage: "wave.3.right") { linkReader.complete = { store.open($0) }; linkReader.begin() }.buttonStyle(PATSButtonStyle(variant: .secondary)) }
                 Text(L.t("app.cardQrBody", ["seconds": String(Int(deadline?.ttl ?? 60))])).font(Theme.body(13)).foregroundStyle(Theme.muted)
             } else { StaffMemberState() }
         }
@@ -80,7 +78,7 @@ struct MemberCardView: View {
         }
         .task(id: store.cardEventID) { attendance.data = .null; await refreshAttendance() }
         .refreshable { await refresh(); await refreshAttendance(); await store.reload() }
-        .onDisappear { deadline = nil; linkReader.cancel() }
+        .onDisappear { deadline = nil }
         .onChange(of: phase) { _, value in
             if value != .active { deadline = nil } else { Task { await refresh(); await refreshAttendance() } }
         }

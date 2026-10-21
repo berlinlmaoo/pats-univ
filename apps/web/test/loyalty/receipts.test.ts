@@ -28,6 +28,15 @@ describe('private receipts on the shared storage driver', () => {
     expect(verifyReceiptUrl(new Request(url), 'read').key).toBe(key);
     await expect(putReceipt(key, png, 'image/png')).rejects.toMatchObject({ status: 409 });
   });
+  it('round-trips receipts for UUIDv7 members after the identity migration', async () => {
+    const key = newReceiptKey('019a1b2c-3d4e-7f00-8a1b-2c3d4e5f6a7b', 'image/png');
+    const upload = await signReceiptUrl(key, { operation: 'write', expiresInSeconds: 120, contentType: 'image/png' });
+    expect(verifyReceiptUrl(new Request(upload), 'write').key).toBe(key);
+    await putReceipt(key, png, 'image/png');
+    const download = await signReceiptUrl(key, { operation: 'read', expiresInSeconds: 120 });
+    expect(verifyReceiptUrl(new Request(download), 'read').key).toBe(key);
+    expect(await readReceipt(key)).toEqual(new Uint8Array(png));
+  });
   it('rejects traversal, false image contents and missing objects', async () => {
     await expect(readReceipt('../private')).rejects.toMatchObject({ status: 404 });
     await expect(putReceipt('receipts/../../x.png', png, 'image/png')).rejects.toMatchObject({ status: 404 });

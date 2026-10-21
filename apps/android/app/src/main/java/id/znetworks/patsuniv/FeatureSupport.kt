@@ -16,7 +16,7 @@ fun query(value: String) = URLEncoder.encode(value, "UTF-8")
 fun count(value: Int) = NumberFormat.getIntegerInstance(Locale.forLanguageTag("id-ID")).format(value)
 fun money(value: Int) = "Rp " + count(value)
 fun zoneLabel(zone: String) = when(zone) { "Asia/Makassar" -> "WITA"; "Asia/Jayapura" -> "WIT"; else -> "WIB" }
-fun dateTime(value: String, language: String = "id", zone: String = "Asia/Jakarta"): String = runCatching {
+fun dateTime(value: String, language: String, zone: String = "Asia/Jakarta"): String = runCatching {
     val date = Instant.parse(value).atZone(ZoneId.of(zone))
     val suffix = when(zone) { "Asia/Makassar" -> "WITA"; "Asia/Jayapura" -> "WIT"; else -> "WIB" }
     date.format(DateTimeFormatter.ofPattern("d MMM yyyy · HH.mm", Locale.forLanguageTag(language))) + " " + suffix

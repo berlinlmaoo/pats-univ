@@ -11,5 +11,6 @@ export * from './i18n';
 export * from './settings';
 export * from './loyalty';
 export * from './social';
+export * from './ux';
 
 export * from './loyalty-presentation';

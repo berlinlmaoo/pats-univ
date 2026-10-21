@@ -1,6 +1,8 @@
 import 'server-only';
 import {
+  can,
   eventPhase,
+  eventTimingInfo,
   roamingExpiry,
   eventTimesFromInput,
   toZonedInput,
@@ -16,6 +18,7 @@ import { audit } from '../audit';
 import { requireCityAccess, type AuthUser } from '../auth/current-user';
 import { db } from '../db';
 import { AppError } from '../http/errors';
+import { notifyContentSubmitted, posterUrlOf, submitContent } from './content';
 
 export const eventInclude = {
   city: { select: { id: true, code: true, name: true, timezone: true } },
@@ -43,7 +46,9 @@ export function toEventSummary(
     phase: eventPhase(e, now),
     capacity: e.capacity,
     // Served by /api/events/:id/flyer; the version busts caches when HQ replaces it.
-    flyerUrl: e.flyerUrl ? `/api/events/${e.id}/flyer?v=${e.updatedAt.getTime()}` : null,
+    flyerUrl: posterUrlOf(e),
+    timing: eventTimingInfo(e, e.city.timezone, now),
+    poster: { url: posterUrlOf(e), description: e.description },
     ...extra,
   };
 }
@@ -80,29 +85,39 @@ async function resolvePlace(actor: AuthUser, fields: EventFields) {
   return { city, times };
 }
 
-/** HQ for any city, a city admin for their own. Members never reach this. */
+/**
+ * HQ for any city, a city admin for their own. Members never reach this. A regional admin's
+ * description goes to HQ for approval (UX redesign D5): the event starts without one.
+ */
 export async function createEvent(actor: AuthUser, fields: EventFields): Promise<EventWithPlace> {
   const { city, times } = await resolvePlace(actor, fields);
-  const event = await db.event.create({
-    data: {
-      cityId: city.id,
-      venueId: fields.venueId || null,
-      title: fields.title,
-      description: fields.description,
-      capacity: fields.capacity ?? null,
-      ...times,
-      status: fields.publish ? 'PUBLISHED' : 'DRAFT',
-      createdById: actor.id,
-    },
-    include: eventInclude,
+  const direct = can(actor.role, 'hq.manage');
+  const { event, submission } = await atomic(async (tx) => {
+    const event = await tx.event.create({
+      data: {
+        cityId: city.id,
+        venueId: fields.venueId || null,
+        title: fields.title,
+        description: direct ? fields.description : '',
+        capacity: fields.capacity ?? null,
+        ...times,
+        status: fields.publish ? 'PUBLISHED' : 'DRAFT',
+        createdById: actor.id,
+      },
+      include: eventInclude,
+    });
+    const submission = !direct && fields.description ? await submitContent(tx, actor, event.id, { description: fields.description, posterKey: null }) : null;
+    return { event, submission };
   });
   await audit(actor.id, 'event.created', { type: 'Event', id: event.id }, { cityId: city.id, status: event.status });
+  if (submission) await notifyContentSubmitted(submission);
   return event;
 }
 
 export async function updateEvent(actor: AuthUser, id: string, fields: EventFields): Promise<EventWithPlace> {
   const { city, times } = await resolvePlace(actor, fields);
-  const event = await atomic(async tx => {
+  const direct = can(actor.role, 'hq.manage');
+  const { updated: event, submission } = await atomic(async tx => {
     const existing = await tx.event.findUnique({ where: { id }, include: { _count: { select: { checkIns: true, reservations: true, roamingRequests: true } } } });
     if (!existing) throw new AppError('NOT_FOUND', 404);
     requireCityAccess(actor, existing.cityId);
@@ -111,15 +126,19 @@ export async function updateEvent(actor: AuthUser, id: string, fields: EventFiel
     }
     if (existing.venueId !== (fields.venueId || null) && existing._count.reservations) throw new AppError('SLOT_TAKEN', 409);
     const status = existing.status === 'DRAFT' && fields.publish ? 'PUBLISHED' : existing.status === 'PUBLISHED' && !fields.publish && !existing._count.checkIns && !existing._count.reservations && !existing._count.roamingRequests ? 'DRAFT' : existing.status;
-    const updated = await tx.event.update({ where: { id }, data: { cityId: city.id, venueId: fields.venueId || null, title: fields.title, description: fields.description, capacity: fields.capacity ?? null, ...times, status }, include: eventInclude });
+    // A regional admin's description change waits for HQ (D5); everything else saves as before.
+    const descriptionChanged = fields.description !== existing.description;
+    const submission = !direct && descriptionChanged ? await submitContent(tx, actor, id, { description: fields.description, posterKey: null }) : null;
+    const updated = await tx.event.update({ where: { id }, data: { cityId: city.id, venueId: fields.venueId || null, title: fields.title, description: direct ? fields.description : existing.description, capacity: fields.capacity ?? null, ...times, status }, include: eventInclude });
     const hours = await getSetting(tx, 'roamingHubExpiryHours');
     for (const type of ['ATTENDANCE', 'SOCIAL_HUB'] as const) {
       await tx.roamingRequest.updateMany({ where: { eventId: id, type, status: 'APPROVED' }, data: { accessExpiresAt: roamingExpiry(updated.endsAt, type, hours) } });
     }
     await tx.auditLog.create({ data: { actorId: actor.id, action: 'event.updated', targetType: 'Event', targetId: id, meta: { status } } });
-    return updated;
+    return { updated, submission };
   });
   await publish({ kind: 'attendance', id });
+  if (submission) await notifyContentSubmitted(submission);
   return event;
 }
 

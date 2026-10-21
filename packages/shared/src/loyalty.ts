@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { parseZonedDateTime } from './event';
 import { zonedParts } from './format';
+import type { FdcSold, ReservationsSold } from './ux';
 
 export interface LedgerEntry {
   delta: number;
@@ -255,6 +256,10 @@ export interface OperationsDto {
     endsAt: string;
     city: { name: string };
     recap: RecapDto | null;
+    /** D6: confirmed reservations split by slot kind (system count, not typed by staff). */
+    reservationsSold?: ReservationsSold;
+    /** D6: "FDC sold": definition pending with the owner, always null for now. */
+    fdcSold?: FdcSold;
   }[];
   reports: ReportDto[];
   members: { id: string; fullName: string; nim: string; isPromoter: boolean }[];
@@ -330,6 +335,9 @@ export interface ClaimDto {
   receiptUrl: string; notes: string; status: 'PENDING' | 'APPROVED' | 'REJECTED'; bonusValue: number | null;
   rejectReason: string | null; member: { fullName: string }; event: { title: string };
   createdAt?: string; reviewedAt?: string | null;
+  /** Crew queue (F22): the guest list counts toward this claim (PR, or member GL allowed by setting). */
+  glAllowed?: boolean;
+  editableFields?: ('guestCount' | 'reservationCount')[];
 }
 /** The review queue (PENDING, oldest first) apart from decided claims (history, newest decision first). */
 export function splitClaims<T extends { status: ClaimDto['status']; createdAt?: string | Date; reviewedAt?: string | Date | null }>(claims: T[]): { pending: T[]; history: T[] } {

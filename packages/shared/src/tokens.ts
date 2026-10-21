@@ -167,7 +167,12 @@ export const ktm = {
   /** Cap-top of each value line (fraction of height). */
   nameY: 0.398,
   drinkY: 0.615,
+  /** Third line: QOTD (the member's quote) on the 21 Oct 2026 artwork; up to two lines. */
+  quoteY: 0.831,
+  /** @deprecated The third line was FAVORITE GENRE before 21 Oct 2026; same position as quoteY. */
   genreY: 0.831,
+  /** QOTD wraps at full size and shrinks only when two full-size lines are not enough. */
+  quoteMaxLines: 2,
   /** Max width for values (fraction of width): the name clears the crest, the others clear the tile. */
   nameMaxW: 0.65,
   valueMaxW: 0.6,
@@ -332,6 +337,9 @@ export function toCssVariables(): string {
   return (
     `:root{${scale}${typeVars}${varsityVars}${colorVars('light')}}` +
     `@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){${colorVars('dark')}}}` +
-    `:root[data-theme="dark"]{${colorVars('dark')}}`
+    `:root[data-theme="dark"]{${colorVars('dark')}}` +
+    // Pages wrapped in [data-pats-theme="light"] (member enrolment) keep the card-front palette in
+    // every system theme. Declared last so it beats both dark rules at equal specificity.
+    `:root:has([data-pats-theme="light"]){${colorVars('light')}}`
   );
 }

@@ -314,7 +314,7 @@ function JoinForm({
         <h1 className="varsity varsity-hero text-fg">{t('join.heroLine')}</h1>
         <p className="mt-3 max-w-md text-body text-muted">{t('join.subtitle')}</p>
         <div className="mt-6 max-w-md">
-          <KtmCard name={values.fullName} drink={values.favoriteDrink} genre={values.favoriteGenre} qrValue={null} priority flippable />
+          <KtmCard name={values.fullName} drink={values.favoriteDrink} quote={values.quotes} qrValue={null} priority flippable />
           <p className="mt-1 text-center text-caption text-muted">{t('join.previewHint')}</p>
         </div>
       </div>
@@ -427,7 +427,7 @@ function JoinForm({
                     onChange={(e) => set('favoriteSong', e.target.value)}
                   />
                 </Field>
-                <Field label={t('join.quotes')} htmlFor="quotes" optionalLabel={t('common.optional')} error={errors.quotes}>
+                <Field label={t('join.quotes')} htmlFor="quotes" optionalLabel={t('common.optional')} hint={t('ux.card.quoteHint')} error={errors.quotes}>
                   <Textarea
                     id="quotes"
                     rows={2}
@@ -435,7 +435,7 @@ function JoinForm({
                     placeholder={t('join.quotesPlaceholder')}
                     value={values.quotes}
                     aria-invalid={Boolean(errors.quotes)}
-                    aria-describedby={describedBy('quotes')}
+                    aria-describedby={describedBy('quotes', true)}
                     onChange={(e) => set('quotes', e.target.value)}
                     className="min-h-20"
                   />
@@ -642,7 +642,7 @@ function Success({
       <p className="mt-2 text-body text-muted">{t('join.successSubtitle')}</p>
 
       <div className="mt-6">
-        <KtmCard name={result.fullName} drink={result.favoriteDrink} genre={result.favoriteGenre} qrValue={null} priority />
+        <KtmCard name={result.fullName} drink={result.favoriteDrink} quote={result.quote ?? ''} qrValue={null} priority />
       </div>
 
       <Card className="mt-6 flex items-center justify-between gap-4 px-5 py-4">
@@ -658,24 +658,6 @@ function Success({
       </Card>
 
       <div className="mt-3 flex flex-col gap-3">
-        <InfoCard icon={<MessageCircle aria-hidden="true" />} title={t('join.waTitle', { city: result.city.name })}>
-          {result.city.waGroupUrl ? (
-            <>
-              <p>{t('join.waBody')}</p>
-              <a
-                href={result.city.waGroupUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={buttonClass('primary', 'lg', 'mt-4 w-full')}
-              >
-                {t('join.waButton')}
-              </a>
-            </>
-          ) : (
-            <p>{t('join.waMissing')}</p>
-          )}
-        </InfoCard>
-
         <InfoCard icon={<Smartphone aria-hidden="true" />} title={t('join.appTitle')}>
           <p>{t('join.appBody', { email })}</p>
           {result.appLinks.ios || result.appLinks.android ? (
@@ -693,6 +675,24 @@ function Success({
             </div>
           ) : (
             <p className="mt-2">{t('join.appSoon')}</p>
+          )}
+        </InfoCard>
+
+        <InfoCard icon={<MessageCircle aria-hidden="true" />} title={t('join.waTitle', { city: result.city.name })}>
+          {result.city.waGroupUrl ? (
+            <>
+              <p>{t('join.waBody')}</p>
+              <a
+                href={result.city.waGroupUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={buttonClass('primary', 'lg', 'mt-4 w-full')}
+              >
+                {t('join.waButton')}
+              </a>
+            </>
+          ) : (
+            <p>{t('join.waMissing')}</p>
           )}
         </InfoCard>
 

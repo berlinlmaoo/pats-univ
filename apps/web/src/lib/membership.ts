@@ -43,8 +43,9 @@ export async function recordDownPayment(admin: AuthUser, raw: unknown) {
     if (!r) throw new AppError('NOT_FOUND', 404);
     requireCityAccess(admin, r.event.cityId);
     await tx.$queryRaw`SELECT id FROM "Member" WHERE id = ${r.memberId} FOR UPDATE`;
-    if (r.status !== 'CONFIRMED') throw new AppError('VALIDATION', 422);
-    const claimed = await tx.reservation.updateMany({ where: { id: r.id, downPaymentAt: null, status: 'CONFIRMED' },
+    // A deposit can be recorded while the booking is still pending (UX19): payment and confirmation are separate.
+    if (r.status !== 'CONFIRMED' && r.status !== 'PENDING') throw new AppError('VALIDATION', 422);
+    const claimed = await tx.reservation.updateMany({ where: { id: r.id, downPaymentAt: null, status: { in: ['PENDING', 'CONFIRMED'] } },
       data: { downPaymentAmount: input.amount, downPaymentAt: new Date(), downPaymentById: admin.id } });
     if (!claimed.count) throw new AppError('REQUEST_DECIDED', 409);
     await tx.auditLog.create({ data: { actorId: admin.id, action: 'reservation.downPayment', targetType: 'Reservation', targetId: r.id, meta: { amount: input.amount } } });
