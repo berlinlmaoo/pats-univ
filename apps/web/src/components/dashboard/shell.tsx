@@ -15,6 +15,7 @@ import {
   Settings2,
   ShieldCheck,
   Trophy,
+  TrendingUp,
   Users,
   X,
   type LucideIcon,
@@ -40,6 +41,7 @@ const NAV: { groupKey: MessageKey; items: NavItem[] }[] = [
       { href: '/regional', labelKey: 'phase5.operations', icon: ClipboardList },
       { href: '/events', labelKey: 'nav.events', icon: CalendarDays },
       { href: '/recaps', labelKey: 'loyalty.recap', icon: BarChart3 },
+      { href: '/reports', labelKey: 'ux.report.dashboardTitle', icon: TrendingUp },
     ],
   },
   {
@@ -69,7 +71,7 @@ const NAV: { groupKey: MessageKey; items: NavItem[] }[] = [
 ];
 
 /** Routes a Regional Admin can open (the rest are HQ-only and redirect). */
-export const REGIONAL_ROUTES = ['/regional', '/events', '/rewards', '/recaps', '/hub'];
+export const REGIONAL_ROUTES = ['/regional', '/events', '/rewards', '/recaps', '/reports', '/hub'];
 
 export function Shell({
   user,

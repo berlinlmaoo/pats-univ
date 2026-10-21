@@ -1,4 +1,4 @@
-import { can, FDC_PENDING } from '@pats/shared';
+import { can, fdcFromReport } from '@pats/shared';
 import 'server-only';
 import { recapInput } from '@pats/shared';
 import type { Prisma } from '@/generated/prisma';
@@ -29,7 +29,7 @@ export async function operations(
   const [events, reports, members, checkIns, fulfilled] = await Promise.all([
     db.event.findMany({
       where: eventWhere,
-      include: { city: { select: { name: true } }, recap: true },
+      include: { city: { select: { name: true } }, recap: true, report: { select: { fdcSold: true } } },
       orderBy: { startsAt: 'desc' },
     }),
     db.promoterReport.findMany({
@@ -54,8 +54,8 @@ export async function operations(
   const sold = await soldByEvent(events.map((e) => e.id));
   return {
     canLockRecap: can(admin.role, 'hq.manage'),
-    // D6: reservations sold (table vs sofa, from confirmed bookings) and the pending FDC slot.
-    events: events.map((e) => ({ ...e, reservationsSold: sold.get(e.id)!, fdcSold: FDC_PENDING })),
+    // D6: reservations sold (table vs sofa, from confirmed bookings) and FDC from the event report.
+    events: events.map(({ report, ...e }) => ({ ...e, reservationsSold: sold.get(e.id)!, fdcSold: fdcFromReport(report) })),
     reports,
     members,
     stats: {

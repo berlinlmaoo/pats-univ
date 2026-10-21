@@ -40,6 +40,8 @@ export const SETTINGS = {
   appQrTtlSeconds: { group: 'checkIn', kind: 'int', min: 30, max: 60, unit: 'seconds', default: 45, scopes: ['GLOBAL'] },
   welcomeBonusXp: { group: 'xp', kind: 'int', min: 0, max: 100000, unit: 'xp', default: 100, scopes: ['GLOBAL'] },
   reservationBonusXp: { group: 'xp', kind: 'int', min: 0, max: 100000, unit: 'xp', default: 25, scopes: ['GLOBAL', 'CITY'] },
+  /** Blast poster: XP for an approved share proof (owner, 22 Oct 2026). */
+  posterShareXp: { group: 'xp', kind: 'int', min: 0, max: 100000, unit: 'xp', default: 2, scopes: ['GLOBAL', 'CITY'] },
   xpExpiryMonths: { group: 'xp', kind: 'int', min: 1, max: 120, unit: 'months', default: 18, scopes: ['GLOBAL'] },
   drawSlots: { group: 'xp', kind: 'int', min: 1, max: 100, unit: 'slots', default: 5, scopes: ['GLOBAL', 'EVENT'] },
   freeDrawExpiryMonths: { group: 'leaderboard', kind: 'int', min: 1, max: 12, unit: 'months', default: 3, scopes: ['GLOBAL'] },

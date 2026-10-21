@@ -20,6 +20,7 @@ import { EventDialogButton } from '../event-form';
 import { EventActions } from './event-actions';
 import { BroadcastButton } from './broadcast';
 import { ContentPanel } from '@/components/events/content-panel';
+import { EventReportPanel } from '@/components/events/report-panel';
 import { eventContent } from '@/lib/events/content';
 import { LiveRefresh } from './live-refresh';
 
@@ -133,6 +134,7 @@ export default async function EventPage({ params }: Params) {
       </div>
 
       <DrawPanel eventId={event.id} ended={event.endsAt <= now} />
+      <EventReportPanel eventId={event.id} />
       <div className="grid items-start gap-6 lg:grid-cols-5">
         <Card className="min-w-0 overflow-hidden lg:col-span-3">
           <CardHeader
