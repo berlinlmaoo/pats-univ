@@ -10,6 +10,7 @@ import {
   recapInput,
   type OperationsDto,
   type RecapDto,
+  type ReservationsSold,
   type ReportDto,
 } from '@pats/shared';
 import { useT } from '@/components/i18n/provider';
@@ -94,7 +95,7 @@ export function OperationsPage() {
             onChange={(v) => setTab(v as typeof tab)}
             items={[
               { value: 'recap', label: t('ops.tabRecap'), count: ended.filter((e) => !e.recap).length },
-              { value: 'reports', label: t('loyalty.promoter') },
+              { value: 'reports', label: t('ux.archive.prReports') },
               { value: 'promoters', label: t('loyalty.promoterFlag') },
             ]}
           />
@@ -113,6 +114,7 @@ export function OperationsPage() {
                     title={e.title}
                     meta={`${e.city.name} · ${formatDate(new Date(e.startsAt), t.locale)}`}
                     recap={e.recap}
+                    sold={e.reservationsSold}
                     canLock={state.data!.canLockRecap}
                     done={done}
                   />
@@ -126,6 +128,7 @@ export function OperationsPage() {
               </Card>
             ) : (
               <div className="space-y-3">
+                <p className="text-body-sm text-muted">{t('ux.archive.prReportsBody')}</p>
                 {state.data.reports.map((r) => (
                   <ReportReview key={`${r.id}-${r.status}`} report={r} />
                 ))}
@@ -269,12 +272,15 @@ export function RecapForm({
   title,
   meta,
   recap,
+  sold,
   done,
 }: {
   eventId: string;
   title: string;
   meta?: string;
   recap: RecapDto | null;
+  /** D6: reservations sold, counted by the system from confirmed bookings. */
+  sold?: ReservationsSold;
   canLock: boolean;
   done: () => void;
 }) {
@@ -325,6 +331,26 @@ export function RecapForm({
           </div>
         </summary>
         <form className="space-y-4 border-t border-border p-5" onSubmit={save}>
+          {sold && (
+            <div className="rounded-control border border-border bg-surface-muted px-4 py-3">
+              <p className="ktm-label text-muted">{t('ux.recap.sold')}</p>
+              <dl className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                <div>
+                  <dt className="text-caption text-muted">{t('ux.recap.soldTable')}</dt>
+                  <dd className="text-title3 tabular-nums">{formatCount(sold.table)}</dd>
+                </div>
+                <div>
+                  <dt className="text-caption text-muted">{t('ux.recap.soldSofa')}</dt>
+                  <dd className="text-title3 tabular-nums">{formatCount(sold.sofa)}</dd>
+                </div>
+                <div>
+                  <dt className="text-caption text-muted">{t('ux.recap.fdcSold')}</dt>
+                  <dd className="text-body-sm text-muted">{t('ux.recap.fdcPending')}</dd>
+                </div>
+              </dl>
+              <p className="mt-2 text-caption text-muted">{t('ux.recap.soldHint')}</p>
+            </div>
+          )}
           <fieldset disabled={!!recap?.lockedAt || busy} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {counts.map((k) => (
               <Field key={k} htmlFor={`${eventId}-${k}`} label={t(`loyalty.${k}`)}>

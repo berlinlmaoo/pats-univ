@@ -29,7 +29,7 @@ export async function saveClaim(memberId: string, raw: unknown, claimId?: string
   return atomic(async tx => {
     const member = await tx.member.findUnique({ where: { id: memberId }, include: { user: true } });
     if (!member || member.status !== 'ACTIVE' || member.user.status !== 'ACTIVE' || (input.formType === 'PR' && !member.isPromoter)) throw new AppError('FORBIDDEN', 403);
-    if (input.formType === 'MEMBER' && input.guestCount && !await getSetting(tx, 'memberClaimAllowGl')) throw new AppError('VALIDATION', 422);
+    if (input.formType === 'MEMBER' && input.guestCount && !await getSetting(tx, 'memberClaimAllowGl')) throw new AppError('VALIDATION', 422, 'Guest list not allowed', { fields: { guestCount: 'ux.claims.glNotAllowed' } });
     const event = await tx.event.findUnique({ where: { id: input.eventId } });
     if (!event || event.status === 'DRAFT' || event.endsAt > new Date()) throw new AppError('CLAIM_NOT_OPEN', 409);
     if (event.cityId !== member.cityId && !await tx.checkIn.findUnique({ where: { eventId_memberId: { eventId: event.id, memberId } } })) throw new AppError('FORBIDDEN', 403);
@@ -46,10 +46,26 @@ export async function saveClaim(memberId: string, raw: unknown, claimId?: string
   });
 }
 
-export async function crewClaims(admin: AuthUser) {
+/**
+ * Crew claim queue. Optional filters (F23): status, eventId. `rules.allowMemberGl` and each claim's
+ * `editableFields` tell review screens which counts they may show as editable (F22): a member
+ * claim's guest list is only editable when the setting allows it, matching what approval accepts.
+ */
+export async function crewClaims(admin: AuthUser, filters: { status?: string | null; eventId?: string | null } = {}) {
   if (!can(admin.role, 'promoter.manage')) throw new AppError('FORBIDDEN', 403);
-  return { claims: await db.xpClaim.findMany({ where: { event: { cityId: can(admin.role, 'hq.manage') ? undefined : admin.cityId! } },
-    include: { member: { select: { fullName: true } }, event: { select: { title: true } } }, orderBy: [{ reviewedAt: { sort: 'asc', nulls: 'first' } }, { createdAt: 'desc' }] }) };
+  const status = filters.status && ['PENDING', 'APPROVED', 'REJECTED'].includes(filters.status) ? filters.status : undefined;
+  const [claims, allowMemberGl] = await Promise.all([
+    db.xpClaim.findMany({ where: { event: { cityId: can(admin.role, 'hq.manage') ? undefined : admin.cityId! }, ...(status ? { status } : {}), ...(filters.eventId ? { eventId: filters.eventId } : {}) },
+      include: { member: { select: { fullName: true } }, event: { select: { title: true } } }, orderBy: [{ reviewedAt: { sort: 'asc', nulls: 'first' } }, { createdAt: 'desc' }] }),
+    getSetting(db, 'memberClaimAllowGl').then(Boolean),
+  ]);
+  return {
+    rules: { allowMemberGl, rejectReasonMin: 3 },
+    claims: claims.map((c) => {
+      const glAllowed = c.formType === 'PR' || allowMemberGl;
+      return { ...c, glAllowed, editableFields: glAllowed ? ['guestCount', 'reservationCount'] : ['reservationCount'] };
+    }),
+  };
 }
 
 export async function reviewClaim(admin: AuthUser, raw: unknown) {
@@ -60,9 +76,12 @@ export async function reviewClaim(admin: AuthUser, raw: unknown) {
     if (!claim) throw new AppError('NOT_FOUND', 404);
     requireCityAccess(admin, claim.event.cityId);
     if (claim.status !== 'PENDING') throw new AppError('REQUEST_DECIDED', 409);
-    const guestCount = input.guestCount ?? claim.guestCount;
+    const glAllowed = claim.formType === 'PR' || Boolean(await getSetting(tx, 'memberClaimAllowGl'));
+    // F22: when the guest list doesn't count, an omitted guestCount means 0 (not a stored legacy value).
+    const guestCount = input.guestCount ?? (glAllowed ? claim.guestCount : 0);
     const reservationCount = input.reservationCount ?? claim.reservationCount;
-    if (input.decision === 'APPROVED' && claim.formType === 'MEMBER' && guestCount && !await getSetting(tx, 'memberClaimAllowGl')) throw new AppError('VALIDATION', 422);
+    if (input.decision === 'APPROVED' && !glAllowed && guestCount)
+      throw new AppError('VALIDATION', 422, 'Guest list not allowed', { fields: { guestCount: 'ux.claims.glNotAllowed' } });
     const pr = claim.formType === 'PR';
     const bonus = input.decision === 'APPROVED' ? prBonusXp(guestCount, reservationCount,
       await getSetting(tx, pr ? 'promoterBonusPerGuestXp' : 'memberBonusPerGuestXp', { cityId: claim.event.cityId }),
@@ -84,7 +103,7 @@ export async function reviewClaim(admin: AuthUser, raw: unknown) {
       title: t('phase5.claimTitle'), body: input.decision === 'APPROVED'
         ? t('phase5.claimApproved', { event: claim.event.title, xp: bonus })
         : t('phase5.claimRejected', { event: claim.event.title, reason: input.reason }),
-      data: { screen: 'claims' },
+      data: { screen: 'claims', claimId: claim.id, eventId: claim.eventId },
     } });
     return { memberId: claim.memberId, notificationId, bonus };
   });

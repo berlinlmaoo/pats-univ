@@ -18,7 +18,9 @@ import { requireDashboard } from '@/lib/hq/guard';
 import { getT } from '@/lib/i18n';
 import { EventDialogButton } from '../event-form';
 import { EventActions } from './event-actions';
-import { BroadcastButton, FlyerUpload } from './broadcast';
+import { BroadcastButton } from './broadcast';
+import { ContentPanel } from '@/components/events/content-panel';
+import { eventContent } from '@/lib/events/content';
 import { LiveRefresh } from './live-refresh';
 
 type Params = { params: Promise<{ id: string }> };
@@ -45,7 +47,7 @@ export default async function EventPage({ params }: Params) {
   const tz = event.city.timezone;
   const phase = eventPhase(event, now);
 
-  const [checkIns, grouped, form, cityMembers, eventCity] = await Promise.all([
+  const [checkIns, grouped, form, cityMembers, eventCity, content] = await Promise.all([
     db.checkIn.findMany({
       where: { eventId: event.id },
       orderBy: { checkedInAt: 'desc' },
@@ -60,6 +62,7 @@ export default async function EventPage({ params }: Params) {
       select: { id: true, name: true, _count: { select: { members: { where: { status: 'ACTIVE', user: { status: 'ACTIVE' } } } } } },
     }),
     db.city.findUnique({ where: { id: event.cityId }, select: { notificationCopy: true } }),
+    eventContent(admin, event.id),
   ]);
   const byMethod = Object.fromEntries(CHECK_IN_METHODS.map((m) => [m, 0])) as Record<CheckInMethod, number>;
   for (const g of grouped) byMethod[g.method] = g._count._all;
@@ -206,18 +209,14 @@ export default async function EventPage({ params }: Params) {
             )}
           </Card>
 
-          <Card>
-            <CardHeader title={t('events.flyer')} className="pb-3" />
-            <div className="flex flex-col gap-3 border-t border-border px-5 py-4">
-              {event.flyerUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element -- served from our own storage route
-                <img src={`/api/events/${event.id}/flyer?v=${event.updatedAt.getTime()}`} alt={t('events.flyerAlt', { title: event.title })} className="max-h-72 w-full rounded-control border border-border object-contain" />
-              ) : (
-                <p className="text-body-sm text-muted">{t('events.flyerEmpty')}</p>
-              )}
-              <FlyerUpload eventId={event.id} hasFlyer={Boolean(event.flyerUrl)} />
-            </div>
-          </Card>
+          <ContentPanel
+            eventId={event.id}
+            eventTitle={event.title}
+            live={content.live}
+            mode={content.mode}
+            pending={content.pending}
+            canDecide={can(admin.role, 'hq.manage')}
+          />
 
           <Card>
             <CardHeader title={t('events.checkIns')} className="pb-3" />

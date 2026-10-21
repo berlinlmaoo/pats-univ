@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
 # Regenerate every brand and KTM image from the official masters (kept out of the repo).
-#   tools/brand/make-assets.sh ~/pats-univ-brand/official ~/pats-univ-brand/ktm
+#   tools/brand/make-assets.sh ~/pats-univ-brand/official ~/pats-univ-brand/ktm-21oct
 # Resize and pad only; never crop into, mask or recolour the marks. See make_assets.py.
 set -eu
 OFFICIAL=$(cd "${1:?usage: make-assets.sh <official logo dir> <ktm dir>}" && pwd)

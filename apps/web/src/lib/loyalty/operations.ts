@@ -1,4 +1,4 @@
-import { can } from '@pats/shared';
+import { can, FDC_PENDING } from '@pats/shared';
 import 'server-only';
 import { recapInput } from '@pats/shared';
 import type { Prisma } from '@/generated/prisma';
@@ -6,6 +6,7 @@ import { requireCityAccess, type AuthUser } from '../auth/current-user';
 import { db } from '../db';
 import { AppError } from '../http/errors';
 import { atomic } from './transaction';
+import { soldByEvent } from '../ux/reservations';
 
 export function cityScope(admin: AuthUser, cityId?: string) {
   if (can(admin.role, 'hq.manage')) return cityId;
@@ -50,9 +51,11 @@ export async function operations(
     db.checkIn.count({ where: { event: eventWhere } }),
     db.redemption.count({ where: { status: 'FULFILLED', event: eventWhere } }),
   ]);
+  const sold = await soldByEvent(events.map((e) => e.id));
   return {
     canLockRecap: can(admin.role, 'hq.manage'),
-    events,
+    // D6: reservations sold (table vs sofa, from confirmed bookings) and the pending FDC slot.
+    events: events.map((e) => ({ ...e, reservationsSold: sold.get(e.id)!, fdcSold: FDC_PENDING })),
     reports,
     members,
     stats: {

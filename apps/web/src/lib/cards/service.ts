@@ -50,6 +50,7 @@ export function toCardInfo(c: CardWithBatch): CardInfo {
     revokeReason: c.revokeReason,
     createdAt: c.createdAt.toISOString(),
     isReplacement: Boolean(c.replacesCardId),
+    replacementFee: c.replacementFee !== null ? { amount: c.replacementFee, paidAt: c.feePaidAt?.toISOString() ?? null } : null,
   };
 }
 
@@ -269,11 +270,12 @@ export async function cardProfile(token: string, viewerMemberId?: string | null,
     state: card.status === 'DELIVERED' ? 'active' : 'pending',
     isMine,
     // The digital ID: what the printed card shows, plus status, city, member since and the photo.
-    // Never NIM, email, phone, song or quote (PRODUCT.md §10.3).
+    // Never NIM, email, phone or song. Since the 21 Oct 2026 KTM prints the quote (QOTD), it shows too.
     member: {
       fullName: m.fullName,
       favoriteDrink: m.favoriteDrink,
       favoriteGenre: m.favoriteGenre,
+      quote: m.quotes,
       city: m.city.name,
       joinedAt: m.joinedAt.toISOString(),
       photoUrl: photoReadUrl(m.photoUrl, 3600, absolutePhoto),

@@ -116,6 +116,7 @@ export async function registerMember(input: Registration): Promise<RegistrationR
     fullName: input.fullName,
     favoriteDrink: input.favoriteDrink,
     favoriteGenre: input.favoriteGenre,
+    quote: input.quotes,
     city: { id: city.id, code: city.code, name: city.name, waGroupUrl: city.waGroupUrl },
     appLinks: { ios: ios || null, android: android || null },
     emailSent: smtpConfigured(),

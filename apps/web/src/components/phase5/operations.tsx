@@ -15,7 +15,7 @@ import { postJson } from '@/lib/client/api';
 
 interface Payments {
   cards: { id: string; replacementFee: number; feePaidAt: string | null; member: { fullName: string; nim: string } }[];
-  reservations: { id: string; downPaymentAmount: number | null; downPaymentAt: string | null; minimumCharge: number; slotCode: string; member: { fullName: string }; event: { title: string } }[];
+  reservations: { id: string; status?: 'PENDING' | 'CONFIRMED'; downPaymentAmount: number | null; downPaymentAt: string | null; minimumCharge: number; slotCode: string; member: { fullName: string }; event: { title: string } }[];
 }
 
 function ErrorLine({ error }: { error: string }) {
@@ -72,7 +72,10 @@ export function PaymentRecords() {
                     {r.minimumCharge > 0 && <> · {t('ops.minimumShort', { amount: formatRupiah(r.minimumCharge) })}</>}
                   </p>
                 </div>
-                <Badge tone={r.downPaymentAt ? 'success' : 'warning'} dot>{t(r.downPaymentAt ? 'phase5.paid' : 'phase5.unpaid')}</Badge>
+                <div className="flex flex-wrap gap-2">
+                  {r.status && <Badge tone={r.status === 'CONFIRMED' ? 'accent' : 'neutral'}>{t.loose(`social.${r.status}`)}</Badge>}
+                  <Badge tone={r.downPaymentAt ? 'success' : 'warning'} dot>{t(r.downPaymentAt ? 'phase5.paid' : 'phase5.unpaid')}</Badge>
+                </div>
               </div>
               {r.downPaymentAt ? (
                 <p className="text-body-sm">

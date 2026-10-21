@@ -3,6 +3,7 @@ import type { CardBatchStatus, Capability } from './card';
 import type { CardStatus, CheckInMethod, EventStatus, MemberStatus, Role } from './enums';
 import type { EventPhase } from './event';
 import type { Locale } from './i18n/types';
+import type { AdminScope, EventTimingInfo, JourneyStep, MemberAction, MembershipState, NotificationTarget, EventPoster, ReservationPayment } from './ux';
 
 /** Error body of every non-2xx API response. `code` is stable; `message` is for logs. */
 export interface ApiError {
@@ -92,6 +93,12 @@ export interface OtpRequestResponse {
   resendAfter: number;
   /** Present only when OTP_PROVIDER=demo: the code to show on screen. */
   demoCode?: string;
+  /** UX redesign (D7): where the code went, masked ("ra***@gmail.com"). */
+  destination?: string;
+  /** How the code was sent. Login stays email + OTP. */
+  channel?: 'email';
+  /** Code lifetime in seconds (same instant as expiresAt). */
+  ttlSeconds?: number;
 }
 
 export interface CitySummary {
@@ -111,6 +118,10 @@ export interface MeResponse {
     city: CitySummary | null;
     /** What this account may do with cards and check-in (PRODUCT.md §3). */
     capabilities: Capability[];
+    /** UX redesign (D1, D8): scope shown next to the Admin mode switch; null for members. */
+    adminScope?: AdminScope | null;
+    /** UX redesign (F03): staff accounts may have no personal membership. */
+    membership?: MembershipState;
   };
   member: {
     id: string;
@@ -146,6 +157,8 @@ export interface RegistrationResponse {
   fullName: string;
   favoriteDrink: string;
   favoriteGenre: string;
+  /** QOTD printed on the 21 Oct 2026 KTM. */
+  quote?: string;
   city: CitySummary & { waGroupUrl: string | null };
   appLinks: { ios: string | null; android: string | null };
   /** Whether a welcome email with the same details was sent. */
@@ -188,15 +201,30 @@ export interface EventSummary {
   myCheckIn?: { checkedInAt: string; method: CheckInMethod } | null;
   /** Admin view: check-ins so far. */
   checkInCount?: number;
+  /** UX redesign (UX08, F19): labelled start/end and check-in boundaries. */
+  timing?: EventTimingInfo;
+  /** UX redesign (D5): approved poster + description (what members see). */
+  poster?: EventPoster;
+  /** Member view (F09): onward actions, and why the others are not offered. */
+  actions?: MemberAction[];
+  /** Member view (D5, F10): the event is in the member's home city. */
+  isHomeCity?: boolean;
 }
 
 export interface EventListResponse {
   upcoming: EventSummary[];
   past: EventSummary[];
+  /** UX redesign (D5): `city` = the member's home city only; `national` = every active city. */
+  scope?: 'city' | 'national';
+  homeCity?: CitySummary | null;
 }
 
 export interface EventDetailResponse {
   event: EventSummary;
+  /** Member view (D4/D5): the event journey, step by step. */
+  journey?: JourneyStep[];
+  /** Member view: my live reservation for this event, with its deposit state. */
+  myReservation?: { id: string; status: 'PENDING' | 'CONFIRMED'; slotCode: string; pax: number; conversationId: string | null; payment: ReservationPayment } | null;
 }
 
 export interface MyCheckIn {
@@ -300,6 +328,8 @@ export interface CardInfo {
   createdAt: string;
   /** This card replaces a revoked one. */
   isReplacement: boolean;
+  /** UX redesign (UX27, F26): replacement fee (rupiah) and when crew recorded it as paid. */
+  replacementFee?: { amount: number; paidAt: string | null } | null;
 }
 
 // Encode stations (Mac Card Station, HQ phones, an admin phone with an approved re-encode).
@@ -404,6 +434,8 @@ export interface CardProfileResponse {
     fullName: string;
     favoriteDrink: string;
     favoriteGenre: string;
+    /** QOTD: printed on the 21 Oct KTM, so the digital ID shows it too. */
+    quote?: string;
     city: string;
     joinedAt: string;
     /** Short-lived signed URL, or null when the member has no photo. */
@@ -428,6 +460,8 @@ export interface NotificationItem {
   readAt: string | null;
   /** Where tapping it leads, e.g. { eventId }. */
   data: Record<string, string> | null;
+  /** UX redesign (UX22, F32): normalised destination + action label, derived from kind + data. */
+  target?: NotificationTarget;
 }
 
 export interface NotificationListResponse {

@@ -32,13 +32,17 @@ export interface CardPrintData {
   /** Not printed on the official KTM (ktm-2026); kept for the PDF title and older templates. */
   nim: string;
   favoriteDrink: string;
+  /** Printed by the pre-21 Oct template (ktm-2026) only. */
   favoriteGenre: string;
+  /** QOTD, the member's quote: the third value on the 21 Oct 2026 KTM (ktm-2026-qotd). */
+  quote: string;
   /** The card URL the QR encodes. */
   url: string;
 }
 
 export function templateDir(): string {
-  const dir = env().CARD_TEMPLATE_DIR ?? 'card-templates/ktm-2026';
+  // ktm-2026-qotd = the owner's 21 Oct 2026 artwork (NAME / FAVORITE DRINK / QOTD).
+  const dir = env().CARD_TEMPLATE_DIR ?? 'card-templates/ktm-2026-qotd';
   // Runtime config, never an input to the deployment bundle (keeps tracing from pulling in the whole repo).
   return path.isAbsolute(dir) ? dir : path.join(/* turbopackIgnore: true */ process.cwd(), dir);
 }
@@ -97,7 +101,8 @@ export async function cardHtml(data: CardPrintData, opts: { proof?: boolean } = 
     .split('{{fullName}}').join(escapeHtml(data.fullName))
     .split('{{nim}}').join(escapeHtml(data.nim))
     .split('{{favoriteDrink}}').join(escapeHtml(data.favoriteDrink))
-    .split('{{favoriteGenre}}').join(escapeHtml(data.favoriteGenre));
+    .split('{{favoriteGenre}}').join(escapeHtml(data.favoriteGenre))
+    .split('{{quote}}').join(escapeHtml(data.quote));
   // Only render the QR variants the template uses.
   if (out.includes('{{qrInverse}}')) out = out.split('{{qrInverse}}').join(await qrSvgInverse(data.url));
   if (out.includes('{{qr}}')) out = out.split('{{qr}}').join(await qrSvg(data.url));
@@ -158,19 +163,25 @@ function scheduleClose() {
 }
 
 /**
- * Shrinks elements marked data-fit="lines:N;min:PT" until their text fits. Runs in the page; kept
- * as a string so no bundler or transpiler rewrites it on the way.
+ * Shrinks elements marked data-fit="lines:N;min:PT" until their text fits in N lines, or
+ * data-fit="box:N;min:PT" until it fits in the height of N lines at its ORIGINAL size (a long quote
+ * may then take three smaller lines). Runs in the page; kept as a string so no bundler or
+ * transpiler rewrites it on the way.
  */
 const FIT_SCRIPT = `(() => {
   for (const el of document.querySelectorAll('[data-fit]')) {
     const opts = Object.fromEntries((el.dataset.fit || '').split(';').map((kv) => kv.split(':').map((s) => s.trim())));
     const lines = Number(opts.lines || 1);
+    const box = Number(opts.box || 0);
     const min = Number(opts.min || 6);
     el.style.maxHeight = 'none';
     let size = parseFloat(getComputedStyle(el).fontSize) * 0.75;
+    const maxHeight = box ? parseFloat(getComputedStyle(el).lineHeight) * box : 0;
     // Count line boxes by the box's own height, not scrollHeight: a face with tall ascent/descent
     // (Avenir: 1.575 em) overflows a line-height-1 box, so scrollHeight > one line even on one line.
-    const fits = () => el.getBoundingClientRect().height <= parseFloat(getComputedStyle(el).lineHeight) * lines + 0.5 && el.scrollWidth <= el.clientWidth + 0.5;
+    const fits = () => (box
+      ? el.getBoundingClientRect().height <= maxHeight + 0.5
+      : el.getBoundingClientRect().height <= parseFloat(getComputedStyle(el).lineHeight) * lines + 0.5) && el.scrollWidth <= el.clientWidth + 0.5;
     while (!fits() && size > min) {
       size = Math.max(min, size - 0.25);
       el.style.fontSize = size + 'pt';

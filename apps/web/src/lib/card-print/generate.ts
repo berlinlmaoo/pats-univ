@@ -19,7 +19,7 @@ export async function generateBatchFiles(batchId: string): Promise<{ ok: true } 
       city: { select: { code: true, name: true } },
       cards: {
         where: { status: { not: 'REVOKED' } },
-        include: { member: { select: { nim: true, fullName: true, favoriteDrink: true, favoriteGenre: true } } },
+        include: { member: { select: { nim: true, fullName: true, favoriteDrink: true, favoriteGenre: true, quotes: true } } },
         orderBy: { member: { nim: 'asc' } },
       },
     },
@@ -33,7 +33,7 @@ export async function generateBatchFiles(batchId: string): Promise<{ ok: true } 
     for (const [i, card] of batch.cards.entries()) {
       if (!card.ndefToken) throw new Error(`Card ${card.id} has no token`);
       const url = cardUrl(card.ndefToken);
-      const pdf = await renderCardPdf({ fullName: card.member.fullName, nim: card.member.nim, favoriteDrink: card.member.favoriteDrink, favoriteGenre: card.member.favoriteGenre, url });
+      const pdf = await renderCardPdf({ fullName: card.member.fullName, nim: card.member.nim, favoriteDrink: card.member.favoriteDrink, favoriteGenre: card.member.favoriteGenre, quote: card.member.quotes, url });
       const file = `${String(i + 1).padStart(3, '0')}-${card.member.nim}.pdf`;
       await store.put(`${folder}/members/${file}`, pdf, 'application/pdf');
       await db.card.update({ where: { id: card.id }, data: { printFileUrl: `${folder}/members/${file}` } });

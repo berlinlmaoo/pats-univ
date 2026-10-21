@@ -29,7 +29,8 @@ export const dynamic = 'force-dynamic';
 /**
  * The digital student ID behind a tapped or scanned card (PRODUCT.md §4.1): the KTM as printed,
  * its live status, city, member since and the member's photo, so venue staff can match the face.
- * Never NIM, email, phone, song or quote. With the app installed, the OS opens the app instead.
+ * Never NIM, email, phone or song; the quote shows because the 21 Oct 2026 KTM prints it (QOTD).
+ * With the app installed, the OS opens the app instead.
  */
 export default async function CardPage({ params }: Params) {
   const t = await getT();
@@ -76,7 +77,7 @@ export default async function CardPage({ params }: Params) {
               />
 
               <div className="mt-6">
-                <KtmCard name={m.fullName} drink={m.favoriteDrink} genre={m.favoriteGenre} qrValue={cardUrl(token)} priority />
+                <KtmCard name={m.fullName} drink={m.favoriteDrink} quote={m.quote ?? ''} qrValue={cardUrl(token)} priority />
               </div>
 
               <Card className="mt-6 flex items-center gap-4 p-4">

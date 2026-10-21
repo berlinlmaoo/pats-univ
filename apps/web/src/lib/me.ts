@@ -2,6 +2,7 @@ import 'server-only';
 import { capabilitiesOf, CARD_DISPLAY_PRIORITY, type MeResponse } from '@pats/shared';
 import { db } from './db';
 import { photoReadUrl } from './members/photo';
+import { adminScope } from './ux/staff';
 
 export async function buildMe(userId: string): Promise<MeResponse> {
   const user = await db.user.findUniqueOrThrow({
@@ -30,6 +31,8 @@ export async function buildMe(userId: string): Promise<MeResponse> {
       locale: user.locale,
       city: user.city ?? m?.city ?? null,
       capabilities: [...capabilitiesOf(user.role)],
+      adminScope: await adminScope(user),
+      membership: m ? 'member' : 'staffOnly',
     },
     member: m
       ? {
