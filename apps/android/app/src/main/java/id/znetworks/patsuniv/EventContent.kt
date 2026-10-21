@@ -20,8 +20,7 @@ import java.io.ByteArrayOutputStream
     if (!LocalAdminMode.current || eventId.isBlank()) { Notice(tr("errors.forbidden"), true); return }
     Remote(api, "/api/admin/events/${query(eventId)}") { data, _ ->
         val event = data.obj("event")
-        Text(event.text("title"), style = MaterialTheme.typography.titleLarge)
-        Text(event.obj("city").text("name") + " · " + dateTime(event.text("startsAt"), language, event.obj("city").text("timezone", "Asia/Jakarta")))
+        AdminEventContext(event, language)
     }
     Remote(api, "/api/admin/events/${query(eventId)}/content") { data, reload ->
         val live = data.obj("live"); val pending = data.obj("pending")

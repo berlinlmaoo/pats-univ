@@ -20,6 +20,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonObject
 
 @Composable fun Shell(model: AppModel, session: Session, language: String, setLanguage: (String) -> Unit, offline: Boolean) {
     val activity = LocalContext.current as Activity
@@ -33,6 +34,16 @@ import kotlinx.coroutines.launch
     var pendingNotificationId by rememberSaveable(accountId) { mutableStateOf<String?>(null) }
     var staffTaskBusy by remember(accountId) { mutableStateOf(false) }
     var navigationBlocked by remember(accountId) { mutableStateOf(false) }
+    var pinnedEvent by remember(route, adminMode) { mutableStateOf<JsonObject?>(null) }
+    val publishPinnedEvent = remember(route, adminMode) { { event: JsonObject -> pinnedEvent = event } }
+    val pinEvent = staff && adminMode && route.substringBefore('/') in setOf("city-event", "scan", "manual", "draw", "event-content", "event-reservations", "event-roaming", "claims-review", "reward-validation") && route.substringAfter('/', "").isNotBlank()
+    LaunchedEffect(route, pinEvent) {
+        if (pinEvent && route.substringBefore('/') in setOf("event-reservations", "event-roaming", "claims-review", "reward-validation")) {
+            try { pinnedEvent = model.api.request("GET", "/api/admin/events/" + query(route.substringAfter('/').substringBefore('/'))).obj("event").takeIf { it.isNotEmpty() } }
+            catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (_: Exception) { /* The scoped screen presents its own request failure. */ }
+        }
+    }
     val publishStaffBusy = remember(accountId) { { busy: Boolean -> staffTaskBusy = busy } }
     val coroutine = rememberCoroutineScope()
     LaunchedEffect(staffTaskBusy) { if (!staffTaskBusy) navigationBlocked = false }
@@ -81,7 +92,7 @@ import kotlinx.coroutines.launch
     LaunchedEffect(model.requestedRoute) { model.requestedRoute?.let { navigate(it); model.requestedRoute = null } }
     BackHandler(route != "home" || stack.isNotEmpty()) { back() }
     val tabs = listOf("home" to "uxShell.home", "events" to "uxShell.events", "card" to "uxShell.card", "hub" to "uxShell.community", "profile" to "uxShell.account")
-    CompositionLocalProvider(LocalAdminMode provides (adminMode && staff), LocalStaffTaskBusy provides publishStaffBusy) {
+    CompositionLocalProvider(LocalAdminMode provides (adminMode && staff), LocalStaffTaskBusy provides publishStaffBusy, LocalAdminEventContext provides publishPinnedEvent.takeIf { pinEvent }) {
         Column(Modifier.background(MaterialTheme.colorScheme.background)) {
             Row(Modifier.fillMaxWidth().background(tone("band")).padding(horizontal = Space.page, vertical = Space.small), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.gap)) {
                 Image(painterResource(R.drawable.official_crest), tr("common.appName"), Modifier.size(40.dp))
@@ -95,6 +106,7 @@ import kotlinx.coroutines.launch
                 TextButton({ setMode(false) }) { Text(tr("uxShell.exitAdmin"), color = tone("bandText")) }
             }
             if (tabs.none { it.first == route }) Row(Modifier.fillMaxWidth().padding(horizontal = Space.page)) { TextButton({ back() }) { Text(tr("common.back")) } }
+            if (pinEvent) pinnedEvent?.let { PinnedAdminEventContext(it, language) }
             Box(Modifier.weight(1f)) {
                 screenState.SaveableStateProvider(route) {
                     key(route) { Page(onRefresh = { try { model.api.reload(); model.offline = false } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: Exception) { model.offline = true; throw e } }) {
