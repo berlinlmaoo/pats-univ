@@ -92,7 +92,7 @@ import kotlinx.serialization.json.JsonObject
     LaunchedEffect(model.requestedRoute) { model.requestedRoute?.let { navigate(it); model.requestedRoute = null } }
     BackHandler(route != "home" || stack.isNotEmpty()) { back() }
     val tabs = listOf("home" to "uxShell.home", "events" to "uxShell.events", "card" to "uxShell.card", "hub" to "uxShell.community", "profile" to "uxShell.account")
-    CompositionLocalProvider(LocalAdminMode provides (adminMode && staff), LocalStaffTaskBusy provides publishStaffBusy, LocalAdminEventContext provides publishPinnedEvent.takeIf { pinEvent }) {
+    CompositionLocalProvider(LocalAdminMode provides (adminMode && staff), LocalStaffTaskBusy provides publishStaffBusy, LocalAdminEventContext provides publishPinnedEvent.takeIf { pinEvent }, LocalRequestSucceeded provides { model.offline = false }) {
         Column(Modifier.background(MaterialTheme.colorScheme.background)) {
             Row(Modifier.fillMaxWidth().background(tone("band")).padding(horizontal = Space.page, vertical = Space.small), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.gap)) {
                 Image(painterResource(R.drawable.official_crest), tr("common.appName"), Modifier.size(40.dp))
