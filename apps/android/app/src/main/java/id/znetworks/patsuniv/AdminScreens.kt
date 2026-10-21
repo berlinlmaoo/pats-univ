@@ -65,6 +65,7 @@ import java.time.*
     var subject by remember { mutableStateOf<JsonObject?>(null) }; var preview by remember { mutableStateOf<JsonObject?>(null) }; var result by remember { mutableStateOf<JsonObject?>(null) }; var reason by remember { mutableStateOf("") }; var search by remember { mutableStateOf("") }; var scanCycle by remember { mutableIntStateOf(0) }
     val mutation = rememberMutation(); MutationStatus(mutation)
     StaffTaskGuard(mutation.busy)
+    val tagWait = remember { TagWait() }
     fun identify(input: JsonObject) { mutation.run { subject = input; preview = api.request("POST", "/api/admin/check-in/preview", JsonObject(input + ("eventId" to JsonPrimitive(eventId)))) } }
     if (result != null) { Notice(tr("app.resultCheckedIn")); Who(api, result!!.obj("checkIn").obj("member")); Action(tr("app.resultNext")) { result = null; subject = null; preview = null; reason = ""; scanCycle++ } }
     else if (preview != null) {
@@ -90,9 +91,13 @@ import java.time.*
         }
     } else {
         NfcAction(reader, "app.scanTapCard", mutation.busy) { mutation.run {
-            val tag = reader.withTag { Ntag.inspect(it) }; val token = cardToken(tag.url.orEmpty()) ?: throw ApiFailure("CARD_INVALID")
-            val input = body("method" to "NFC", "token" to token, "nfcUid" to tag.uid); subject = input; preview = api.request("POST", "/api/admin/check-in/preview", JsonObject(input + ("eventId" to JsonPrimitive(eventId))))
+            tagWait.start()
+            try {
+                val tag = reader.withTag { tagWait.acquired(); Ntag.inspect(it) }; val token = cardToken(tag.url.orEmpty()) ?: throw ApiFailure("CARD_INVALID")
+                val input = body("method" to "NFC", "token" to token, "nfcUid" to tag.uid); subject = input; preview = api.request("POST", "/api/admin/check-in/preview", JsonObject(input + ("eventId" to JsonPrimitive(eventId))))
+            } finally { tagWait.finish() }
         } }
+        CancelTagWait(tagWait, mutation)
         if (mutation.failure != null) Action(tr("app.scanAgain"), !mutation.busy, true) { mutation.run { subject = null; scanCycle++ } }
         else if (!mutation.busy) key(scanCycle) { QrScanner { value -> identify(body("method" to "APP_QR", "token" to value)) } }
         Notice(tr("app.scanNotRecorded"))
@@ -105,6 +110,7 @@ import java.time.*
     Title(tr("app.handoverTitle"), tr("app.handoverBody"))
     val mutation = rememberMutation(); MutationStatus(mutation)
     StaffTaskGuard(mutation.busy)
+    val tagWait = remember { TagWait() }
     var input by remember { mutableStateOf<JsonObject?>(null) }; var preview by remember { mutableStateOf<JsonObject?>(null) }; var done by remember { mutableStateOf(false) }
     if (done) { Notice(tr("app.handoverDone")); Who(api, preview!!.obj("member")); Action(tr("app.handoverNext")) { done = false; preview = null; input = null } }
     else if (preview != null) {
@@ -113,9 +119,13 @@ import java.time.*
         else Notice(when(p.obj("issue").text("code")) { "ALREADY_DELIVERED" -> tr("app.handoverAlready", "date" to dateTime(p.obj("issue").text("at"), LocalLanguage.current), "name" to p.obj("issue").text("by")); "OTHER_CITY" -> tr("app.handoverOtherCity", "city" to p.obj("member").obj("city").text("name")); else -> tr("app.resultInactive") }, true)
         Action(tr("app.handoverAgain"), !mutation.busy, true) { preview = null; input = null }
     } else NfcAction(reader, "app.handoverTap", mutation.busy, returnToCards = { go("tools") }) { mutation.run {
-        val tag = reader.withTag { Ntag.inspect(it) }; val token = cardToken(tag.url.orEmpty()) ?: throw ApiFailure("CARD_INVALID")
-        input = body("token" to token, "nfcUid" to tag.uid); preview = api.request("POST", "/api/admin/cards/handover/preview", input)
+        tagWait.start()
+        try {
+            val tag = reader.withTag { tagWait.acquired(); Ntag.inspect(it) }; val token = cardToken(tag.url.orEmpty()) ?: throw ApiFailure("CARD_INVALID")
+            input = body("token" to token, "nfcUid" to tag.uid); preview = api.request("POST", "/api/admin/cards/handover/preview", input)
+        } finally { tagWait.finish() }
     } }
+    CancelTagWait(tagWait, mutation)
 }
 @Composable fun MemberCards(api: Api, go: (String) -> Unit) {
     Title(tr("app.adminCards"), tr("app.cardsSearchHint"))

@@ -35,7 +35,7 @@ import java.io.ByteArrayOutputStream
         }
         Notice(tr(if (approval) "ux.content.approvalHint" else "ux.content.directHint"))
         if (pending.isNotEmpty()) Notice(tr("ux.content.replacesPending"))
-        var description by rememberSaveable(eventId, pending.text("id"), live.text("description")) { mutableStateOf(pending.text("description", live.text("description"))) }
+        var description by rememberSaveable(eventId, pending.text("id"), live.text("description")) { mutableStateOf(if (approval) pending.text("description", live.text("description")) else live.text("description")) }
         var poster by remember(eventId) { mutableStateOf<ByteArray?>(null) }
         var contentType by remember(eventId) { mutableStateOf("image/jpeg") }
         var succeeded by remember(eventId) { mutableStateOf(false) }

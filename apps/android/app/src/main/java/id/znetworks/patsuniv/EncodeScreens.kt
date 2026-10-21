@@ -26,6 +26,7 @@ fun validCardLookup(value: String) = cardToken(value) != null || Regex("^[A-Za-z
     val station = remember { val prefs = context.getSharedPreferences("station", 0); val id = prefs.getString("id", null) ?: java.util.UUID.randomUUID().toString().take(8).also { prefs.edit().putString("id", it).apply() }; (android.os.Build.MODEL.take(40) + " · " + id).take(60) }
     val mutation = rememberMutation(); MutationStatus(mutation)
     StaffTaskGuard(mutation.busy)
+    val tagWait = remember { TagWait() }
     // Protect the lease through the blocking write and persisted-but-unreported result.
     val writingTag = remember { AtomicBoolean(false) }
     val reports = remember(api.origin, api.userId) { PendingEncodeStore(context.noBackupFilesDir, api.origin, api.userId, KeystoreSessionCipher()) }
@@ -71,8 +72,10 @@ fun validCardLookup(value: String) = cardToken(value) != null || Regex("^[A-Za-z
         } else {
             Text(tr("app.encodeCheckName")); Text(held.obj("card").obj("batch").text("label"))
             NfcAction(reader, "app.encodeTap", mutation.busy, returnToCards = { go("tools") }) { mutation.run {
+                tagWait.start()
                 try {
                     val data = reader.withTag { io ->
+                        tagWait.acquired()
                         val inspection = Ntag.inspect(io)
                         val existing = cardToken(inspection.url.orEmpty())
                         if (existing != null && !held.text("url").endsWith(existing) && !reencode) throw ApiFailure("UID_IN_USE")
@@ -87,7 +90,9 @@ fun validCardLookup(value: String) = cardToken(value) != null || Regex("^[A-Za-z
                     report(held, data)
                 } catch(e: CancellationException) { throw e }
                 catch(e: Exception) { if (pending == null) { release(held, (e as? TagFailure)?.key); claim = null }; throw e }
+                finally { tagWait.finish() }
             } }
+            CancelTagWait(tagWait, mutation)
             Action(tr("app.encodeNotThisCard"), !mutation.busy, true) { mutation.run { release(held); claim = null; lookup = "" } }
         }
     }
