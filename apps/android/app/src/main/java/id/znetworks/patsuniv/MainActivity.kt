@@ -51,9 +51,8 @@ class MainActivity : ComponentActivity() {
     var language by rememberSaveable { mutableStateOf(prefs.getString("language", "id") ?: "id") }
     val session by model.store.session.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
-    var route by rememberSaveable { mutableStateOf("profile") }
     LaunchedEffect(session?.me?.obj("user")?.text("id")) {
-        route = if (session?.me?.obj("member")?.isNotEmpty() == true) "card" else "tools"
+        if (session == null) context.getSharedPreferences("ux-preferences", 0).edit().remove("activeAccount").remove("adminMode").apply()
         if (session != null) {
             try { model.api.reload(); model.offline = false } catch (e: CancellationException) { throw e } catch (_: Exception) { model.offline = true }
         }
@@ -84,7 +83,7 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     } else if (session == null) Login(model.api, language, ::setLanguage)
-                    else Shell(model, session!!, language, ::setLanguage, model.offline)
+                    else key(session!!.me.obj("user").text("id")) { Shell(model, session!!, language, ::setLanguage, model.offline) }
                 }
             }
         }
@@ -116,7 +115,7 @@ class MainActivity : ComponentActivity() {
     Page {
         Column(Modifier.fillMaxWidth().background(tone("band")).padding(Space.large), verticalArrangement = Arrangement.spacedBy(Space.page)) { Brand(); LanguageToggle(language, true, setLanguage) }
         Box(Modifier.fillMaxWidth().height(androidx.compose.ui.unit.Dp(3f)).background(tone("gold")))
-        Title(tr(if (otp == null) "auth.signInHeading" else "otp.title"), tr(if (otp == null) "app.loginSubtitle" else "otp.subtitle", "email" to email), hero = true)
+        Title(tr(if (otp == null) "auth.signInHeading" else "otp.title"), tr(if (otp == null) "uxShell.loginBody" else "otp.subtitle", "email" to email), hero = true)
         if (otp == null) Field(tr("auth.emailLabel"), email, { email = it }, KeyboardType.Email)
         else {
             val demo = otp!!.text("demoCode")
@@ -129,35 +128,7 @@ class MainActivity : ComponentActivity() {
             Action(if (cooldown > 0) tr("otp.resendIn", "seconds" to cooldown.toString()) else tr("otp.resend"), !busy && cooldown == 0, true) { submit(false) }
             Action(tr("otp.changeEmail"), !busy, true) { otpJson = null; code = ""; error = null }
         }
-        Action(tr("auth.joinLink"), secondary = true) { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(api.joinUrl))) }
+        Text(tr("uxShell.registerBody"), style = MaterialTheme.typography.bodySmall)
+        Action(tr("uxShell.register"), secondary = true) { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(api.joinUrl))) }
     }
-}
-@Composable fun Profile(session: Session, api: Api, language: String, setLanguage: (String) -> Unit, go: (String) -> Unit = {}) {
-    val user = session.me.obj("user"); val member = session.me.obj("member")
-    var confirm by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
-    val mutation = rememberMutation()
-    Title(member.text("fullName", user.text("name")), member.text("nim", tr("role." + user.text("role"))))
-    if(member.isNotEmpty()) ProfileEditor(member, api)
-    Tile {
-        Text(user.text("email")); Text(user.text("phone")); Text(member.obj("city").text("name", user.obj("city").text("name")))
-        if (member.isNotEmpty()) { Text(member.text("favoriteSong")); Text(member.text("favoriteGenre")); Text(member.text("quotes")) }
-    }
-    if (member.isNotEmpty()) {
-        KtmCard(member, thumbnail = true, onOpen = { go("card") })
-        Remote(api, "/api/loyalty/wallet", refresh = liveVersion(api, "wallet", member.text("id"))) { data, _ -> Text(count(data.number("balance")) + " XP", style = MaterialTheme.typography.titleLarge) }
-        if (member.flag("isPromoter")) Notice(tr("phase5.prBadge"))
-        Action(tr("phase5.claimTitle"), secondary = true) { go("claims") }
-        Action(tr("phase5.regionChange"), secondary = true) { go("region-change") }
-        Action(tr("app.historyTitle"), secondary = true) { go("history") }
-    }
-    Action(tr("app.notificationsTitle"), secondary = true) { go("notifications") }
-    Action(tr("app.notificationSettingsTitle"), secondary = true) { go("notification-settings") }
-    Text(tr("common.language"), style = MaterialTheme.typography.titleMedium)
-    LanguageToggle(language, setLanguage = setLanguage)
-    Action(tr("common.signOut"), secondary = true) { confirm = true }
-    if (member.isNotEmpty()) Decide(tr("phase5.leave"), tr("phase5.leaveConfirm"), !mutation.busy, true) { mutation.run { api.request("POST", "/api/me/leave"); api.signOut() } }
-    MutationStatus(mutation)
-    if (confirm) Confirm(tr("common.signOut"), tr("app.signOutBody"), { confirm = false }) { confirm = false; scope.launch { api.signOut() } }
-    Text(tr("app.version", "version" to BuildConfig.VERSION_NAME), style = MaterialTheme.typography.bodySmall)
 }

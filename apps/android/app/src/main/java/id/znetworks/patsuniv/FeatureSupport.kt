@@ -29,6 +29,7 @@ fun canEnterDraw(draw: JsonObject, now: Instant = Instant.now()): Boolean = runC
 fun hasCapability(session: Session, capability: String) = session.me.obj("user")["capabilities"]?.jsonArray?.any { it.jsonPrimitive.content == capability } == true
 
 class Mutation(private val scope: CoroutineScope) {
+    private var job: Job? = null
     var busy by mutableStateOf(false); private set
     var failure by mutableStateOf<String?>(null); private set
     var failureArgs by mutableStateOf<Array<Pair<String, String>>>(emptyArray()); private set
@@ -36,10 +37,28 @@ class Mutation(private val scope: CoroutineScope) {
     fun run(block: suspend () -> Unit) {
         if (busy) return
         busy = true; failure = null; notice = null
-        scope.launch {
+        job = scope.launch {
             try { block() } catch(e: CancellationException) { throw e } catch(e: Exception) { failure = if (e is TagFailure) e.key else errorKey((e as? ApiFailure)?.code ?: "INTERNAL"); failureArgs = errorArgs(e) }
             finally { busy = false }
         }
+    }
+    fun cancel() { job?.cancel() }
+}
+/** Tag acquisition and Cancel compete once; cancellation can never win after a tag is acquired. */
+class TagWait {
+    private val gate = java.util.concurrent.atomic.AtomicBoolean(false)
+    var waitingForTag by mutableStateOf(false); private set
+    fun start() { gate.set(true); waitingForTag = true }
+    fun acquired() {
+        if (!gate.compareAndSet(true, false)) throw CancellationException("Tag wait canceled")
+        waitingForTag = false
+    }
+    fun cancelWaiting(): Boolean = gate.compareAndSet(true, false).also { if (it) waitingForTag = false }
+    fun finish() { gate.set(false); waitingForTag = false }
+}
+@Composable fun CancelTagWait(wait: TagWait, mutation: Mutation) {
+    if (wait.waitingForTag && mutation.busy) Action(tr("common.cancel"), secondary = true) {
+        if (wait.cancelWaiting()) mutation.cancel()
     }
 }
 @Composable fun rememberMutation(): Mutation { val scope = rememberCoroutineScope(); return remember(scope) { Mutation(scope) } }

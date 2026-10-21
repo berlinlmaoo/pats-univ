@@ -85,6 +85,7 @@ enum XpReason {
   PROMOTER_BONUS
   MEMBER_CLAIM
   ADJUST
+  POSTER_SHARE
 }
 
 enum LeaderboardScope {
@@ -242,6 +243,8 @@ model User {
   reencodeDecided      ReencodeRequest[] @relation("ReencodeDecidedBy")
   contentSubmitted     EventContentSubmission[] @relation("ContentSubmittedBy")
   contentDecided       EventContentSubmission[] @relation("ContentDecidedBy")
+  posterProofsReviewed PosterProof[]            @relation("PosterProofReviewedBy")
+  eventReportsUpdated  EventReport[]            @relation("EventReportUpdatedBy")
 
   @@index([role, cityId])
   @@index([phone])
@@ -333,6 +336,7 @@ model Member {
   roamingRequests  RoamingRequest[]
   screenshotEvents ScreenshotEvent[]
   eventSteps       MemberEventStep[]
+  posterProofs     PosterProof[]
 
   @@index([cityId, joinedAt])
   @@index([fullName])
@@ -556,6 +560,8 @@ model Event {
   settings        Setting[]
   contentSubmissions EventContentSubmission[]
   memberSteps     MemberEventStep[]
+  posterProofs    PosterProof[]
+  report          EventReport?
 
   @@index([cityId, startsAt])
   @@index([status])
@@ -1078,4 +1084,54 @@ model MemberEventStep {
 
   @@id([memberId, eventId, step])
   @@index([eventId])
+}
+
+/// "Blast poster" proof (22 Oct 2026): a member shares the event poster and uploads a screenshot.
+/// Crew of the event city (or HQ) approves → +posterShareXp once (award key poster:<id>). One per
+/// member and event; a rejected proof may be sent again (back to PENDING).
+model PosterProof {
+  id           String    @id @default(uuid(7))
+  memberId     String
+  eventId      String
+  /// Private storage key of the screenshot (poster-proofs/<memberId>/…); served to the owner and crew only.
+  imageKey     String
+  /// PENDING, APPROVED, REJECTED.
+  status       String    @default("PENDING")
+  xpAwarded    Int?
+  reviewedById String?
+  reviewedAt   DateTime?
+  rejectReason String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  member     Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  event      Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  reviewedBy User?  @relation("PosterProofReviewedBy", fields: [reviewedById], references: [id])
+
+  @@unique([memberId, eventId])
+  @@index([status, eventId])
+}
+
+/// Admin event report (22 Oct 2026): the numbers HQ tracks per event. One per event; every save is
+/// audited (AuditLog event.report.saved with before/after). FDC = First Drink Charge / Free Drink Coupon.
+model EventReport {
+  id                 String   @id @default(uuid(7))
+  eventId            String   @unique
+  cityId             String
+  tablesSold         Int
+  sofasSold          Int
+  fdcSold            Int
+  paxTotal           Int
+  membersAttended    Int
+  nonMembersAttended Int
+  newMembers         Int
+  createdById        String
+  updatedById        String
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  event     Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  updatedBy User  @relation("EventReportUpdatedBy", fields: [updatedById], references: [id])
+
+  @@index([cityId, createdAt])
 }

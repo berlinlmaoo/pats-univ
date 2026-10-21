@@ -462,22 +462,22 @@
     "getTheApp": "Get the app",
     "successEyebrow": "You’re in",
     "successTitle": "Welcome, {name}",
-    "successSubtitle": "Your membership is active. Your digital card is ready in the app.",
+    "successSubtitle": "Your membership is active. Next: open the PATS University app and sign in with this email.",
     "nimLabel": "Your NIM",
-    "nimHint": "Your member number. You’ll find it on your card.",
+    "nimHint": "Your member number. You'll find it in the app.",
     "copyNim": "Copy NIM",
     "copied": "Copied",
     "waTitle": "Join the {city} WhatsApp group",
     "waBody": "Event drops, meetups and announcements from your city crew.",
     "waButton": "Open WhatsApp group",
     "waMissing": "Your city crew will share the group link with you soon.",
-    "appTitle": "Get the PATS University app",
-    "appBody": "Log in with {email} to see your card, events and rewards.",
+    "appTitle": "Return to the app and sign in",
+    "appBody": "Sign in with {email}. We'll email you a 6-digit code — no password needed.",
     "appStore": "App Store",
     "playStore": "Google Play",
     "appSoon": "The app is in private testing. We’ll email you the download link.",
     "cardTitle": "Your physical card",
-    "cardBody": "We print your NFC member card and hand it to you at an event in {city}.",
+    "cardBody": "We print your NFC member card and hand it to you at an event in {city}. Until then, the digital card in the app works at the door.",
     "emailSent": "We also emailed these details to {email}."
   },
   "auth": {
@@ -1439,6 +1439,14 @@
     "reencodeRejected": {
       "title": "Re-encode rejected",
       "body": "HQ rejected the re-encode of {member}’s card ({nim})."
+    },
+    "contentSubmitted": {
+      "title": "Poster to approve",
+      "body": "{sender} sent a poster/description for {event}."
+    },
+    "contentDecided": {
+      "title": "Poster update",
+      "body": "{event}: {status}."
     }
   },
   "nfc": {
@@ -1662,5 +1670,261 @@
     "PROMOTER_BONUS": "PR bonus",
     "ADJUST": "Adjustment",
     "attendanceHint": "Check guests and the receipt against event attendance before validating."
+  },
+  "ux": {
+    "nav": {
+      "home": "Home",
+      "events": "Events",
+      "card": "Card",
+      "community": "Community",
+      "account": "Account"
+    },
+    "adminMode": {
+      "title": "Admin mode",
+      "body": "Show staff tools across Home, Events and Community. It doesn't change your role or permissions.",
+      "on": "Admin mode · {scope}",
+      "exit": "Exit Admin mode",
+      "scopeHq": "HQ, all cities",
+      "scopeCity": "Regional Admin · {city}",
+      "openIn": "Open in Admin mode",
+      "finishFirst": "Finish or cancel the current scan before switching mode."
+    },
+    "welcome": {
+      "title": "Welcome to PATS University",
+      "cardNow": "Your digital card works now. Show its QR to the crew at the door.",
+      "crewConfirms": "The crew confirms your check-in; you'll see it in the app right after.",
+      "physicalCard": "Your physical KTM is prepared separately and handed to you at an event in {city}.",
+      "photo": "Add a photo so the crew can match your face.",
+      "staff": "Staff tools live in Account → Admin mode.",
+      "start": "Get started",
+      "skip": "Skip"
+    },
+    "otp": {
+      "signInTitle": "Sign in with your email",
+      "signInBody": "We'll email you a 6-digit code. No password needed.",
+      "sentTo": "Code sent to {email}",
+      "validFor": "Valid for {minutes} minutes.",
+      "checkSpam": "Not there? Check spam or promotions.",
+      "changeEmail": "Change email",
+      "resent": "Code resent to {email}.",
+      "notMember": "Not a member yet? Register on the web, then come back and sign in with the same email."
+    },
+    "staff": {
+      "noMembershipTitle": "No personal member card",
+      "noMembershipBody": "This staff account has no PATS membership, so there's no NIM, card or XP. Staff tools are in Account → Admin mode."
+    },
+    "card": {
+      "title": "Card",
+      "subtitle": "KTM — your PATS member card",
+      "digitalTitle": "Digital check-in QR",
+      "digitalReady": "Ready now",
+      "digitalReadyBody": "Show this QR to the crew. It works before your physical card arrives.",
+      "digitalInactive": "Not available: your membership is inactive.",
+      "showQr": "Show check-in QR",
+      "showToCrew": "Show this to crew; your check-in is recorded after they confirm.",
+      "qrRefresh": "Refreshes every {seconds}s. Screenshots expire.",
+      "flip": "Flip card",
+      "physicalTitle": "Physical card",
+      "stage": {
+        "queued": "Queued for printing",
+        "printing": "Being printed",
+        "atHq": "At HQ, being prepared",
+        "encoded": "Ready at HQ, not shipped yet",
+        "shipped": "Arrived in {city}: pick it up at the next event",
+        "delivered": "Active: tap it at the door",
+        "inactive": "This physical card is inactive. Ask the crew about a replacement."
+      },
+      "fields": {
+        "name": "NAME",
+        "drink": "FAVORITE DRINK",
+        "quote": "QOTD"
+      },
+      "quoteHint": "QOTD — your quote of the day, printed on your card.",
+      "feeDue": "Replacement fee {amount} — pay the crew; they record it.",
+      "feePaid": "Replacement fee paid {date}"
+    },
+    "home": {
+      "nextTitle": "What's next",
+      "noEvent": "No upcoming event in {city} yet.",
+      "browseNational": "Browse other cities"
+    },
+    "journey": {
+      "event": "Check the next event",
+      "poster": "Blast the poster",
+      "posterPending": "Details coming soon from HQ.",
+      "reservation": "Reserve a table or sofa",
+      "reservationBonus": "+{xp} XP at check-in with a confirmed reservation",
+      "reservationSkip": "Not this time",
+      "reservationRequested": "Waiting for crew approval",
+      "checkIn": "Check in at the door",
+      "completed": "Completed",
+      "markDone": "Mark as done",
+      "done": "Done"
+    },
+    "events": {
+      "national": "National",
+      "nationalOn": "Events in all active cities",
+      "nationalOff": "Events in {city}",
+      "upcoming": "Upcoming",
+      "past": "Past",
+      "viewEvent": "View event",
+      "reservation": "Reservation",
+      "otherCity": "Other city"
+    },
+    "timing": {
+      "starts": "Starts",
+      "ends": "Ends",
+      "checkInOpens": "Check-in opens",
+      "checkInCloses": "Check-in closes",
+      "overnight": "Runs past midnight",
+      "opensBefore": "Check-in opens {minutes} minutes before the start",
+      "minutesBefore": "minutes before the start"
+    },
+    "reason": {
+      "eventEnded": "This event has ended.",
+      "eventNotEnded": "Available after the event ends.",
+      "noVenue": "This event has no venue for reservations.",
+      "reservationExists": "You already have a reservation for this event.",
+      "noCityAccess": "Request access to this city first.",
+      "checkInNotOpen": "Check-in isn't open yet.",
+      "alreadyCheckedIn": "You're checked in.",
+      "roamingRequired": "Request to attend this other-city event first.",
+      "homeCity": "This event is in your city.",
+      "claimSubmitted": "You already submitted a claim for this event.",
+      "drawNotConfigured": "No prize draw at this event."
+    },
+    "roaming": {
+      "visitTitle": "Visit another city",
+      "attend": "Attend this event",
+      "attendBody": "The {city} crew approves. Not a reservation or immediate entry.",
+      "hub": "Temporary {city} Community access",
+      "hubBody": "HQ approves. Access ends {hours} hours after the event.",
+      "eventChanged": "The event changed. Choose it again before sending.",
+      "homeCityError": "This event is in your own city; no request is needed.",
+      "requestExists": "You already have a request for this event.",
+      "monthlyLimit": "You've reached this month's request limit."
+    },
+    "reservation": {
+      "title": "Reservation",
+      "mine": "My reservations",
+      "review": "Review your request",
+      "send": "Send reservation request",
+      "pendingTitle": "Pending — waiting for crew approval",
+      "confirmedTitle": "Confirmed",
+      "minimumCharge": "Minimum charge {amount}",
+      "depositUnpaid": "Deposit not recorded yet",
+      "depositPaid": "Deposit {amount} recorded {date}",
+      "depositOffApp": "Pay the deposit to the crew outside the app; they record it here.",
+      "blocked": "Your reservation for {event} has no deposit yet. New bookings open after the crew records it.",
+      "openBlocking": "Open that reservation",
+      "recordDeposit": "Record deposit received",
+      "depositAmount": "Deposit amount",
+      "depositConfirm": "Record a deposit of {amount} for {member}? This unlocks their next booking.",
+      "cancelConfirm": "Cancel your reservation for {slot} at {event}? The slot goes back to others.",
+      "posterHint": "Tap to see the full poster and details",
+      "kind": {
+        "TABLE": "Table",
+        "SOFA": "Sofa",
+        "OTHER": "Other"
+      }
+    },
+    "content": {
+      "title": "Poster & description",
+      "live": "Live for members",
+      "pending": "Waiting for HQ approval",
+      "approvalHint": "Your changes go to HQ for approval before members see them.",
+      "directHint": "Changes are live for members as soon as you save.",
+      "submit": "Send to HQ",
+      "save": "Save",
+      "submitted": "Sent to HQ for approval.",
+      "saved": "Poster and description updated.",
+      "approve": "Approve",
+      "reject": "Reject",
+      "rejectReason": "Reason (the admin sees it)",
+      "approved": "Approved: now live for members.",
+      "rejected": "Rejected.",
+      "queueTitle": "Poster approvals",
+      "queueEmpty": "No submissions waiting",
+      "queueEmptyBody": "Posters and descriptions from regional admins show up here for approval.",
+      "posterLabel": "Poster",
+      "descriptionLabel": "Description",
+      "noChange": "Change the poster or the description first.",
+      "replacesPending": "This replaces your earlier submission that's still waiting.",
+      "by": "By {name} · {date}",
+      "statusPENDING": "Waiting",
+      "statusAPPROVED": "Approved",
+      "statusREJECTED": "Rejected",
+      "statusWITHDRAWN": "Replaced"
+    },
+    "workspace": {
+      "title": "Event workspace",
+      "overview": "Overview",
+      "attendance": "Attendance",
+      "reservations": "Reservations",
+      "claims": "Claims",
+      "draw": "Draw",
+      "rewards": "Rewards",
+      "recap": "Recap",
+      "chooseScanEvent": "Choose event to scan",
+      "noOpenEvent": "No event is open for check-in",
+      "nextOpens": "Next: {event} opens {time}",
+      "checkInEnded": "Check-in ended {time}",
+      "openEarly": "Open check-in now",
+      "openEarlyBody": "Check-in starts now instead of {time}. Members can be scanned right away.",
+      "manageInDashboard": "Manage in dashboard",
+      "pendingWork": "Pending work",
+      "pending": {
+        "claims": "Claims to review",
+        "reservations": "Reservations to decide",
+        "deposits": "Deposits to record",
+        "roaming": "Visiting-city requests",
+        "hubAccess": "Community access requests",
+        "reencode": "Re-encode requests",
+        "regionChanges": "Home city changes",
+        "content": "Poster approvals",
+        "myContent": "My posters waiting for HQ",
+        "recapsDue": "Recaps to fill"
+      }
+    },
+    "recap": {
+      "sold": "Reservations sold",
+      "soldTable": "Tables sold",
+      "soldSofa": "Sofas sold",
+      "soldHint": "Confirmed reservations at this event, by slot type in the floor plan.",
+      "fdcSold": "FDC sold",
+      "fdcPending": "Waiting for HQ to define FDC"
+    },
+    "notif": {
+      "markAllRead": "Mark all read"
+    },
+    "notifAction": {
+      "viewEvent": "View event",
+      "viewAttendance": "View attendance",
+      "openCard": "Open card",
+      "openBooking": "Open booking",
+      "reviewBooking": "Review booking",
+      "reviewRequest": "Review request",
+      "viewRequest": "View request",
+      "viewClaim": "View claim",
+      "reviewClaim": "Review claim",
+      "reviewPoster": "Review poster",
+      "viewPoster": "View poster",
+      "openChat": "Open chat",
+      "open": "Open"
+    },
+    "claims": {
+      "bonusTitle": "Claim bonus XP",
+      "bonusBody": "Check-in XP is automatic. This form reports qualifying reservations after the event for review.",
+      "glNotAllowed": "Guest list isn't counted on member claims.",
+      "reasonRequired": "A reason is required to reject."
+    },
+    "draw": {
+      "staffTitle": "Live prize draw",
+      "runWhenFull": "Run the draw once every slot is taken during the peak window."
+    },
+    "archive": {
+      "prReports": "PR reports · archive (read only)",
+      "prReportsBody": "Old PR reports are kept for reference. New bonus XP goes through Claims."
+    }
   }
 }

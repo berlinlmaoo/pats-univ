@@ -5,7 +5,9 @@
     "valueCap": 0.0312,
     "nameY": 0.398,
     "drinkY": 0.615,
+    "quoteY": 0.831,
     "genreY": 0.831,
+    "quoteMaxLines": 2,
     "nameMaxW": 0.65,
     "valueMaxW": 0.6,
     "tile": {

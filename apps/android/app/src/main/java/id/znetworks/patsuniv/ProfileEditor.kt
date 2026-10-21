@@ -43,7 +43,7 @@ fun validPhotoSize(bytes: Int, width: Int, height: Int) = bytes in 1..5*1024*102
 
 @Composable fun ProfileEditor(member: JsonObject, api: Api) {
     val context = LocalContext.current
-    var edit by remember { mutableStateOf(false) }
+    var edit by remember { mutableStateOf(true) }
     var drink by remember(member) { mutableStateOf(member.text("favoriteDrink")) }
     var genre by remember(member) { mutableStateOf(member.text("favoriteGenre")) }
     var song by remember(member) { mutableStateOf(member.text("favoriteSong")) }
@@ -81,12 +81,13 @@ fun validPhotoSize(bytes: Int, width: Int, height: Int) = bytes in 1..5*1024*102
         Action(tr(if(member.text("photoUrl").isBlank()) "join.photoChoose" else "join.photoChange"), !mutation.busy, true) { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
         Action(tr("native.photoCamera"), !mutation.busy, true) { permission.launch(Manifest.permission.CAMERA) }
         photoError?.let { Notice(tr(it, "px" to "400"), true) }
-        Action(tr("native.profileEdit"), secondary = true) { edit = !edit }
+        if (!edit) Action(tr("native.profileEdit"), secondary = true) { edit = true }
         if(edit) {
             Detail(tr("ktm.name"), member.text("fullName"))
             Field(tr("join.favoriteDrink"), drink, { drink = it })
             Field(tr("app.genre"), genre, { genre = it })
             Field(tr("app.song"), song, { song = it })
+            Text(tr("ux.card.quoteHint"), style = MaterialTheme.typography.bodySmall)
             Field(tr("app.quotes"), quote, { quote = it }, multiline = true)
             Action(tr("common.save"), !mutation.busy && validProfile(drink,genre,song,quote)) { mutation.run {
                 api.request("PATCH", "/api/me", body("favoriteDrink" to drink.trim(), "favoriteGenre" to genre.trim(), "favoriteSong" to song.trim(), "quotes" to quote.trim())); api.reload(); edit = false; mutation.notice = "native.saved"

@@ -134,13 +134,15 @@ export function memberEventActions(
 // ─── Home task flow (D4) ──────────────────────────────────────────────────────
 
 /**
- * next event → blast poster → reservation (table/sofa, bonus XP) → check-in → completed. Steps the
- * member completes by tapping are stored per member and event; check-in and completion come only
- * from the server (crew confirms attendance).
+ * next event → blast poster (optional) → reservation (table/sofa, bonus XP) → check-in → completed.
+ * Steps the member completes by tapping are stored per member and event; check-in and completion
+ * come only from the server (crew confirms attendance). Blast poster (22 Oct 2026): the member shares
+ * the poster and uploads a screenshot as proof; crew approval awards posterShareXp (default 2). It is
+ * optional: skipping it (a tap) or leaving it open never blocks the later steps.
  */
 export const JOURNEY_STEPS = ['event', 'poster', 'reservation', 'checkIn', 'completed'] as const;
 export type JourneyStepKey = (typeof JOURNEY_STEPS)[number];
-/** Steps a member may mark done themselves (POST /api/me/journey). */
+/** Steps a member may mark done themselves (POST /api/me/journey). For `poster` the tap means "skip". */
 export const TAPPABLE_STEPS = ['event', 'poster', 'reservation'] as const satisfies readonly JourneyStepKey[];
 export type TappableStep = (typeof TAPPABLE_STEPS)[number];
 
@@ -149,22 +151,43 @@ export const journeyTapSchema = z.object({
   step: z.enum(TAPPABLE_STEPS),
 });
 
+export interface PosterProofInfo {
+  id: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  /** Owner/crew-only image path (bearer). */
+  imageUrl: string;
+  submittedAt: string;
+  reviewedAt: string | null;
+  rejectReason: string | null;
+  xpAwarded: number | null;
+}
+
 export interface JourneyStep {
   key: JourneyStepKey;
-  state: 'done' | 'current' | 'upcoming';
-  /** How the step completes: by the member's tap, or by the server (crew check-in, event end). */
-  completion: 'tap' | 'server';
+  /** `optional`: an optional step that is still open (poster); it is never `current`. */
+  state: 'done' | 'current' | 'upcoming' | 'optional';
+  /** How the step completes: member tap, crew review of an upload (poster), or the server. */
+  completion: 'tap' | 'review' | 'server';
   completedAt: string | null;
-  /** reservation: reserved (confirmed), requested (waiting for crew), skipped (tapped without booking). */
-  outcome?: 'reserved' | 'requested' | 'skipped';
+  /** The step can be skipped and never blocks later steps (poster). */
+  optional?: boolean;
+  /**
+   * reservation: reserved (confirmed), requested (waiting for crew), skipped (tapped without booking).
+   * poster: submitted (proof waiting for crew), approved, rejected (send a new proof), skipped.
+   */
+  outcome?: 'reserved' | 'requested' | 'skipped' | 'submitted' | 'approved' | 'rejected';
   /** reservation: XP added at check-in when the reservation is confirmed (setting reservationBonusXp). */
   bonusXp?: number;
-  /** poster: what "blast poster" asks of the member is not decided yet; the tap is only recorded. */
-  pending?: 'ownerDecision';
+  /** poster: XP awarded when crew approves the proof (setting posterShareXp). */
+  rewardXp?: number;
+  /** poster: the member's proof for this event, if any. */
+  proof?: PosterProofInfo | null;
 }
 
 export interface JourneyInput {
   taps: Partial<Record<TappableStep, Date>>;
+  posterProof?: PosterProofInfo | null;
+  posterShareXp?: number;
   reservation: { status: 'PENDING' | 'CONFIRMED'; updatedAt: Date } | null;
   checkIn: { checkedInAt: Date } | null;
   ended: boolean;
@@ -176,7 +199,15 @@ export function buildJourney(input: JourneyInput): JourneyStep[] {
   const iso = (d: Date | undefined | null) => (d ? d.toISOString() : null);
   const steps: Omit<JourneyStep, 'state'>[] = [
     { key: 'event', completion: 'tap', completedAt: iso(input.taps.event) },
-    { key: 'poster', completion: 'tap', completedAt: iso(input.taps.poster), pending: 'ownerDecision' },
+    (() => {
+      const proof = input.posterProof ?? null;
+      const base = { key: 'poster' as const, completion: 'review' as const, optional: true, rewardXp: input.posterShareXp ?? 0, proof };
+      if (proof?.status === 'APPROVED') return { ...base, completedAt: proof.reviewedAt, outcome: 'approved' as const };
+      if (proof?.status === 'PENDING') return { ...base, completedAt: null, outcome: 'submitted' as const };
+      if (proof?.status === 'REJECTED') return { ...base, completedAt: null, outcome: 'rejected' as const };
+      if (input.taps.poster) return { ...base, completedAt: iso(input.taps.poster), outcome: 'skipped' as const };
+      return { ...base, completedAt: null };
+    })(),
     (() => {
       const r = input.reservation;
       if (r?.status === 'CONFIRMED') return { key: 'reservation' as const, completion: 'tap' as const, completedAt: iso(r.updatedAt), outcome: 'reserved' as const, bonusXp: input.reservationBonusXp };
@@ -189,6 +220,7 @@ export function buildJourney(input: JourneyInput): JourneyStep[] {
   let current = false;
   return steps.map((s) => {
     if (s.completedAt) return { ...s, state: 'done' as const };
+    if (s.optional) return { ...s, state: 'optional' as const };
     if (!current) {
       current = true;
       return { ...s, state: 'current' as const };
@@ -289,15 +321,63 @@ export function countSold(
 }
 
 /**
- * "FDC sold" on the recap: the owner has not defined FDC's source yet. The slot stays null with
- * status `definitionPending`; nothing derives it (the existing manual recap fdcCount is separate).
+ * "FDC sold" (FDC = First Drink Charge / Free Drink Coupon, owner 21 Oct): the number the admin
+ * reports on the event report. Null until the report exists; never derived by the server.
  */
 export interface FdcSold {
   value: number | null;
-  status: 'definitionPending';
+  status: 'reported' | 'notReported';
 }
 
-export const FDC_PENDING: FdcSold = { value: null, status: 'definitionPending' };
+export function fdcFromReport(report: { fdcSold: number } | null | undefined): FdcSold {
+  return report ? { value: report.fdcSold, status: 'reported' } : { value: null, status: 'notReported' };
+}
+
+// ─── Event report (22 Oct 2026) ───────────────────────────────────────────────
+
+/** The seven numbers per event, in display/CSV order. */
+export const EVENT_REPORT_FIELDS = ['tablesSold', 'sofasSold', 'fdcSold', 'paxTotal', 'membersAttended', 'nonMembersAttended', 'newMembers'] as const;
+export type EventReportField = (typeof EVENT_REPORT_FIELDS)[number];
+export type EventReportNumbers = Record<EventReportField, number>;
+
+const reportCount = z.number({ error: 'validation.numberInvalid' }).int('validation.numberInvalid').min(0, 'validation.numberInvalid').max(1_000_000, 'validation.numberInvalid');
+export const eventReportInput = z.object(Object.fromEntries(EVENT_REPORT_FIELDS.map((f) => [f, reportCount])) as Record<EventReportField, typeof reportCount>);
+
+export interface EventReportInfo extends EventReportNumbers {
+  id: string;
+  eventId: string;
+  createdAt: string;
+  updatedAt: string;
+  updatedBy: string;
+}
+
+/** What the server already knows, shown next to the inputs; never written into the report. */
+export interface EventReportReference {
+  /** Confirmed reservations by slot kind. */
+  tablesSold: number;
+  sofasSold: number;
+  /** Members checked in (any method). */
+  membersAttended: number;
+  /** Members of the event's city who registered between check-in opening and the event end. */
+  newMembers: number;
+  /** Guests on confirmed reservations (pax), a lower bound for the total. */
+  reservationPax: number;
+}
+
+export function sumReports(rows: EventReportNumbers[]): EventReportNumbers {
+  const out = Object.fromEntries(EVENT_REPORT_FIELDS.map((f) => [f, 0])) as EventReportNumbers;
+  for (const r of rows) for (const f of EVENT_REPORT_FIELDS) out[f] += r[f];
+  return out;
+}
+
+// ─── Poster proof review (22 Oct 2026) ────────────────────────────────────────
+
+export const posterProofDecisionSchema = z
+  .object({
+    decision: z.enum(['APPROVED', 'REJECTED']),
+    reason: z.string().trim().max(500).default(''),
+  })
+  .refine((v) => v.decision !== 'REJECTED' || v.reason.length >= 3, { path: ['reason'], message: 'validation.required' });
 
 // ─── Event poster / description content (D5) ──────────────────────────────────
 
@@ -369,6 +449,7 @@ export type NotificationScreen =
   | 'adminEventContent'
   | 'adminContentQueue'
   | 'adminEvent'
+  | 'adminPosterProofs'
   | 'notifications';
 
 export interface NotificationTarget {
@@ -381,6 +462,7 @@ export interface NotificationTarget {
   memberId?: string;
   requestId?: string;
   submissionId?: string;
+  proofId?: string;
   /** Staff work: open it in Admin mode (an authorized account gets "Open in Admin mode"). */
   requiresAdminMode: boolean;
   /** i18n key of the row's action label (ux.notifAction.*). */
@@ -390,7 +472,7 @@ export interface NotificationTarget {
 const pick = (data: Record<string, string>, keys: readonly string[]) =>
   Object.fromEntries(keys.filter((k) => data[k]).map((k) => [k, data[k]!]));
 
-const ID_KEYS = ['eventId', 'reservationId', 'conversationId', 'channelId', 'claimId', 'memberId', 'requestId', 'submissionId'] as const;
+const ID_KEYS = ['eventId', 'reservationId', 'conversationId', 'channelId', 'claimId', 'memberId', 'requestId', 'submissionId', 'proofId'] as const;
 
 /** Where a notification leads, from its kind and stored payload (old rows included). */
 export function notificationTarget(kind: string, data: Record<string, string> | null | undefined): NotificationTarget {
@@ -420,6 +502,8 @@ export function notificationTarget(kind: string, data: Record<string, string> | 
       return to('adminContentQueue', 'reviewPoster', true);
     case 'contentDecided':
       return to('adminEventContent', 'viewPoster', true);
+    case 'posterProofDecided':
+      return to('event', 'viewProof');
     case 'cardShipped':
     case 'cardDelivered':
       return to('card', 'openCard');
