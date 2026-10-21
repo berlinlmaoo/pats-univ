@@ -59,9 +59,10 @@ internal fun cardTokenDeadline(code: JsonObject, requestStartedElapsed: Long): L
 @Composable private fun LiveCardCode(api: Api, member: JsonObject) {
     val requestStarted = remember { longArrayOf(0L) }
     Remote(api, "/api/me/card-token", pollMs = 25_000, placeholder = { KtmCard(member) }, onRequestStarted = { requestStarted[0] = android.os.SystemClock.elapsedRealtime() }) { code, reload ->
-        var remaining by remember(code) { mutableIntStateOf(0) }
-        LaunchedEffect(code) {
-            val deadline = cardTokenDeadline(code, requestStarted[0])
+        val deadline = remember(code) { cardTokenDeadline(code, requestStarted[0]) }
+        // A fresh response must never introduce an expired frame and dispose the enlarged dialog.
+        var remaining by remember(code) { mutableIntStateOf(((deadline - android.os.SystemClock.elapsedRealtime()) / 1000).toInt().coerceAtLeast(0)) }
+        LaunchedEffect(deadline) {
             while (true) { remaining = ((deadline - android.os.SystemClock.elapsedRealtime()) / 1000).toInt().coerceAtLeast(0); delay(1000) }
         }
         if (remaining > 0) {
