@@ -35,7 +35,14 @@ struct APIError: LocalizedError {
     let code: String
     var status: Int = 0
     var params: [String: JSON] = [:]
-    var errorDescription: String? { L.error(code, params: params) }
+    var fields: [String: JSON] = [:]
+    var errorDescription: String? {
+        if let key = fields.sorted(by: { $0.key < $1.key }).first?.value.text,
+           key.hasPrefix("validation.") || key.hasPrefix("ux.") {
+            return L.t(key, params.mapValues(\.text))
+        }
+        return L.error(code, params: params)
+    }
     var invalidSession: Bool { status == 401 || ["UNAUTHENTICATED", "ACCOUNT_DISABLED"].contains(code) }
 }
 
@@ -176,6 +183,90 @@ actor APIClient {
             throw e
         }
     }
+    /// Evidence goes only to this authenticated endpoint; never through a public/signed upload.
+    func uploadPosterProof(eventID: String, image: Data, contentType: String) async throws -> JSON {
+        guard !image.isEmpty else { throw APIError(code: "VALIDATION", fields: ["image": .str("validation.flyerRequired")]) }
+        guard image.count <= 5 * 1024 * 1024 else { throw APIError(code: "VALIDATION", fields: ["image": .str("validation.flyerTooLarge")]) }
+        let extensions = ["image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"]
+        guard let ext = extensions[contentType] else { throw APIError(code: "VALIDATION", fields: ["image": .str("validation.flyerType")]) }
+        guard UUID(uuidString: eventID) != nil else { throw APIError(code: "VALIDATION") }
+        let boundary = "PATS-" + UUID().uuidString
+        var body = Data()
+        func append(_ text: String) { body.append(Data(text.utf8)) }
+        append("--\(boundary)\r\nContent-Disposition: form-data; name=\"eventId\"\r\n\r\n\(eventID)\r\n")
+        append("--\(boundary)\r\nContent-Disposition: form-data; name=\"image\"; filename=\"proof.\(ext)\"\r\nContent-Type: \(contentType)\r\n\r\n")
+        body.append(image); append("\r\n--\(boundary)--\r\n")
+        let bytes = try await authenticatedData("POST", url: Config.url("/api/me/poster-proof"), body: body, contentType: "multipart/form-data; boundary=\(boundary)")
+        guard let result = try? JSON.parse(bytes), result.exists else { throw APIError(code: "INTERNAL") }
+        return result
+    }
+    /// Proof images are private. Refuse external origins and unrelated credential-bearing routes.
+    func privateImage(path: String) async throws -> Data {
+        let base = Config.baseURL
+        guard let url = URL(string: path, relativeTo: base)?.absoluteURL,
+              url.scheme == base.scheme, url.host == base.host, url.port == base.port,
+              url.user == nil, url.password == nil else { throw APIError(code: "MEDIA_INVALID") }
+        let parts = url.path.split(separator: "/")
+        guard parts.count == 4, parts[0] == "api", parts[1] == "poster-proofs", parts[3] == "image",
+              UUID(uuidString: String(parts[2])) != nil else { throw APIError(code: "MEDIA_INVALID") }
+        let bytes = try await authenticatedData("GET", url: url, accept: "image/*, application/json")
+        guard !bytes.isEmpty, bytes.count <= 5 * 1024 * 1024 else { throw APIError(code: "MEDIA_INVALID") }
+        return bytes
+    }
+    /// Approved event flyers are public; sharing sends no account credentials.
+    func eventPosterImage(path: String) async throws -> Data {
+        let base = Config.baseURL
+        guard let url = URL(string: path, relativeTo: base)?.absoluteURL,
+              url.scheme == base.scheme, url.host == base.host, url.port == base.port,
+              url.user == nil, url.password == nil else { throw APIError(code: "MEDIA_INVALID") }
+        let parts = url.path.split(separator: "/")
+        guard parts.count == 4, parts[0] == "api", parts[1] == "events", parts[3] == "flyer",
+              UUID(uuidString: String(parts[2])) != nil else { throw APIError(code: "MEDIA_INVALID") }
+        var request = URLRequest(url: url); request.setValue("image/*", forHTTPHeaderField: "Accept")
+        let bytes: Data; let response: URLResponse
+        do { (bytes, response) = try await transport.data(for: request) }
+        catch { if Task.isCancelled { throw CancellationError() }; throw APIError(code: "NETWORK") }
+        guard let status = (response as? HTTPURLResponse)?.statusCode, (200..<300).contains(status),
+              !bytes.isEmpty, bytes.count <= 5 * 1024 * 1024 else { throw APIError(code: "MEDIA_INVALID") }
+        return bytes
+    }
+    private func authenticatedData(_ method: String, url: URL, body: Data? = nil, contentType: String? = nil, accept: String = "application/json") async throws -> Data {
+        let epoch = generation
+        func send(_ token: String) async throws -> Data {
+            var request = URLRequest(url: url); request.httpMethod = method; request.httpBody = body
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            request.setValue(accept, forHTTPHeaderField: "Accept")
+            if let contentType { request.setValue(contentType, forHTTPHeaderField: "Content-Type") }
+            let bytes: Data; let response: URLResponse
+            do { (bytes, response) = try await transport.data(for: request) }
+            catch { if Task.isCancelled { throw CancellationError() }; throw APIError(code: "NETWORK") }
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            guard (200..<300).contains(status) else {
+                let result = (try? JSON.parse(bytes)) ?? .null
+                var params = result["params"].object
+                if result["error"]["retryAfter"].exists { params["seconds"] = result["error"]["retryAfter"] }
+                throw APIError(code: result["error"]["code"].text.isEmpty ? "INTERNAL" : result["error"]["code"].text, status: status, params: params, fields: result["error"]["fields"].object)
+            }
+            return bytes
+        }
+        do {
+            let token = try await accessToken()
+            guard epoch == generation, session.exists else { throw CancellationError() }
+            let data: Data
+            do { data = try await send(token) }
+            catch let error as APIError where error.status == 401 {
+                guard epoch == generation, session.exists else { throw CancellationError() }
+                let next = try await accessToken(forceFor: token)
+                guard epoch == generation, session.exists else { throw CancellationError() }
+                data = try await send(next)
+            }
+            guard epoch == generation, session.exists else { throw CancellationError() }
+            return data
+        } catch let error as APIError {
+            if error.invalidSession && epoch == generation { clear() }
+            throw error
+        }
+    }
     private func accessToken(forceFor rejected: String? = nil) async throws -> String {
         guard session.exists, session["_origin"].text == Config.baseURL.absoluteString else { throw APIError(code: "UNAUTHENTICATED", status: 401) }
         let current = session["accessToken"].text
@@ -211,7 +302,7 @@ actor APIClient {
         guard (200..<300).contains(status) else {
             var params = result["params"].object
             if result["error"]["retryAfter"].exists { params["seconds"] = result["error"]["retryAfter"] }
-            throw APIError(code: result["error"]["code"].text.isEmpty ? "INTERNAL" : result["error"]["code"].text, status: status, params: params)
+            throw APIError(code: result["error"]["code"].text.isEmpty ? "INTERNAL" : result["error"]["code"].text, status: status, params: params, fields: result["error"]["fields"].object)
         }
         guard result.exists else { throw APIError(code: "INTERNAL") }
         return result

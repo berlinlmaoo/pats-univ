@@ -240,7 +240,7 @@ struct AdminHomeView: View {
     @Environment(\.scenePhase) private var phase
     @EnvironmentObject private var store: AppStore
     @StateObject private var home = Resource()
-    private let queues = ["claims", "reservations", "deposits", "roaming", "recapsDue", "hubAccess", "reencode", "regionChanges", "content", "myContent"]
+    private let queues = ["posterProofs", "claims", "reservations", "deposits", "roaming", "reportsDue", "recapsDue", "hubAccess", "reencode", "regionChanges", "content", "myContent"]
     var body: some View {
         Page(title: "ux.home.adminTitle") {
             ResourceState(resource: home) { await load() }
@@ -266,6 +266,7 @@ struct AdminHomeView: View {
                         let queue = home.data["pending"][key]
                         Button {
                             if key == "recapsDue" { store.link = .recap("") }
+                            else if key == "reportsDue" { store.routeNotification(.object(["screen": .str("adminEventReport"), "requiresAdminMode": .bool(true), "onlyDue": .bool(true)])) }
                             else if key == "regionChanges" { store.link = .dashboard("/regional?tab=region", "ux.workspace.pending.regionChanges") }
                             else if key == "reencode" { store.link = .dashboard("/cards?tab=requests", "ux.workspace.pending.reencode") }
                             else { store.routeNotification(queue["target"]) }
@@ -404,10 +405,16 @@ struct NotificationTaskDestination: View {
     var body: some View {
         switch payload["screen"].text {
         case "event":
-            if store.member.exists { EventDetailView(eventID: eventID) }
+            if store.member.exists { EventDetailView(eventID: eventID, initialProofID: payload["proofId"].text) }
             else { AdminModeRequired(capability: "checkin.scan") { EventDetailView(eventID: eventID, admin: true) } }
         case "adminEvent":
             if eventID.isEmpty { EventsView(admin: true) } else { EventDetailView(eventID: eventID, admin: true) }
+        case "adminEventReport":
+            AdminModeRequired(capability: "city.operations") {
+                if eventID.isEmpty { EventReportListView(onlyDue: payload["onlyDue"].bool) } else { EventReportView(eventID: eventID) }
+            }
+        case "adminPosterProofs":
+            AdminModeRequired(capability: "promoter.manage") { PosterProofReviewView(eventID: eventID, proofID: payload["proofId"].text) }
         case "attendance":
             if payload["requiresAdminMode"].bool { AttendanceView(eventID: eventID) }
             else if !store.member.exists { StaffMemberState() }

@@ -46,6 +46,7 @@ enum UXNotificationTarget: Equatable {
             "reservationRequested": ("adminReservations", true), "reservationDecided": ("reservation", false),
             "roamingRequested": ("adminRoaming", true), "roamingDecided": ("roaming", false),
             "claimDecided": ("claims", false), "reencodeApproved": ("adminMemberCard", true), "reencodeRejected": ("adminMemberCard", true),
+            "posterProofDecided": ("event", false),
             "contentSubmitted": ("adminContentQueue", true), "contentDecided": ("adminEventContent", true),
             "cardShipped": ("card", false), "cardDelivered": ("card", false), "checkIn": ("attendance", false),
             "hubMention": (data["conversationId"].text.isEmpty ? "hub" : "conversation", true)

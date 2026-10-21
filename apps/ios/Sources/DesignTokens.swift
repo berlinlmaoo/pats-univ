@@ -6,7 +6,9 @@ static let valueX: CGFloat = 0.0492
 static let valueCap: CGFloat = 0.0312
 static let nameY: CGFloat = 0.398
 static let drinkY: CGFloat = 0.615
+static let quoteY: CGFloat = 0.831
 static let genreY: CGFloat = 0.831
+static let quoteMaxLines: CGFloat = 2
 static let nameMaxW: CGFloat = 0.65
 static let valueMaxW: CGFloat = 0.6
 enum Tile {

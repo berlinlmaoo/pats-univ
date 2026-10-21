@@ -13,12 +13,13 @@ struct AdminEventWorkspace: View {
     private var event: JSON { workspace["event"] }
     let reload: () async -> Void
     @State private var section = "overview"
+    @EnvironmentObject private var store: AppStore
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.padding) {
             ScrollView(.horizontal) {
                 HStack {
-                    ForEach(["overview", "attendance", "reservations", "claims", "rewards", "draw", "recap"], id: \.self) { item in
-                        Button(L.t("ux.workspace." + item)) { section = item }.buttonStyle(PATSButtonStyle(variant: section == item ? .maroon : .secondary)).fixedSize()
+                    ForEach(["overview", "attendance", "reservations", "claims", "rewards", "draw", "report", "posterProofs", "recap"].filter { $0 != "posterProofs" || store.can("promoter.manage") }, id: \.self) { item in
+                        Button(L.t(item == "posterProofs" ? "ux.posterProof.queueTitle" : "ux.workspace." + item)) { section = item }.buttonStyle(PATSButtonStyle(variant: section == item ? .maroon : .secondary)).fixedSize()
                     }
                 }
             }.scrollIndicators(.hidden)
@@ -34,6 +35,14 @@ struct AdminEventWorkspace: View {
             case "rewards": NavigationRow(title: "app.tabRewards", icon: "gift") { RewardValidationView(initialEventID: event.id) }
             case "draw": DrawView(eventID: event.id, ended: EventJourneyPolicy.ended(event))
             case "recap": NavigationRow(title: "ux.workspace.recap", icon: "chart.bar.doc.horizontal") { EventRecapView(eventID: event.id) }
+            case "report": NavigationRow(title: "ux.report.title", subtitle: L.t(workspace["report"]["report"].exists ? "ux.report.reported" : "ux.report.notFilled"), icon: "doc.text") { EventReportView(eventID: event.id) }
+            case "posterProofs":
+                Panel {
+                    ForEach(["PENDING", "APPROVED", "REJECTED"], id: \.self) { status in
+                        HStack { Badge(value: status); Spacer(); CountChip(count: workspace["posterProofs"]["byStatus"][status].int) }
+                    }
+                    NavigationRow(title: "ux.posterProof.queueTitle", icon: "photo.badge.checkmark") { PosterProofReviewView(eventID: event.id) }
+                }
             default:
                 EventPosterHighlight(event: event)
                 EventTiming(event: event)
@@ -42,8 +51,9 @@ struct AdminEventWorkspace: View {
                     Text(L.t("ux.recap.sold")).font(Theme.title(17))
                     DetailRow(key: "ux.recap.soldTable", value: L.count(workspace["reservations"]["sold"]["table"].int))
                     DetailRow(key: "ux.recap.soldSofa", value: L.count(workspace["reservations"]["sold"]["sofa"].int))
-                    DetailRow(key: "ux.recap.fdcSold", value: workspace["recap"]["fdcSold"]["value"].exists ? L.count(workspace["recap"]["fdcSold"]["value"].int) : "—")
-                    Text(L.t("ux.recap.fdcPending")).font(Theme.body(13)).foregroundStyle(Theme.muted)
+                    DetailRow(key: "ux.recap.fdcSold", value: EventReportFDC.value(workspace["recap"]["fdcSold"]).map(L.count) ?? L.t("ux.report.notFilled"))
+                    Text(L.t("ux.report.fdcHint")).font(Theme.body(13)).foregroundStyle(Theme.muted)
+                    NavigationRow(title: "ux.report.title", icon: "doc.text") { EventReportView(eventID: event.id) }
                 }
                 EventContentPanel(event: event, content: workspace["content"])
             }
@@ -62,6 +72,7 @@ struct AdminEventActions: View {
             Text(L.t("app.adminCheckedInCount", ["count": L.count(event["checkInCount"].int)])).font(Theme.title(20))
             if lifecycle["scanUnavailable"].text == "checkInEnded" {
                 Notice(text: L.t("ux.workspace.checkInEnded", ["time": L.date(lifecycle["checkInClosesAt"].text, zone: event["timing"]["timezone"].text)]))
+                NavigationRow(title: "ux.report.title", icon: "doc.text") { EventReportView(eventID: event.id) }
                 NavigationRow(title: "ux.workspace.recap", icon: "chart.bar") { EventRecapView(eventID: event.id) }
             } else if lifecycle["canPublish"].bool {
                 Notice(text: L.t("ux.editor.publishHint"))
