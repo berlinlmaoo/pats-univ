@@ -29,11 +29,11 @@ export const GET = route(async (_req: Request, { params }: Params) => {
   if (kind === 'batch.pdf') [key, download] = [batch.batchPdfUrl, `${label}-batch.pdf`];
   else if (kind === 'manifest.csv') [key, download] = [batch.manifestCsvUrl, `${label}-manifest.csv`];
   else if ((kind === 'members' || kind === 'proof') && name?.endsWith('.pdf')) {
-    const card = await db.card.findFirst({ where: { id: name.slice(0, -4), batchId: id }, include: { member: { select: { nim: true, fullName: true, favoriteDrink: true, favoriteGenre: true } } } });
+    const card = await db.card.findFirst({ where: { id: name.slice(0, -4), batchId: id }, include: { member: { select: { nim: true, fullName: true, favoriteDrink: true, favoriteGenre: true, quotes: true } } } });
     if (!card) throw new AppError('NOT_FOUND', 404);
     if (kind === 'proof') {
       if (!card.ndefToken) throw new AppError('NOT_FOUND', 404);
-      const pdf = await renderCardPdf({ fullName: card.member.fullName, nim: card.member.nim, favoriteDrink: card.member.favoriteDrink, favoriteGenre: card.member.favoriteGenre, url: cardUrl(card.ndefToken) }, { proof: true });
+      const pdf = await renderCardPdf({ fullName: card.member.fullName, nim: card.member.nim, favoriteDrink: card.member.favoriteDrink, favoriteGenre: card.member.favoriteGenre, quote: card.member.quotes, url: cardUrl(card.ndefToken) }, { proof: true });
       return new Response(pdf as BodyInit, {
         headers: { 'Content-Type': 'application/pdf', 'Content-Disposition': `inline; filename="${label}-${card.member.nim}-proof.pdf"`, 'Cache-Control': 'private, no-store' },
       });

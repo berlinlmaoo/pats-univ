@@ -99,7 +99,18 @@ export async function issueOtp(input: {
     expiresAt: expiresAt.toISOString(),
     resendAfter: OTP_RESEND_SECONDS,
     ...(displayCode ? { demoCode: displayCode } : {}),
+    // D7: say exactly where the code went and how long it lasts. The auth method itself is unchanged.
+    destination: maskEmail(input.email),
+    channel: 'email',
+    ttlSeconds: OTP_TTL_MINUTES * 60,
   };
+}
+
+/** "rara.anindya@gmail.com" → "ra***@gmail.com": enough to recognise, not to harvest. */
+export function maskEmail(email: string): string {
+  const [local = '', domain = ''] = email.split('@');
+  const shown = local.length <= 2 ? local.slice(0, 1) : local.slice(0, 2);
+  return `${shown}***@${domain}`;
 }
 
 /**

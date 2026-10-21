@@ -38,7 +38,7 @@ export function EventDialogButton({
   event,
 }: {
   cities: CityOption[];
-  defaults: { opensBeforeMinutes: number; date: string };
+  defaults: { opensBeforeMinutes: number; date: string; descriptionNeedsApproval?: boolean };
   event?: { id: string; values: EventFormValues; cityLocked: boolean };
 }) {
   const t = useT();
@@ -71,7 +71,7 @@ function EventForm({
   open: boolean;
   onClose: () => void;
   cities: CityOption[];
-  defaults: { opensBeforeMinutes: number; date: string };
+  defaults: { opensBeforeMinutes: number; date: string; descriptionNeedsApproval?: boolean };
   event?: { id: string; values: EventFormValues; cityLocked: boolean };
 }) {
   const t = useT();
@@ -181,7 +181,13 @@ function EventForm({
             />
           </Field>
         </div>
-        <Field label={t('events.description')} htmlFor="description" error={err('description')} optionalLabel={t('common.optional')}>
+        <Field
+          label={t('events.description')}
+          htmlFor="description"
+          error={err('description')}
+          optionalLabel={t('common.optional')}
+          hint={defaults.descriptionNeedsApproval ? t('ux.content.approvalHint') : undefined}
+        >
           <Textarea id="description" name="description" rows={3} defaultValue={v?.description} placeholder={t('events.descriptionPlaceholder')} />
         </Field>
         <label className="flex cursor-pointer items-start gap-3 rounded-control border border-border px-3.5 py-3 hover:bg-surface-hover">

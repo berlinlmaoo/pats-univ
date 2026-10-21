@@ -28,7 +28,8 @@ export const GET = route(async (req: Request, ctx: Context) => {
         p.get("cursor"),
       ),
     );
-  if (action === "operations") return ok(await social.operations(user));
+  if (action === "operations") return ok(await social.operations(user, { eventId: p.get("eventId") }));
+  if (action === "roaming-options") return ok(await social.roamingOptions(user, p.get("eventId") ?? ""));
   if (action === "slots")
     return ok(await social.reservationOptions(user, p.get("eventId") ?? ""));
   if (action === "token") {

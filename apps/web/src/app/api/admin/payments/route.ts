@@ -7,7 +7,7 @@ import { recordDownPayment, recordCardFee } from '@/lib/membership';
 export const GET = route(async (req: Request) => {
   const cityId = cityScope(await requireCrew(req));
   return ok({ cards: await db.card.findMany({ where: { replacementFee: { not: null }, member: { cityId } }, include: { member: { select: { fullName: true, nim: true } } }, orderBy: { createdAt: 'desc' } }),
-    reservations: await db.reservation.findMany({ where: { status: 'CONFIRMED', event: { cityId } }, include: { member: { select: { fullName: true } }, event: { select: { title: true } } }, orderBy: { createdAt: 'desc' } }) });
+    reservations: await db.reservation.findMany({ where: { status: { in: ['PENDING', 'CONFIRMED'] }, event: { cityId } }, include: { member: { select: { fullName: true } }, event: { select: { title: true } } }, orderBy: { createdAt: 'desc' } }) });
 });
 export const POST = route(async (req: Request) => {
   const user = await requireCrew(req);

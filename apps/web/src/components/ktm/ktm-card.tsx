@@ -8,9 +8,9 @@ import { useT } from '@/components/i18n/provider';
 import { cn } from '@/lib/cn';
 
 /**
- * The KTM exactly as printed (DESIGN.md "KTM card"): the official blank front with the member's
- * values in the card's heavy black caps, a white QR inside the artwork's maroon tile, and the
- * official back on the other side. Everything scales with the card's own width (container query
+ * The KTM exactly as printed (DESIGN.md "KTM card"): the official blank front (21 Oct 2026 artwork:
+ * NAME / FAVORITE DRINK / QOTD) with the member's values in the card's heavy black caps, a white QR
+ * inside the artwork's maroon tile, and the official back on the other side. Everything scales with the card's own width (container query
  * units), so it is identical at 280 px and at 800 px.
  */
 
@@ -26,7 +26,7 @@ type Side = 'front' | 'back';
 export function KtmCard({
   name,
   drink,
-  genre,
+  quote,
   qrValue,
   side: controlledSide,
   flippable = true,
@@ -35,7 +35,8 @@ export function KtmCard({
 }: {
   name: string;
   drink: string;
-  genre: string;
+  /** QOTD: the member's quote (third line of the 21 Oct 2026 card). */
+  quote: string;
   /** Encoded in the QR (the card URL). Null/empty leaves the maroon tile empty, as on an unissued card. */
   qrValue?: string | null;
   /** Force one side (e.g. a thumbnail); otherwise the card starts on the front and can flip. */
@@ -79,7 +80,7 @@ export function KtmCard({
             />
             <Value label={t('ktm.name')} value={name} y={ktm.nameY} maxW={ktm.nameMaxW} />
             <Value label={t('ktm.drink')} value={drink} y={ktm.drinkY} maxW={ktm.valueMaxW} />
-            <Value label={t('ktm.genre')} value={genre} y={ktm.genreY} maxW={ktm.valueMaxW} />
+            <Value label={t('ux.card.fields.quote')} value={quote} y={ktm.quoteY} maxW={ktm.valueMaxW} lines={ktm.quoteMaxLines} />
             {qrValue ? <Qr value={qrValue} label={t('ktm.qrLabel')} /> : null}
           </Face>
           <Face side="back" hidden={side !== 'back'}>
@@ -134,9 +135,10 @@ function Face({ side, hidden, children }: { side: Side; hidden: boolean; childre
 
 /**
  * One value under its printed label: heavy black caps at the card's size, shrunk to fit its width;
- * a value too long even at 60% wraps to two lines instead (never clipped).
+ * a value too long even at 60% wraps to two lines instead (never clipped). With `lines` (QOTD), the
+ * value first wraps at full size and only shrinks when `lines` full-size lines are not enough.
  */
-function Value({ label, value, y, maxW }: { label: string; value: string; y: number; maxW: number }) {
+function Value({ label, value, y, maxW, lines = 0 }: { label: string; value: string; y: number; maxW: number; lines?: number }) {
   const ref = useRef<HTMLSpanElement>(null);
   const [fit, setFit] = useState<{ scale: number; wrap: boolean }>({ scale: 1, wrap: false });
   const text = value.trim().toLocaleUpperCase('id-ID');
@@ -157,7 +159,24 @@ function Value({ label, value, y, maxW }: { label: string; value: string; y: num
       el.style.whiteSpace = prev.whiteSpace;
       if (!natural || !room) return;
       const ratio = room / natural;
-      const next = ratio >= 0.6 ? { scale: Math.min(1, ratio), wrap: false } : { scale: Math.max(0.42, Math.min(0.6, ratio * 1.9)), wrap: true };
+      let next = ratio >= 0.6 ? { scale: Math.min(1, ratio), wrap: false } : { scale: Math.max(0.42, Math.min(0.6, ratio * 1.9)), wrap: true };
+      if (lines > 1 && ratio < 1) {
+        // Wrap at full size; shrink step by step until the text fits the height of `lines` full-size lines.
+        const prevLineHeight = el.style.lineHeight;
+        el.style.whiteSpace = 'normal';
+        el.style.lineHeight = '1.04';
+        el.style.fontSize = `${VALUE_CQW}cqw`;
+        const maxHeight = parseFloat(getComputedStyle(el).fontSize) * 1.04 * lines + 0.5;
+        let scale = 1;
+        while (scale > 0.42 && el.getBoundingClientRect().height > maxHeight) {
+          scale = Math.round((scale - 0.04) * 100) / 100;
+          el.style.fontSize = `${VALUE_CQW * scale}cqw`;
+        }
+        el.style.fontSize = prev.fontSize;
+        el.style.whiteSpace = prev.whiteSpace;
+        el.style.lineHeight = prevLineHeight;
+        next = { scale: Math.max(0.42, scale), wrap: true };
+      }
       setFit((f) => (f.scale === next.scale && f.wrap === next.wrap ? f : next));
     };
     measure();
@@ -171,7 +190,7 @@ function Value({ label, value, y, maxW }: { label: string; value: string; y: num
       alive = false;
       document.fonts?.removeEventListener('loadingdone', onFonts);
     };
-  }, [text]);
+  }, [text, lines]);
 
   const style: CSSProperties = {
     left: pct(ktm.valueX),

@@ -84,6 +84,8 @@ function ClaimReview({ claim, reload }: { claim: ClaimDto; reload: () => Promise
   const [pax, setPax] = useState(String(claim.guestCount)), [reservations, setReservations] = useState(String(claim.reservationCount));
   const [reason, setReason] = useState(''), [error, setError] = useState(''), [busy, setBusy] = useState(false);
   const [decision, setDecision] = useState<'APPROVED' | 'REJECTED' | null>(null);
+  // F22: a member claim's guest list is only reviewable when the setting allows it (server rule).
+  const glAllowed = claim.glAllowed ?? claim.formType === 'PR';
   return (
     <Card className="space-y-4 p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -97,10 +99,12 @@ function ClaimReview({ claim, reload }: { claim: ClaimDto; reload: () => Promise
         <ClaimStatusBadge status={claim.status} />
       </div>
       <dl className="grid grid-cols-2 gap-3 sm:max-w-sm">
-        <div>
-          <dt className="ktm-label text-muted">{t('phase5.guestCount')}</dt>
-          <dd className="mt-0.5 text-title3 tabular-nums">{formatCount(claim.guestCount)}</dd>
-        </div>
+        {glAllowed && (
+          <div>
+            <dt className="ktm-label text-muted">{t('phase5.guestCount')}</dt>
+            <dd className="mt-0.5 text-title3 tabular-nums">{formatCount(claim.guestCount)}</dd>
+          </div>
+        )}
         <div>
           <dt className="ktm-label text-muted">{t('phase5.reservationCount')}</dt>
           <dd className="mt-0.5 text-title3 tabular-nums">{formatCount(claim.reservationCount)}</dd>
@@ -115,10 +119,13 @@ function ClaimReview({ claim, reload }: { claim: ClaimDto; reload: () => Promise
       {claim.status === 'PENDING' ? (
         <div className="space-y-4 border-t border-border pt-4">
           <p className="text-caption text-muted">{t('phase5.claimAdjustHint')}</p>
+          {!glAllowed && <p className="text-caption text-muted">{t('ux.claims.glNotAllowed')}</p>}
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field htmlFor={`gl-${claim.id}`} label={t('phase5.guestCount')}>
-              <Input id={`gl-${claim.id}`} type="number" inputMode="numeric" min={0} value={pax} onChange={(e) => setPax(e.target.value)} />
-            </Field>
+            {glAllowed && (
+              <Field htmlFor={`gl-${claim.id}`} label={t('phase5.guestCount')}>
+                <Input id={`gl-${claim.id}`} type="number" inputMode="numeric" min={0} value={pax} onChange={(e) => setPax(e.target.value)} />
+              </Field>
+            )}
             <Field htmlFor={`res-${claim.id}`} label={t('phase5.reservationCount')}>
               <Input id={`res-${claim.id}`} type="number" inputMode="numeric" min={0} value={reservations} onChange={(e) => setReservations(e.target.value)} />
             </Field>
@@ -127,7 +134,7 @@ function ClaimReview({ claim, reload }: { claim: ClaimDto; reload: () => Promise
             <Textarea id={`why-${claim.id}`} value={reason} onChange={(e) => setReason(e.target.value)} />
           </Field>
           <div className="flex flex-wrap gap-2">
-            <Button disabled={busy || !pax || !reservations} onClick={() => setDecision('APPROVED')}>
+            <Button disabled={busy || (glAllowed && !pax) || !reservations} onClick={() => setDecision('APPROVED')}>
               {t('phase5.approve')}
             </Button>
             <Button variant="danger" disabled={busy || reason.trim().length < 3} onClick={() => setDecision('REJECTED')}>
@@ -152,7 +159,7 @@ function ClaimReview({ claim, reload }: { claim: ClaimDto; reload: () => Promise
         onConfirm={async () => {
           setBusy(true);
           setError('');
-          const result = await postJson('/api/admin/loyalty/claims', { id: claim.id, decision, guestCount: Number(pax), reservationCount: Number(reservations), reason });
+          const result = await postJson('/api/admin/loyalty/claims', { id: claim.id, decision, ...(glAllowed ? { guestCount: Number(pax) } : {}), reservationCount: Number(reservations), reason });
           setBusy(false);
           setDecision(null);
           if (!result.ok) setError(result.error.messageKey);

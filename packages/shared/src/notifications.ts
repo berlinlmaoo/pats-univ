@@ -24,6 +24,8 @@ export const NOTIFICATION_KINDS = [
   'cardDelivered',
   'reencodeApproved',
   'reencodeRejected',
+  'contentSubmitted',
+  'contentDecided',
 ] as const;
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
 
@@ -45,6 +47,9 @@ export const NOTIFICATION_CATEGORY: Record<NotificationKind, NotificationCategor
   // Crew-facing and account-level: always delivered.
   reencodeApproved: 'account',
   reencodeRejected: 'account',
+  // Poster/description approval between a regional admin and HQ (staff work).
+  contentSubmitted: 'account',
+  contentDecided: 'account',
 };
 
 /** Kinds whose copy HQ can change per city (the member-facing event and card messages). */

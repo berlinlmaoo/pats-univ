@@ -95,6 +95,8 @@ export const reservationSchema = z.object({
 export const roamingSchema = z.object({
   eventId: id,
   type: z.enum(["ATTENDANCE", "SOCIAL_HUB"]),
+  /** UX redesign (F11): the event the member started from. When sent, it must equal eventId. */
+  originEventId: id.optional(),
 });
 export const decisionSchema = z.object({
   id,

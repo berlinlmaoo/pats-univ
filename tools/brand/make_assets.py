@@ -5,7 +5,10 @@ artwork). Only the generated sizes are committed. The artwork is only ever resiz
 canvas, or stripped of its fully transparent margin: never cropped into, masked, recoloured or
 redrawn (docs/DESIGN.md §7).
 
-    tools/brand/make-assets.sh ~/pats-univ-brand/official ~/pats-univ-brand/ktm
+    tools/brand/make-assets.sh ~/pats-univ-brand/official ~/pats-univ-brand/ktm-21oct
+
+The KTM folder may hold the 21 Oct 2026 masters (ktm-front-blank.png / ktm-back.png, default print
+template ktm-2026-qotd) or the 18 Oct ones (blank-front.png / example-back.png, template ktm-2026).
 
 Runs anywhere Python + Pillow exist (make-assets.sh uses a throwaway python:3.12-slim container).
 """
@@ -19,7 +22,7 @@ from PIL import Image
 ROOT = Path(__file__).resolve().parents[2]
 WEB = ROOT / 'apps/web/public'
 MOBILE = ROOT / 'apps/mobile/assets'
-PRINT = ROOT / 'apps/web/card-templates/ktm-2026'
+TEMPLATES = ROOT / 'apps/web/card-templates'
 BRAND = json.loads((ROOT / 'packages/shared/src/colors.json').read_text())['brand']
 
 
@@ -82,8 +85,14 @@ def main(official: str, ktm: str) -> None:
 
     # KTM: the official blank front and the back, for screens (WebP) and for print (PNG, 300+ dpi).
     k = Path(ktm)
-    front = Image.open(k / 'blank-front.png').convert('RGB')
-    back = Image.open(k / 'example-back.png').convert('RGB')  # the back carries no personal data
+    if (k / 'ktm-front-blank.png').exists():  # 21 Oct 2026 artwork: NAME / FAVORITE DRINK / QOTD
+        front = Image.open(k / 'ktm-front-blank.png').convert('RGB')
+        back = Image.open(k / 'ktm-back.png').convert('RGB')
+        PRINT = TEMPLATES / 'ktm-2026-qotd'
+    else:  # 18 Oct 2026 artwork: NAME / FAVORITE DRINK / FAVORITE GENRE
+        front = Image.open(k / 'blank-front.png').convert('RGB')
+        back = Image.open(k / 'example-back.png').convert('RGB')  # the back carries no personal data
+        PRINT = TEMPLATES / 'ktm-2026'
     (WEB / 'ktm').mkdir(parents=True, exist_ok=True)
     for w in (800, 1600):
         width(front, w).save(WEB / f'ktm/front-{w}.webp', quality=86, method=6)

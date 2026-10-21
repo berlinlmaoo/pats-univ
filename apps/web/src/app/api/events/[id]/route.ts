@@ -1,10 +1,12 @@
 import type { EventDetailResponse } from '@pats/shared';
 import { requireMember } from '@/lib/auth/roles';
 import { db } from '@/lib/db';
-import { eventInclude, toEventSummary } from '@/lib/events/service';
+import { eventInclude } from '@/lib/events/service';
 import { AppError } from '@/lib/http/errors';
 import { ok, route } from '@/lib/http/respond';
+import { memberEventDetail } from '@/lib/ux/member';
 
+/** Member event detail: the event, its journey (D4/D5) and my reservation with its deposit. */
 export const GET = route(async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
   const { member } = await requireMember(req);
   const { id } = await params;
@@ -13,12 +15,6 @@ export const GET = route(async (req: Request, { params }: { params: Promise<{ id
     include: eventInclude,
   });
   if (!event) throw new AppError('NOT_FOUND', 404);
-  const mine = await db.checkIn.findUnique({
-    where: { eventId_memberId: { eventId: id, memberId: member.id } },
-    select: { checkedInAt: true, method: true },
-  });
-  const body: EventDetailResponse = {
-    event: toEventSummary(event, { myCheckIn: mine ? { checkedInAt: mine.checkedInAt.toISOString(), method: mine.method } : null }),
-  };
+  const body: EventDetailResponse = await memberEventDetail(member, event);
   return ok(body);
 });

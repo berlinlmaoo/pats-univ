@@ -5,11 +5,16 @@ import { AppError } from '../http/errors';
 import { hit } from '../rate-limit';
 import { requireApiUser, type AuthUser } from './current-user';
 
-/** App member with their profile. Inactive members are already refused by session checks. */
+/**
+ * App member with their profile. Inactive members are already refused by session checks.
+ * Personal participation follows the membership, not the role (UX01, F03): a staff account with
+ * its own member profile may use member endpoints; one without gets FORBIDDEN with
+ * params.reason = NO_MEMBERSHIP so the app can show the "no personal member card" state.
+ */
 export async function requireMember(req: Request) {
-  const user = await requireApiUser(req, ['MEMBER']);
+  const user = await requireApiUser(req);
   const member = await db.member.findUnique({ where: { userId: user.id }, select: { id: true, cityId: true, status: true } });
-  if (!member) throw new AppError('FORBIDDEN', 403, 'No member profile');
+  if (!member) throw new AppError('FORBIDDEN', 403, 'No member profile', { params: { reason: 'NO_MEMBERSHIP' } });
   if (member.status !== 'ACTIVE') throw new AppError('ACCOUNT_DISABLED', 403);
   return { user, member };
 }

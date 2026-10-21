@@ -240,6 +240,8 @@ model User {
   settingsChanged      Setting[]         @relation("SettingUpdatedBy")
   reencodeRequested    ReencodeRequest[] @relation("ReencodeRequestedBy")
   reencodeDecided      ReencodeRequest[] @relation("ReencodeDecidedBy")
+  contentSubmitted     EventContentSubmission[] @relation("ContentSubmittedBy")
+  contentDecided       EventContentSubmission[] @relation("ContentDecidedBy")
 
   @@index([role, cityId])
   @@index([phone])
@@ -330,6 +332,7 @@ model Member {
   reservations     Reservation[]
   roamingRequests  RoamingRequest[]
   screenshotEvents ScreenshotEvent[]
+  eventSteps       MemberEventStep[]
 
   @@index([cityId, joinedAt])
   @@index([fullName])
@@ -551,6 +554,8 @@ model Event {
   roamingRequests RoamingRequest[]
   recap           TrafficRecap?
   settings        Setting[]
+  contentSubmissions EventContentSubmission[]
+  memberSteps     MemberEventStep[]
 
   @@index([cityId, startsAt])
   @@index([status])
@@ -1032,4 +1037,45 @@ model PostReaction {
   post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   @@id([postId, userId])
+}
+
+/// A poster/description change for an event (UX redesign D5). A regional admin's change waits for
+/// HQ approval (PENDING) before it reaches Event.description / Event.flyerUrl; HQ's own edits apply
+/// directly and are recorded here as APPROVED. One PENDING row per event (partial unique index).
+model EventContentSubmission {
+  id            String    @id @default(uuid(7))
+  eventId       String
+  submittedById String
+  /// Proposed description; null when only the poster changes.
+  description   String?
+  /// Storage key of the proposed poster; null when only the description changes.
+  posterKey     String?
+  /// PENDING, APPROVED, REJECTED, or WITHDRAWN (replaced by the same event's newer submission).
+  status        String    @default("PENDING")
+  decidedById   String?
+  decidedAt     DateTime?
+  note          String?
+  createdAt     DateTime  @default(now())
+
+  event       Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  submittedBy User  @relation("ContentSubmittedBy", fields: [submittedById], references: [id])
+  decidedBy   User? @relation("ContentDecidedBy", fields: [decidedById], references: [id])
+
+  @@index([status, createdAt])
+  @@index([eventId, createdAt])
+}
+
+/// Home task-flow steps a member marked done by tapping (D4): event, poster, reservation.
+/// Check-in and completion are never stored here; they come from CheckIn and the event end.
+model MemberEventStep {
+  memberId    String
+  eventId     String
+  step        String
+  completedAt DateTime @default(now())
+
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  event  Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@id([memberId, eventId, step])
+  @@index([eventId])
 }

@@ -5,7 +5,7 @@ import { db } from '../db';
 import { getSetting } from '../settings';
 
 /** Cities with their venues, for the event form. Shared with the event page. */
-export async function eventFormOptions(cityId?: string): Promise<{ cities: CityOption[]; defaults: { opensBeforeMinutes: number; date: string } }> {
+export async function eventFormOptions(cityId?: string): Promise<{ cities: CityOption[]; defaults: { opensBeforeMinutes: number; date: string; descriptionNeedsApproval: boolean } }> {
   const [cities, opensBeforeMinutes] = await Promise.all([
     db.city.findMany({
       where: { active: true, id: cityId },
@@ -17,7 +17,8 @@ export async function eventFormOptions(cityId?: string): Promise<{ cities: CityO
   const now = new Date();
   return {
     cities: cities.map(({ timezone, ...c }) => ({ ...c, zoneLabel: zoneLabel(now, timezone) })),
-    defaults: { opensBeforeMinutes, date: toZonedInput(now, cities[0]?.timezone ?? 'Asia/Jakarta').date },
+    // A regional admin (scoped to one city) sends descriptions to HQ for approval (D5).
+    defaults: { opensBeforeMinutes, date: toZonedInput(now, cities[0]?.timezone ?? 'Asia/Jakarta').date, descriptionNeedsApproval: Boolean(cityId) },
   };
 }
 
