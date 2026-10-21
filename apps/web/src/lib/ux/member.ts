@@ -16,6 +16,7 @@ import { batchLabel } from '../cards/service';
 import { eventInclude, toEventSummary, type EventWithPlace } from '../events/service';
 import { getSetting } from '../settings';
 import { paymentOf, recorderNames } from './reservations';
+import { proofFor } from './poster-proof';
 
 export type ActiveMember = { id: string; cityId: string };
 
@@ -112,9 +113,15 @@ async function journeyFor(
   c: { checkIn: { checkedInAt: Date } | null; reservation: { status: string; updatedAt: Date } | null },
   now: Date,
 ): Promise<JourneyStep[]> {
-  const taps = await db.memberEventStep.findMany({ where: { memberId: member.id, eventId: event.id } });
+  const [taps, posterProof, posterShareXp] = await Promise.all([
+    db.memberEventStep.findMany({ where: { memberId: member.id, eventId: event.id } }),
+    proofFor(member.id, event.id),
+    getSetting(db, 'posterShareXp', { cityId: event.cityId }),
+  ]);
   return buildJourney({
     taps: Object.fromEntries(taps.map((t) => [t.step, t.completedAt])) as Partial<Record<TappableStep, Date>>,
+    posterProof,
+    posterShareXp,
     reservation: c.reservation ? { status: c.reservation.status as 'PENDING' | 'CONFIRMED', updatedAt: c.reservation.updatedAt } : null,
     checkIn: c.checkIn,
     ended: event.endsAt.getTime() <= now.getTime(),

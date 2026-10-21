@@ -2,6 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   buildJourney,
   contentDecisionSchema,
+  EVENT_REPORT_FIELDS,
+  eventReportInput,
+  fdcFromReport,
+  posterProofDecisionSchema,
+  sumReports,
   countSold,
   createTranslator,
   dictionaries,
@@ -64,21 +69,36 @@ describe('member event actions (F09)', () => {
   });
 });
 
-describe('Home journey (D4)', () => {
-  const input = { taps: {}, reservation: null, checkIn: null, ended: false, endsAt: later, reservationBonusXp: 25 };
-  it('starts at the event step; tapped steps are done; check-in comes from the server', () => {
+describe('Home journey (D4, blast poster 22 Oct)', () => {
+  const input = { taps: {}, reservation: null, checkIn: null, ended: false, endsAt: later, reservationBonusXp: 25, posterShareXp: 2 };
+  const proof = (status: 'PENDING' | 'APPROVED' | 'REJECTED') => ({ id: 'p', status, imageUrl: '/x', submittedAt: earlier.toISOString(), reviewedAt: status === 'PENDING' ? null : earlier.toISOString(), rejectReason: status === 'REJECTED' ? 'blurry' : null, xpAwarded: status === 'APPROVED' ? 2 : null });
+  it('poster is optional and never current; check-in comes from the server', () => {
     const steps = buildJourney(input);
     expect(steps.map((s) => s.key)).toEqual(['event', 'poster', 'reservation', 'checkIn', 'completed']);
-    expect(steps.map((s) => s.state)).toEqual(['current', 'upcoming', 'upcoming', 'upcoming', 'upcoming']);
-    expect(steps[1]).toMatchObject({ completion: 'tap', pending: 'ownerDecision' });
+    expect(steps.map((s) => s.state)).toEqual(['current', 'optional', 'upcoming', 'upcoming', 'upcoming']);
+    expect(steps[1]).toMatchObject({ completion: 'review', optional: true, rewardXp: 2 });
+    expect(steps[1]).not.toHaveProperty('pending');
     expect(steps[3]!.completion).toBe('server');
-    expect(steps[2]!.bonusXp).toBe(25);
+  });
+
+  it('skipping or an open poster never blocks the next step', () => {
+    const open = buildJourney({ ...input, taps: { event: earlier } });
+    expect(open[1]!.state).toBe('optional');
+    expect(open[2]!.state).toBe('current');
+    const skipped = buildJourney({ ...input, taps: { event: earlier, poster: earlier } });
+    expect(skipped[1]).toMatchObject({ state: 'done', outcome: 'skipped' });
+  });
+
+  it('poster follows the proof review', () => {
+    expect(buildJourney({ ...input, posterProof: proof('PENDING') })[1]).toMatchObject({ state: 'optional', outcome: 'submitted' });
+    expect(buildJourney({ ...input, posterProof: proof('REJECTED') })[1]).toMatchObject({ state: 'optional', outcome: 'rejected' });
+    expect(buildJourney({ ...input, posterProof: proof('APPROVED') })[1]).toMatchObject({ state: 'done', outcome: 'approved' });
   });
 
   it('a confirmed reservation completes its step; a pending one stays current', () => {
-    const taps = { event: earlier, poster: earlier };
+    const taps = { event: earlier };
     const confirmed = buildJourney({ ...input, taps, reservation: { status: 'CONFIRMED', updatedAt: earlier } });
-    expect(confirmed[2]).toMatchObject({ state: 'done', outcome: 'reserved' });
+    expect(confirmed[2]).toMatchObject({ state: 'done', outcome: 'reserved', bonusXp: 25 });
     expect(confirmed[3]!.state).toBe('current');
     const pending = buildJourney({ ...input, taps, reservation: { status: 'PENDING', updatedAt: earlier } });
     expect(pending[2]).toMatchObject({ state: 'current', outcome: 'requested' });
@@ -87,14 +107,34 @@ describe('Home journey (D4)', () => {
   });
 
   it('completed only after a check-in and the event end', () => {
-    const steps = buildJourney({ ...input, taps: { event: earlier, poster: earlier, reservation: earlier }, checkIn: { checkedInAt: earlier }, ended: true });
-    expect(steps.every((s) => s.state === 'done')).toBe(true);
+    const steps = buildJourney({ ...input, taps: { event: earlier, reservation: earlier }, checkIn: { checkedInAt: earlier }, ended: true });
+    expect(steps.filter((s) => !s.optional).every((s) => s.state === 'done')).toBe(true);
   });
 
-  it('only event, poster and reservation can be tapped', () => {
+  it('only event, poster (skip) and reservation can be tapped', () => {
     expect(journeyTapSchema.safeParse({ eventId: 'e', step: 'poster' }).success).toBe(true);
     expect(journeyTapSchema.safeParse({ eventId: 'e', step: 'checkIn' }).success).toBe(false);
     expect(journeyTapSchema.safeParse({ eventId: 'e', step: 'completed' }).success).toBe(false);
+  });
+});
+
+describe('event report (22 Oct)', () => {
+  const full = { tablesSold: 3, sofasSold: 2, fdcSold: 40, paxTotal: 120, membersAttended: 70, nonMembersAttended: 50, newMembers: 8 };
+  it('requires all seven non-negative integers', () => {
+    expect(eventReportInput.safeParse(full).success).toBe(true);
+    expect(eventReportInput.safeParse({ ...full, fdcSold: undefined }).success).toBe(false);
+    expect(eventReportInput.safeParse({ ...full, paxTotal: -1 }).success).toBe(false);
+    expect(eventReportInput.safeParse({ ...full, newMembers: 1.5 }).success).toBe(false);
+  });
+  it('FDC comes from the report; sums add up', () => {
+    expect(fdcFromReport(null)).toEqual({ value: null, status: 'notReported' });
+    expect(fdcFromReport(full)).toEqual({ value: 40, status: 'reported' });
+    expect(sumReports([full, full])).toMatchObject({ fdcSold: 80, paxTotal: 240, newMembers: 16 });
+    expect(EVENT_REPORT_FIELDS).toHaveLength(7);
+  });
+  it('a rejected poster proof needs a reason', () => {
+    expect(posterProofDecisionSchema.safeParse({ decision: 'REJECTED', reason: '' }).success).toBe(false);
+    expect(posterProofDecisionSchema.safeParse({ decision: 'APPROVED' }).success).toBe(true);
   });
 });
 
@@ -154,7 +194,7 @@ describe('notification targets (UX22, F32)', () => {
   });
 
   it('every action label exists in both languages', () => {
-    const kinds = ['reservationRequested', 'reservationDecided', 'roamingRequested', 'roamingDecided', 'claimDecided', 'reencodeApproved', 'contentSubmitted', 'contentDecided', 'cardShipped', 'checkIn', 'hubMention', 'eventBroadcast', 'x'];
+    const kinds = ['reservationRequested', 'reservationDecided', 'roamingRequested', 'roamingDecided', 'claimDecided', 'reencodeApproved', 'contentSubmitted', 'contentDecided', 'posterProofDecided', 'cardShipped', 'checkIn', 'hubMention', 'eventBroadcast', 'x'];
     for (const locale of ['en', 'id'] as const) {
       const t = createTranslator(locale);
       for (const k of kinds) {

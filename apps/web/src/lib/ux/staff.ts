@@ -3,7 +3,7 @@ import {
   can,
   CHECK_IN_METHODS,
   eventPhase,
-  FDC_PENDING,
+  fdcFromReport,
   type AdminScope,
   type CheckInMethod,
   type NotificationTarget,
@@ -18,6 +18,7 @@ import { eventInclude, type EventWithPlace } from '../events/service';
 import { AppError } from '../http/errors';
 import { drawState } from '../loyalty/draw';
 import { reservationCards, soldByEvent } from './reservations';
+import { eventReport } from './event-report';
 
 /** Shown next to the Admin mode switch (D1): "Regional Admin · Jakarta" or "HQ, all cities". */
 export async function adminScope(user: { role: AuthUser['role']; cityId: string | null }): Promise<AdminScope | null> {
@@ -53,13 +54,13 @@ export async function adminHome(user: AuthUser, now = new Date()) {
     db.event.findMany({ where: { ...eventScope, endsAt: { gte: now } }, orderBy: { startsAt: 'asc' }, include: eventInclude, take: 20 }),
     db.event.findMany({
       where: { ...eventScope, endsAt: { lt: now, gte: new Date(now.getTime() - 30 * 86400_000) } },
-      select: { id: true, recap: { select: { id: true } } },
+      select: { id: true, recap: { select: { id: true } }, report: { select: { id: true } } },
     }),
   ]);
   const open = live.filter((e) => eventPhase(e, now) === 'open');
   const next = live.find((e) => eventPhase(e, now) === 'upcoming') ?? null;
   const eventCity = cityId ? { event: { cityId } } : {};
-  const [claims, reservations, deposits, roaming, hubAccess, reencode, regionChanges, content] = await Promise.all([
+  const [claims, reservations, deposits, roaming, hubAccess, reencode, regionChanges, content, posterProofs] = await Promise.all([
     db.xpClaim.count({ where: { status: 'PENDING', ...eventCity } }),
     db.reservation.count({ where: { status: 'PENDING', ...eventCity } }),
     db.reservation.count({ where: { status: { in: ['PENDING', 'CONFIRMED'] }, downPaymentAt: null, ...eventCity } }),
@@ -68,14 +69,18 @@ export async function adminHome(user: AuthUser, now = new Date()) {
     hq ? db.reencodeRequest.count({ where: { status: 'PENDING' } }) : Promise.resolve(0),
     hq ? db.regionChangeRequest.count({ where: { status: 'PENDING' } }) : Promise.resolve(0),
     db.eventContentSubmission.count({ where: { status: 'PENDING', ...(hq ? {} : { submittedById: user.id }) } }),
+    db.posterProof.count({ where: { status: 'PENDING', ...eventCity } }),
   ]);
   const recapsDue = recentEnded.filter((e) => !e.recap).length;
+  const reportsDue = recentEnded.filter((e) => !e.report).length;
   const pending: Record<string, WorkCount> = {
     claims: { count: claims, target: target('adminClaims', {}, 'reviewClaim') },
     reservations: { count: reservations, target: target('adminReservations', {}, 'reviewBooking') },
     deposits: { count: deposits, target: target('adminReservations', {}, 'reviewBooking') },
     roaming: { count: roaming, target: target('adminRoaming', {}, 'reviewRequest') },
     recapsDue: { count: recapsDue, target: target('adminEvent', {}, 'open') },
+    reportsDue: { count: reportsDue, target: target('adminEvent', {}, 'open') },
+    posterProofs: { count: posterProofs, target: target('adminPosterProofs', {}, 'viewProof') },
     ...(hq
       ? {
           hubAccess: { count: hubAccess, target: target('adminRoaming', {}, 'reviewRequest') },
@@ -130,7 +135,7 @@ export function lifecycleActions(e: EventWithPlace, now = new Date()) {
  */
 export async function eventWorkspace(user: AuthUser, eventId: string, now = new Date()) {
   const event = await staffEvent(user, eventId);
-  const [[summary], byMethod, reservationGroups, sold, claimGroups, roamingPending, recap, draw, content, rewardsFulfilled] = await Promise.all([
+  const [[summary], byMethod, reservationGroups, sold, claimGroups, roamingPending, recap, draw, content, rewardsFulfilled, report, proofGroups] = await Promise.all([
     withCheckInCounts([event], now),
     db.checkIn.groupBy({ by: ['method'], where: { eventId }, _count: { _all: true } }),
     db.reservation.groupBy({ by: ['status'], where: { eventId }, _count: { _all: true } }),
@@ -141,7 +146,11 @@ export async function eventWorkspace(user: AuthUser, eventId: string, now = new 
     drawState(user, eventId),
     eventContent(user, eventId),
     db.redemption.count({ where: { eventId, status: 'FULFILLED' } }),
+    eventReport(user, eventId),
+    db.posterProof.groupBy({ by: ['status'], where: { eventId }, _count: { _all: true } }),
   ]);
+  const posterProofs = { PENDING: 0, APPROVED: 0, REJECTED: 0 } as Record<string, number>;
+  for (const g of proofGroups) posterProofs[g.status] = g._count._all;
   const methods = Object.fromEntries(CHECK_IN_METHODS.map((m) => [m, 0])) as Record<CheckInMethod, number>;
   for (const g of byMethod) methods[g.method] = g._count._all;
   const reservations = Object.fromEntries(['PENDING', 'CONFIRMED', 'REJECTED', 'CANCELLED'].map((s) => [s, 0])) as Record<string, number>;
@@ -158,6 +167,9 @@ export async function eventWorkspace(user: AuthUser, eventId: string, now = new 
     claims: { byStatus: claims },
     roaming: { pending: roamingPending },
     rewards: { fulfilled: rewardsFulfilled },
+    posterProofs: { byStatus: posterProofs },
+    /** 22 Oct: the admin event report (seven numbers) with system references and edit history. */
+    report,
     draw,
     recap: {
       saved: recap
@@ -178,9 +190,10 @@ export async function eventWorkspace(user: AuthUser, eventId: string, now = new 
         : null,
       /** System counts from confirmed reservations (not typed by staff). */
       reservationsSold: soldSplit,
-      /** FDC's definition is pending with the owner: always null, never derived. */
-      fdcSold: FDC_PENDING,
+      /** FDC = First Drink Charge / Free Drink Coupon: the value the admin reported (null until reported). */
+      fdcSold: fdcFromReport(report.report),
       due: event.endsAt.getTime() <= now.getTime() && !recap,
+      reportDue: event.endsAt.getTime() <= now.getTime() && !report.report,
       canLock: can(user.role, 'hq.manage'),
     },
     content,
