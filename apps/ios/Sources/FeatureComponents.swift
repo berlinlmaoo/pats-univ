@@ -28,7 +28,7 @@ struct Room: Equatable { var kind: String; var id: String }
         }
         .refreshable { await load() }
         .onDisappear { live.stop() }
-        .onChange(of: phase) { _, p in if p == .active { connect() } else { live.stop() } }
+        .onChange(of: phase) { _, p in if p == .active { connect(); Task { await load() } } else { live.stop() } }
     }
     private func load() async { await resource.load(path) }
     private func connect() { if let room, phase == .active { live.start(kind: room.kind, id: room.id) { await load() } } }
@@ -79,6 +79,7 @@ struct Choice: View {
     var options: [JSON]
     @Binding var selection: String
     var allowEmpty = false
+    var autoSelect = true
     var body: some View {
         Picker(L.t(label), selection: $selection) {
             if allowEmpty || (selection.isEmpty && !options.contains { $0.id.isEmpty }) { Text(L.t("common.notSet")).tag("") }
@@ -87,7 +88,7 @@ struct Choice: View {
             .onAppear { selectDefault() }.onChange(of: options) { _, _ in selectDefault() }
     }
     private func selectDefault() {
-        if !allowEmpty, !options.contains(where: { $0.id == selection }), let first = options.first { selection = first.id }
+        if autoSelect, !allowEmpty, !options.contains(where: { $0.id == selection }), let first = options.first { selection = first.id }
     }
 }
 struct NavigationRow<Destination: View>: View {
