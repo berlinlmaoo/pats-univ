@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct ClaimsView: View {
+    var initialEventID = ""
     @EnvironmentObject private var store: AppStore
     @State private var eventID = ""
     @State private var form = "MEMBER"
@@ -14,7 +15,7 @@ struct ClaimsView: View {
     var body: some View {
         DataPage(title: "phase5.claimTitle", path: "/api/loyalty/claims", room: Room(kind: "wallet", id: store.member.id)) { data, reload in
             Notice(text: L.t("phase5.claimBody"))
-            Choice(label: "loyalty.event", options: data["events"].rows, selection: $eventID)
+            OperationEventContext(events: data["events"].rows, selection: $eventID, fixed: !initialEventID.isEmpty)
                 .onChange(of: eventID) { _, _ in if editing.isEmpty || data["claims"].rows.first(where: { $0.id == editing })?["eventId"].text != eventID { clear() } }
             if data["isPromoter"].bool {
                 Tabs(options: [("MEMBER", "phase5.claimMember"), ("PR", "phase5.claimPr")], selection: $form)
@@ -42,7 +43,7 @@ struct ClaimsView: View {
             }
             MutationState(mutation: mutation)
             Tabs(options: [("pending", "ktm.pending"), ("history", "ktm.history")], selection: $section, counts: ["pending": data["claims"].rows.filter { $0["status"].text == "PENDING" }.count])
-            let rows = data["claims"].rows.filter { ($0["status"].text == "PENDING") == (section == "pending") }
+            let rows = data["claims"].rows.filter { ($0["status"].text == "PENDING") == (section == "pending") && (initialEventID.isEmpty || $0["eventId"].text == initialEventID) }
             if rows.isEmpty { EmptyState(title: "phase5.claimEmpty") }
             ForEach(rows) { claim in
                 Panel {
@@ -56,7 +57,7 @@ struct ClaimsView: View {
                     }
                 }
             }
-        }
+        }.onAppear { if !initialEventID.isEmpty { eventID = initialEventID } }
     }
     private var validCounts: Bool { (Int(guests).map { (0...1_000_000).contains($0) } ?? false) && (Int(reservations).map { (0...1_000_000).contains($0) } ?? false) && notes.count <= 2000 }
     private func clear() { editing = ""; guests = "0"; reservations = "0"; receipt = ""; notes = "" }

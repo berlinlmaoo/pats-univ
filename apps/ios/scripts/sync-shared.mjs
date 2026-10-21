@@ -1,5 +1,4 @@
 import fs from 'node:fs';
-import { execFileSync } from 'node:child_process';
 import vm from 'node:vm';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -50,13 +49,12 @@ for (const [name, sources] of [
   });
   fs.writeFileSync(`${dir}/Contents.json`, JSON.stringify({ images, info: { author: 'xcode', version: 1 } }, null, 2));
 }
-// Decode the exact web artwork losslessly at import time; UIImage need not decode WebP.
-for (const [name, side] of [['KTMFront', 'front'], ['KTMBack', 'back']]) {
-  const dir = `${resources}/Assets.xcassets/${name}.imageset`;
-  fs.rmSync(dir, { recursive: true, force: true });
-  fs.mkdirSync(dir, { recursive: true });
-  execFileSync('/usr/bin/sips', ['-s', 'format', 'png', `${root}/apps/web/public/ktm/${side}-1600.webp`, '--out', `${dir}/${name}.png`], { stdio: 'pipe' });
-  fs.writeFileSync(`${dir}/Contents.json`, JSON.stringify({ images: [{ idiom: 'universal', filename: `${name}.png` }], info: { author: 'xcode', version: 1 } }, null, 2));
+// Owner-approved 21 Oct native KTM PNGs live in the asset catalog. Keep them
+// swappable and do not overwrite them with the previous web card design.
+for (const name of ['KTMFront', 'KTMBack']) {
+  if (!fs.existsSync(`${resources}/Assets.xcassets/${name}.imageset/${name}.png`)) {
+    throw new Error(`Missing approved native artwork: ${name}`);
+  }
 }
 const tokens = fs.readFileSync(`${root}/packages/shared/src/tokens.ts`, 'utf8');
 function tokenObject(name) {

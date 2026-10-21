@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct HandoverView: View {
+    @EnvironmentObject private var store: AppStore
     @State private var reader: any CardReader = CoreNFCCardReader()
     @State private var scan: CardScan?
     @State private var preview: JSON = .null
@@ -14,7 +15,10 @@ struct HandoverView: View {
                     let value = try await reader.read(); scan = value
                     preview = try await APIClient.shared.call("POST", "/api/admin/cards/handover/preview", .object(["token": .str(value.token), "nfcUid": .str(value.uid)]))
                 } } }.buttonStyle(PATSButtonStyle(loading: mutation.busy)).disabled(mutation.busy)
-            } else { Notice(text: L.t("native.nfcUnavailable")) }
+            } else {
+                Notice(text: L.t("ux.card.handoverNfcRequired"))
+                NavigationRow(title: "app.adminCards", subtitle: L.t("ux.card.identificationOnly"), icon: "person.text.rectangle") { MemberCardsView() }
+            }
             MutationState(mutation: mutation)
             if preview.exists {
                 Panel {
@@ -31,7 +35,10 @@ struct HandoverView: View {
                     }
                 }
             }
-        }.onDisappear { reader.cancel() }
+        }.onChange(of: mutation.busy) { _, busy in store.operationInProgress = busy }
+        .navigationBarBackButtonHidden(mutation.busy)
+        .interactiveDismissDisabled(mutation.busy)
+        .onDisappear { reader.cancel(); if !mutation.busy { store.operationInProgress = false } }
     }
     private var handoverIssue: String {
         switch preview["issue"]["code"].text {
@@ -47,6 +54,7 @@ struct MemberCardsView: View {
     @StateObject private var state = Resource()
     var body: some View {
         Page(title: "app.adminCards") {
+            Notice(text: L.t("ux.card.repairReplaceGuide"))
             Field(key: "native.search", value: $term)
             if term.count < 2 { Notice(text: L.t("app.cardsSearchHint")) }
             ResourceState(resource: state) { await search() }
@@ -65,16 +73,29 @@ struct MemberCardsDetail: View {
     @EnvironmentObject private var store: AppStore
     @StateObject private var mutation = Mutation()
     @State private var reason = ""
+    @State private var action = ""
     var body: some View {
-        DataPage(title: "app.adminCards", path: "/api/admin/cards/members/\(memberID)") { data, reload in
+        DataPage(title: "app.adminCards", path: "/api/admin/cards/members/\(memberID)", poll: true) { data, reload in
             Panel { MemberIdentity(member: data["member"]) }
+            Panel {
+                Text(L.t("ux.card.chipQuestion")).font(Theme.title(20))
+                Notice(text: L.t("ux.card.repairReplaceGuide"))
+                Button(L.t("ux.card.repair")) { action = "repair"; reason = "" }.buttonStyle(PATSButtonStyle(variant: .secondary))
+                Button(L.t("ux.card.replace")) { action = "replace"; reason = "" }.buttonStyle(PATSButtonStyle(variant: .secondary))
+            }
             if data["reencode"].exists {
                 Panel {
-                    Badge(value: data["reencode"]["status"].text); Text(data["reencode"]["decisionNote"].text)
-                    if data["reencode"]["grantExpiresAt"].exists { Text(L.date(data["reencode"]["grantExpiresAt"].text)) }
-                    if data["reencode"]["status"].text == "APPROVED" && data["reencode"]["mine"].bool {
+                    Text(L.t("ux.reencode." + reencodeStatus(data["reencode"]))).font(Theme.title(20))
+                    Text(L.t("ux.reencode.requester", ["name": data["reencode"]["requestedBy"].text]))
+                    if data["reencode"]["createdAt"].exists { Text(L.t("ux.reencode.requestedAt", ["date": L.date(data["reencode"]["createdAt"].text)])) }
+                    if !data["reencode"]["decidedBy"].text.isEmpty { Text(L.t("ux.reencode.decidedBy", ["name": data["reencode"]["decidedBy"].text])) }
+                    if !data["reencode"]["decisionNote"].text.isEmpty { Text(data["reencode"]["decisionNote"].text) }
+                    if data["reencode"]["grantExpiresAt"].exists { Text(L.t("ux.reencode.oneUseUntil", ["date": L.date(data["reencode"]["grantExpiresAt"].text)])) }
+                    if data["reencode"]["usedAt"].exists { Text(L.t("ux.reencode.usedAt", ["date": L.date(data["reencode"]["usedAt"].text)])) }
+                    Notice(text: L.t("ux.reencode.next." + reencodeStatus(data["reencode"])))
+                    if reencodeStatus(data["reencode"]) == "APPROVED" && data["reencode"]["mine"].bool && validReencodeGrant(data["reencode"]) {
                         NavigationRow(title: "app.reencodeNow", icon: "wave.3.right") { EncodeView(grantID: data["reencode"].id, initialLookup: data["member"]["nim"].text, reencode: true) }
-                    }
+                    } else if reencodeStatus(data["reencode"]) == "APPROVED" { Notice(text: L.t(data["reencode"]["mine"].bool ? "ux.reencode.deadlineUnavailable" : "ux.reencode.requesterOnly")) }
                 }
             }
             ForEach(data["cards"].rows) { card in
@@ -83,24 +104,40 @@ struct MemberCardsDetail: View {
                     Text(card["nfcUid"].text).monospaced(); Text(card["chipType"].text)
                     Text(card["batch"]["label"].text).foregroundStyle(Theme.muted)
                     if card["deliveredAt"].exists { Text(L.date(card["deliveredAt"].text)) }
-                    if card["status"].text != "REVOKED" {
+                    if card["isReplacement"].bool {
+                        Notice(text: L.t("ux.card.replacementNext"))
+                        if store.managing && store.can("dashboard.access") {
+                            Link(L.t("ux.card.recordReplacementPayment"), destination: Config.baseURL.appendingPathComponent("regional").appending(queryItems: [URLQueryItem(name: "tab", value: "payments")]))
+                            Text(L.t("ux.card.paymentRefresh")).font(Theme.body(13)).foregroundStyle(Theme.muted)
+                            Button(L.t("ux.operations.refresh")) { Task { await reload() } }.buttonStyle(PATSButtonStyle(variant: .secondary)).disabled(mutation.busy)
+                        }
+                    }
+                    if store.managing && card["status"].text != "REVOKED" && card["status"].text != "NOT_PRINTED" && !action.isEmpty {
+                        Notice(text: L.t(action == "replace" ? "ux.card.replaceConsequences" : "ux.card.repairConsequences"), error: action == "replace")
                         Field(key: "phase5.reason", value: $reason)
-                        if store.can("card.reportLost") {
-                            ConfirmAction(label: "app.cardsLostConfirm", message: L.t("app.cardsLostConfirmBody"), destructive: true, disabled: mutation.busy || reason.trimmingCharacters(in: .whitespacesAndNewlines).count < 3) {
+                        if action == "replace" && store.can("card.reportLost") {
+                            ConfirmAction(label: "ux.card.replace", message: data["member"]["fullName"].text + "\n" + L.t("ux.card.replaceConsequences"), destructive: true, disabled: mutation.busy || reason.trimmingCharacters(in: .whitespacesAndNewlines).count < 3) {
                                 await mutation.send("/api/admin/cards/\(card.id)/revoke", body: .object(["reason": .str(reason)]), after: reload)
                             }
                         }
-                        if store.can("card.requestReencode") && card["status"].text == "DELIVERED" {
-                            ConfirmAction(label: "app.cardsReencodeSend", message: L.t("app.cardsReencodeBody"), disabled: mutation.busy || reason.trimmingCharacters(in: .whitespacesAndNewlines).count < 3 || data["reencode"]["status"].text == "PENDING") {
+                        if action == "repair" && store.can("card.requestReencode") && card["status"].text == "DELIVERED" {
+                            ConfirmAction(label: "app.cardsReencodeSend", message: data["member"]["fullName"].text + "\n" + L.t("ux.card.repairConsequences"), disabled: mutation.busy || reason.trimmingCharacters(in: .whitespacesAndNewlines).count < 3 || ["PENDING", "APPROVED"].contains(reencodeStatus(data["reencode"]))) {
                                 await mutation.send("/api/admin/cards/\(card.id)/reencode-requests", body: .object(["reason": .str(reason)]), after: reload)
                             }
-                        }
+                        } else if action == "repair" { Notice(text: L.t("ux.card.repairNotAvailable")) }
                     }
                 }
             }
             MutationState(mutation: mutation)
         }
     }
+    private func reencodeStatus(_ request: JSON) -> String {
+        guard request.exists else { return "" }
+        let status = request["status"].text
+        if status == "APPROVED", let deadline = Dates.parse(request["grantExpiresAt"].text), deadline <= Date() { return "EXPIRED" }
+        return ["PENDING", "APPROVED", "EXPIRED", "USED", "REJECTED"].contains(status) ? status : "PENDING"
+    }
+    private func validReencodeGrant(_ request: JSON) -> Bool { Dates.parse(request["grantExpiresAt"].text).map { $0 > Date() } ?? false }
 }
 struct EncodingBatchesView: View {
     var body: some View {
@@ -111,7 +148,7 @@ struct EncodingBatchesView: View {
             if data["batches"].rows.isEmpty { EmptyState(title: "app.encodeNoBatchTitle", message: "app.encodeNoBatchBody") }
             ForEach(data["batches"].rows) { b in
                 Panel {
-                    NavigationRow(title: b["label"].text, subtitle: b["city"]["name"].text, icon: "rectangle.stack") { EncodeView(batchID: b.id) }
+                    NavigationRow(title: b["label"].text, subtitle: b["city"]["name"].text, icon: "rectangle.stack") { EncodeView(batchID: b.id, batchLabel: b["label"].text) }
                     Badge(value: b["status"].text)
                     ProgressView(value: Double(b["encodedCount"].int), total: Double(max(1, b["cardCount"].int)))
                     Text(L.t("app.encodeProgress", ["label": b["label"].text, "done": L.count(b["encodedCount"].int), "total": L.count(b["cardCount"].int)]))
@@ -127,6 +164,11 @@ struct PendingEncode: Codable {
     let userID: String
     let origin: String
     let result: EncodeResult
+    var batchID: String? = nil
+    var batchLabel: String? = nil
+    var reencode: Bool? = nil
+    var memberName: String? = nil
+    var memberNIM: String? = nil
     var body: JSON { .object(["leaseId": .str(leaseID), "nfcUid": .str(result.nfcUid), "chipType": .str(result.chipType), "protectedNow": .bool(result.protectedNow)]) }
 }
 @MainActor final class EncodeStation: ObservableObject {
@@ -136,6 +178,9 @@ struct PendingEncode: Codable {
     let mutation = Mutation()
     let reader: any CardReader
     private let userID: String
+    private var preparedBatchID = ""
+    private var preparedBatchLabel = ""
+    private var preparedReencode = false
     private var account: String { "encode-report.\(userID)" }
     init(userID: String, reader: (any CardReader)? = nil) {
         self.userID = userID; self.reader = reader ?? CoreNFCCardReader()
@@ -147,7 +192,7 @@ struct PendingEncode: Codable {
         if id == nil { id = UUID().uuidString; try? Keychain.save(Data(id!.utf8), key) }
         return "iPhone · " + String(id!.prefix(12))
     }
-    func prepare(lookup: String, batchID: String, grantID: String, reencode: Bool) async {
+    func prepare(lookup: String, batchID: String, batchLabel: String = "", grantID: String, reencode: Bool) async {
         guard pending == nil else { return }
         await mutation.run {
             await release(); done = false
@@ -155,6 +200,7 @@ struct PendingEncode: Codable {
             if !batchID.isEmpty { body["batchId"] = .str(batchID) }
             if !grantID.isEmpty { body["grantId"] = .str(grantID) }
             claim = try await APIClient.shared.call("POST", "/api/hq/cards/prepare", .object(body))
+            preparedBatchID = batchID; preparedBatchLabel = batchLabel; preparedReencode = reencode
         }
     }
     func write() async {
@@ -165,7 +211,7 @@ struct PendingEncode: Codable {
                     let key = try await APIClient.shared.call("POST", "/api/hq/cards/\(self.claim["card"].id)/key", .object(["leaseId": self.claim["lease"]["id"], "nfcUid": .str(inspection.uid)]))
                     return TagCredentials(url: key["url"].text, pwd: try Hex.bytes(key["pwd"].text), pack: try Hex.bytes(key["pack"].text))
                 }
-                let report = PendingEncode(cardID: claim["card"].id, leaseID: claim["lease"].id, userID: userID, origin: Config.baseURL.absoluteString, result: result)
+                let report = PendingEncode(cardID: claim["card"].id, leaseID: claim["lease"].id, userID: userID, origin: Config.baseURL.absoluteString, result: result, batchID: preparedBatchID, batchLabel: preparedBatchLabel, reencode: preparedReencode, memberName: claim["member"]["fullName"].text, memberNIM: claim["member"]["nim"].text)
                 pending = report
                 try Keychain.save(try JSONEncoder().encode(report), account)
                 try await reportPending()
@@ -194,43 +240,64 @@ struct PendingEncode: Codable {
 }
 struct EncodeView: View {
     var batchID = ""
+    var batchLabel = ""
     var grantID = ""
     var initialLookup = ""
     var reencode = false
     @EnvironmentObject private var store: AppStore
-    var body: some View { EncodeScreen(batchID: batchID, grantID: grantID, initialLookup: initialLookup, reencode: reencode, userID: store.user.id) }
+    var body: some View { EncodeScreen(batchID: batchID, batchLabel: batchLabel, grantID: grantID, initialLookup: initialLookup, reencode: reencode, userID: store.user.id) }
 }
 struct EncodeScreen: View {
-    let batchID: String, grantID: String, initialLookup: String
+    let batchID: String, batchLabel: String, grantID: String, initialLookup: String
     let reencode: Bool
     @StateObject private var station: EncodeStation
     @State private var lookup = ""
     @State private var camera = false
-    init(batchID: String, grantID: String, initialLookup: String, reencode: Bool, userID: String) {
-        self.batchID = batchID; self.grantID = grantID; self.initialLookup = initialLookup; self.reencode = reencode
+    init(batchID: String, batchLabel: String, grantID: String, initialLookup: String, reencode: Bool, userID: String) {
+        self.batchID = batchID; self.batchLabel = batchLabel; self.grantID = grantID; self.initialLookup = initialLookup; self.reencode = reencode
         _station = StateObject(wrappedValue: EncodeStation(userID: userID))
     }
     var body: some View {
-        Page(title: "app.adminEncode") {
-            EncodeStationContent(station: station, mutation: station.mutation, lookup: $lookup, camera: $camera, batchID: batchID, grantID: grantID, reencode: reencode)
+        Page(title: screenTitle) {
+            EncodeStationContent(station: station, mutation: station.mutation, lookup: $lookup, camera: $camera, batchID: batchID, batchLabel: batchLabel, grantID: grantID, reencode: reencode)
         }
         .task { if !initialLookup.isEmpty && station.pending == nil { lookup = initialLookup; await prepare() } }
         .sheet(isPresented: $camera) { ScannerSheet { value in lookup = value; Task { await prepare() } } }
         .onDisappear { station.cancel(); Task { await station.release() } }
     }
-    private func prepare() async { await station.prepare(lookup: lookup, batchID: batchID, grantID: grantID, reencode: reencode) }
+    private var screenTitle: String {
+        if let pending = station.pending {
+            guard let repair = pending.reencode else { return "ux.encode.resumeTitle" }
+            return repair ? "ux.encode.repairTitle" : (pending.batchID ?? "").isEmpty ? "ux.encode.anyTitle" : "ux.encode.batchTitle"
+        }
+        return reencode ? "ux.encode.repairTitle" : batchID.isEmpty ? "ux.encode.anyTitle" : "ux.encode.batchTitle"
+    }
+    private func prepare() async { await station.prepare(lookup: lookup, batchID: batchID, batchLabel: batchLabel, grantID: grantID, reencode: reencode) }
 }
 private struct EncodeStationContent: View {
+    @EnvironmentObject private var store: AppStore
     @ObservedObject var station: EncodeStation
     @ObservedObject var mutation: Mutation
     @Binding var lookup: String
     @Binding var camera: Bool
-    let batchID: String, grantID: String
+    let batchID: String, batchLabel: String, grantID: String
     let reencode: Bool
     var body: some View {
+        Panel {
+            Text(L.t(operationTitle)).font(Theme.title(20))
+            if !visibleBatch.isEmpty { Text(L.t("ux.encode.batch", ["batch": visibleBatch])) }
+            if let pending = station.pending, let name = pending.memberName { Text(name + " · " + (pending.memberNIM ?? "")) }
+            Text(L.t("ux.encode.stages")).font(Theme.body(13)).foregroundStyle(Theme.muted)
+            Text(L.t(stageKey)).fontWeight(.semibold).accessibilityAddTraits(.updatesFrequently)
+            if !station.reader.available { Notice(text: L.t("ux.card.encodeNfcRequired")) }
+        }
+        .onChange(of: mutation.busy) { _, busy in store.operationInProgress = busy }
+        .navigationBarBackButtonHidden(mutation.busy)
+        .interactiveDismissDisabled(mutation.busy)
+        .onDisappear { if !mutation.busy { store.operationInProgress = false } }
         MutationState(mutation: mutation)
         if station.pending != nil {
-            Notice(text: L.t("native.retryReport"))
+            Notice(text: L.t("ux.encode.reportOnly"))
             Button(L.t("app.encodeReportAgain")) { Task { await station.retryReport() } }.buttonStyle(PATSButtonStyle(loading: mutation.busy)).disabled(station.mutation.busy)
         } else if station.claim.exists {
             Panel {
@@ -244,10 +311,26 @@ private struct EncodeStationContent: View {
             }
         } else {
             Notice(text: L.t(station.done ? "app.encodeDone" : "app.encodeIdentify"))
-            if !station.reader.available { Notice(text: L.t("native.nfcUnavailable")) }
             Field(key: "app.encodeNim", value: $lookup)
             Button(L.t("app.encodeScanQr")) { camera = true }.buttonStyle(PATSButtonStyle(variant: .secondary)).disabled(station.mutation.busy)
-            Button(L.t("app.encodeFind")) { Task { await station.prepare(lookup: lookup, batchID: batchID, grantID: grantID, reencode: reencode) } }.buttonStyle(PATSButtonStyle(loading: mutation.busy)).disabled(station.mutation.busy || lookup.trimmingCharacters(in: .whitespacesAndNewlines).count < 3)
+            Button(L.t("app.encodeFind")) { Task { await station.prepare(lookup: lookup, batchID: batchID, batchLabel: batchLabel, grantID: grantID, reencode: reencode) } }.buttonStyle(PATSButtonStyle(loading: mutation.busy)).disabled(station.mutation.busy || lookup.trimmingCharacters(in: .whitespacesAndNewlines).count < 3)
         }
+    }
+    private var stageKey: String {
+        if station.pending != nil { return "ux.encode.stageReport" }
+        if station.done { return "ux.encode.stageComplete" }
+        if station.claim.exists { return mutation.busy ? "ux.encode.stageWrite" : "ux.encode.stageVerify" }
+        return "ux.encode.stageIdentify"
+    }
+    private var visibleBatch: String {
+        if let pending = station.pending { return pending.batchLabel.flatMap { $0.isEmpty ? nil : $0 } ?? pending.batchID ?? "" }
+        return batchLabel.isEmpty ? batchID : batchLabel
+    }
+    private var operationTitle: String {
+        if let pending = station.pending {
+            guard let repair = pending.reencode else { return "ux.encode.resumeTitle" }
+            return repair ? "ux.encode.repairTitle" : (pending.batchID ?? "").isEmpty ? "ux.encode.anyTitle" : "ux.encode.batchTitle"
+        }
+        return reencode ? "ux.encode.repairTitle" : batchID.isEmpty ? "ux.encode.anyTitle" : "ux.encode.batchTitle"
     }
 }
