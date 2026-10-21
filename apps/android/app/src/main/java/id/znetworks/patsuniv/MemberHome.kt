@@ -18,7 +18,7 @@ import androidx.compose.ui.platform.LocalContext
         Action(tr("uxShell.events"), secondary = true) { go("events") }
         return
     }
-    Remote(api, "/api/events") { data, _ ->
+    Remote(api, "/api/events", pollMs = 15_000) { data, _ ->
         val events = data.rows("upcoming")
         val event = events.firstOrNull { it.text("phase") == "open" } ?: events.firstOrNull()
         if (event == null) {

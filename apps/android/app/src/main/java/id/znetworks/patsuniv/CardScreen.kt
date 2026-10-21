@@ -8,7 +8,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.delay
+import kotlinx.serialization.json.JsonObject
 import java.time.Instant
+
+internal fun cardTokenDeadline(code: JsonObject, requestStartedElapsed: Long): Long {
+    val validity = runCatching { Instant.parse(code.text("expiresAt")).toEpochMilli() - Instant.parse(code.text("serverTime")).toEpochMilli() }.getOrDefault(0)
+    // Start at the request, so transport/server delay can only shorten the displayed lifetime.
+    return requestStartedElapsed + validity.coerceAtLeast(0)
+}
 
 @Composable fun CardScreen(session: Session, api: Api, go: (String) -> Unit) {
     Title(tr("uxShell.cardTitle"))
@@ -23,11 +30,11 @@ import java.time.Instant
         onDispose { (context as? Activity)?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
     }
     SectionLabel(tr("uxShell.digital"))
-    Remote(api, "/api/me/card-token", pollMs = 25_000, placeholder = { KtmCard(member) }) { code, reload ->
+    val requestStarted = remember { longArrayOf(0L) }
+    Remote(api, "/api/me/card-token", pollMs = 25_000, placeholder = { KtmCard(member) }, onRequestStarted = { requestStarted[0] = android.os.SystemClock.elapsedRealtime() }) { code, reload ->
         var remaining by remember(code) { mutableIntStateOf(0) }
         LaunchedEffect(code) {
-            val validity = runCatching { Instant.parse(code.text("expiresAt")).toEpochMilli() - Instant.parse(code.text("serverTime")).toEpochMilli() }.getOrDefault(0)
-            val deadline = android.os.SystemClock.elapsedRealtime() + validity
+            val deadline = cardTokenDeadline(code, requestStarted[0])
             while (true) { remaining = ((deadline - android.os.SystemClock.elapsedRealtime()) / 1000).toInt().coerceAtLeast(0); delay(1000) }
         }
         if (remaining > 0) Badge(tr("uxShell.ready"), "ACTIVE")

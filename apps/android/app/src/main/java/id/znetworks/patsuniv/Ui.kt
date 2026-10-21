@@ -97,7 +97,7 @@ private val RupiahInput = androidx.compose.ui.text.input.VisualTransformation { 
     AlertDialog(onDismissRequest = onDismiss, title = { Text(title) }, text = { Text(message) }, confirmButton = { TextButton(onConfirm, colors = ButtonDefaults.textButtonColors(contentColor = tone("dangerText"))) { Text(label) } }, dismissButton = { TextButton(onDismiss) { Text(tr("common.cancel")) } })
 }
 /** Request ownership follows the visible screen; stale responses cannot update another route. */
-@Composable fun Remote(api: Api, path: String, refresh: Int = 0, pollMs: Long = 0, authenticated: Boolean = true, onForbidden: () -> Unit = {}, placeholder: (@Composable () -> Unit)? = null, content: @Composable ColumnScope.(JsonObject, () -> Unit) -> Unit) {
+@Composable fun Remote(api: Api, path: String, refresh: Int = 0, pollMs: Long = 0, authenticated: Boolean = true, onForbidden: () -> Unit = {}, placeholder: (@Composable () -> Unit)? = null, onRequestStarted: () -> Unit = {}, content: @Composable ColumnScope.(JsonObject, () -> Unit) -> Unit) {
     var result by remember(path) { mutableStateOf<JsonObject?>(null) }
     var error by remember(path) { mutableStateOf<String?>(null) }
     var errorParams by remember(path) { mutableStateOf<Array<Pair<String, String>>>(emptyArray()) }
@@ -109,7 +109,7 @@ private val RupiahInput = androidx.compose.ui.text.input.VisualTransformation { 
         do {
             loading = result == null
             pageRefresh?.started(pageVersion)
-            try { result = api.request("GET", path, authenticated = authenticated); error = null }
+            try { onRequestStarted(); result = api.request("GET", path, authenticated = authenticated); error = null }
             catch (e: CancellationException) { throw e }
             catch (e: Exception) { error = errorKey((e as? ApiFailure)?.code ?: "NETWORK"); errorParams = errorArgs(e); if ((e as? ApiFailure)?.code in setOf("FORBIDDEN", "ACCOUNT_DISABLED", "UNAUTHENTICATED")) { result = null; onForbidden() } }
             finally { loading = false; pageRefresh?.finished(pageVersion) }
