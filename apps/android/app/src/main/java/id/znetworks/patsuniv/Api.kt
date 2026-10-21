@@ -28,11 +28,12 @@ class Api(private val store: SessionStore, private val base: String = BuildConfi
     suspend fun request(method: String, path: String, payload: JsonObject? = null, authenticated: Boolean = true): JsonObject {
         val token = if (authenticated) accessToken() else null
         return try { raw(method, path, payload, token) } catch (e: ApiFailure) {
-            if (authenticated && e.code in setOf("UNAUTHENTICATED", "ACCOUNT_DISABLED")) {
-                if (store.current?.tokens?.accessToken == token) store.clear()
-            }
+            if (authenticated) clearRejectedSession(token, e)
             throw e
         }
+    }
+    private fun clearRejectedSession(token: String?, failure: ApiFailure) {
+        if (failure.code in setOf("UNAUTHENTICATED", "ACCOUNT_DISABLED") && store.current?.tokens?.accessToken == token) store.clear()
     }
     private suspend fun accessToken(): String = refreshLock.withLock {
         val current = store.current ?: throw ApiFailure("UNAUTHENTICATED")
@@ -68,6 +69,36 @@ class Api(private val store: SessionStore, private val base: String = BuildConfi
         require(validEmail(email) && validOtp(code))
         val response = request("POST", "/api/auth/otp/verify", body("email" to email.trim(), "code" to code, "client" to "app"), false)
         store.save(Session(PatsJson.decodeFromJsonElement<Tokens>(response), response.obj("me")))
+    }
+    suspend fun saveEventContent(eventId: String, description: String, poster: ByteArray?, contentType: String): JsonObject {
+        if (poster == null) return request("POST", "/api/admin/events/${query(eventId)}/content", body("description" to description))
+        require(poster.isNotEmpty() && poster.size <= 5 * 1024 * 1024 && contentType in setOf("image/jpeg", "image/png", "image/webp"))
+        val token = accessToken()
+        return withContext(Dispatchers.IO) {
+            val form = MultipartBody.Builder().setType(MultipartBody.FORM).addFormDataPart("description", description)
+                .addFormDataPart("poster", "poster." + if (contentType == "image/png") "png" else if (contentType == "image/webp") "webp" else "jpg", poster.toRequestBody(contentType.toMediaType())).build()
+            val request = Request.Builder().url(base.trimEnd('/') + "/api/admin/events/${query(eventId)}/content").header("Authorization", "Bearer $token").post(form).build()
+            try { http.newCall(request).execute().use { response ->
+                val parsed = runCatching { PatsJson.parseToJsonElement(response.body.string()).jsonObject }.getOrDefault(body())
+                if (!response.isSuccessful) throw ApiFailure(parsed.obj("error").text("code", "INTERNAL"), parsed)
+                parsed
+            } } catch (e: ApiFailure) { clearRejectedSession(token, e); throw e } catch (e: IOException) { throw ApiFailure("NETWORK") }
+        }
+    }
+    /** Only this same-origin, staff-only route receives bearer auth; signed media stays credential-free. */
+    suspend fun staffPoster(path: String): ByteArray {
+        require(Regex("/api/admin/content-submissions/[A-Za-z0-9-]+/poster").matches(path))
+        val token = accessToken()
+        return withContext(Dispatchers.IO) {
+            val request = Request.Builder().url(base.trimEnd('/') + path).header("Authorization", "Bearer $token").build()
+            try { http.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    val parsed = runCatching { PatsJson.parseToJsonElement(response.body.string()).jsonObject }.getOrDefault(body())
+                    throw ApiFailure(parsed.obj("error").text("code", "MEDIA_INVALID"), parsed)
+                }
+                response.body.bytes()
+            } } catch (e: ApiFailure) { clearRejectedSession(token, e); throw e } catch (e: IOException) { throw ApiFailure("NETWORK") }
+        }
     }
     suspend fun reload() {
         val original = store.current ?: return

@@ -7,49 +7,94 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.Alignment
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import kotlinx.coroutines.delay
 import kotlinx.serialization.json.*
 import java.time.Instant
 
-@Composable fun Wallet(session: Session, api: Api, language: String, go: (String) -> Unit) {
-    Title(tr("loyalty.wallet"))
+@Composable fun Wallet(session: Session, api: Api, language: String, go: (String) -> Unit, initialTab: String = "") {
+    Title(tr("uxAdmin.xpRewards"))
     val live = liveVersion(api, "wallet", session.me.obj("member").text("id"))
     val mutation = rememberMutation(); MutationStatus(mutation)
     var eventId by remember { mutableStateOf("") }
+    var issued by remember { mutableStateOf<JsonObject?>(null) }
+    var issuedEvent by remember { mutableStateOf("") }
+    var issuedCost by remember { mutableIntStateOf(0) }
+    var selected by androidx.compose.runtime.saveable.rememberSaveable(initialTab) { mutableStateOf(if (initialTab == "activity") "activity" else "rewards") }
+    val now = adminNow()
     Remote(api, "/api/loyalty/wallet", refresh = live, pollMs = 15000) { data, reload ->
+        val activeCodes = data.rows("redemptions").filter { activeRewardCode(it, now) }
+        if (activeCodes.isNotEmpty()) {
+            Text(tr("uxAdmin.activeCodes"), style = MaterialTheme.typography.titleLarge)
+            activeCodes.forEach { Redemption(it, language, reload) }
+        }
+        val events = data.rows("events")
+        val event = events.find { it.text("id") == eventId } ?: if (eventId.isBlank()) events.firstOrNull() else null
         Tile {
             Text(tr("loyalty.balance")); Text(count(data.number("balance")) + " XP", style = MaterialTheme.typography.headlineLarge)
             val milestone = data.obj("milestone")
-            if (milestone.isNotEmpty()) { Text(if (milestone.number("remaining") > 0) tr("loyalty.milestone", "remaining" to count(milestone.number("remaining")), "reward" to milestone.obj("reward").text("name")) else tr("loyalty.ready")); LinearProgressIndicator(progress = { (milestone["progress"] as? JsonPrimitive)?.floatOrNull?.coerceIn(0f, 1f) ?: 0f }, modifier = Modifier.fillMaxWidth(), color = tone("gold"), trackColor = tone("surfaceMuted")) }
+            if (milestone.isNotEmpty()) { Text(if (milestone.number("remaining") > 0) tr("loyalty.milestone", "remaining" to count(milestone.number("remaining")), "reward" to milestone.obj("reward").text("name")) else tr("uxAdmin.balanceEnough")); LinearProgressIndicator(progress = { (milestone["progress"] as? JsonPrimitive)?.floatOrNull?.coerceIn(0f, 1f) ?: 0f }, modifier = Modifier.fillMaxWidth(), color = tone("gold"), trackColor = tone("surfaceMuted")) }
+            Text(tr(if (event == null) "uxAdmin.redeemNeedsCheckIn" else "uxAdmin.redeemEligible", "event" to event?.text("title").orEmpty()))
         }
-        Action(tr("loyalty.leaderboard"), secondary = true) { go("leaderboard") }; Action(tr("phase5.claimTitle"), secondary = true) { go("claims") }
-        val events = data.rows("events")
-        val event = events.find { it.text("id") == eventId } ?: events.firstOrNull()
+        Tabs(listOf("rewards" to tr("uxAdmin.rewards"), "mine" to tr("uxAdmin.myRewards"), "activity" to tr("uxAdmin.xpActivity")), selected) { selected = it }
+        when (selected) {
+        "rewards" -> {
         Choices(tr("loyalty.selectEvent"), events.map { it.text("id") to it.text("title") }, event?.text("id").orEmpty()) { eventId = it }
-        if (events.isEmpty()) Empty(tr("loyalty.noEvents"), tr("loyalty.noEventsBody"))
+        if (event == null) Notice(tr("uxAdmin.redeemNeedsCheckIn"))
         Text(tr("loyalty.catalogue"), style = MaterialTheme.typography.titleLarge)
         val rewards = data.rows("rewards").filter { it.text("type") == "DIRECT" && (event == null || it.text("venueId") == event.text("venueId")) }
         if (rewards.isEmpty()) Empty(tr("loyalty.emptyRewards"), tr("loyalty.emptyRewardsBody"))
         rewards.forEach { r -> Tile {
             Text(r.text("name"), style = MaterialTheme.typography.titleMedium); Text(r.text("description")); Text(count(r.number("xpCost")) + " XP")
             Text(if (r["stock"] == JsonNull) tr("loyalty.unlimited") else tr("loyalty.stockLeft", "count" to count(r.number("stock"))))
-            Decide(tr("loyalty.redeem"), tr("loyalty.confirmRedeem"), !mutation.busy && event != null && data.number("balance") >= r.number("xpCost") && (r["stock"] == JsonNull || r.number("stock") > 0)) {
-                mutation.run { api.request("POST", "/api/loyalty/redeem", body("eventId" to event!!.text("id"), "rewardId" to r.text("id"))); reload() }
+            Decide(tr("loyalty.redeem"), tr("uxAdmin.redeemConfirm", "reward" to r.text("name"), "cost" to count(r.number("xpCost")), "event" to event?.text("title").orEmpty()), !mutation.busy && event != null && data.number("balance") >= r.number("xpCost") && (r["stock"] == JsonNull || r.number("stock") > 0)) {
+                mutation.run {
+                    val response = api.request("POST", "/api/loyalty/redeem", body("eventId" to event!!.text("id"), "rewardId" to r.text("id")))
+                    issuedEvent = event.text("title"); issuedCost = r.number("xpCost"); issued = response.obj("redemption").takeIf { it.isNotEmpty() }
+                    reload()
+                }
             }
         } }
         if (event != null) Action(tr("phase5.draw")) { go("draw/" + event.text("id")) }
-        Text(tr("loyalty.codes"), style = MaterialTheme.typography.titleLarge)
-        if (data.rows("redemptions").isEmpty()) Empty(tr("loyalty.emptyCodes"), tr("loyalty.emptyCodesBody"))
-        data.rows("redemptions").forEach { r -> Redemption(r, language, reload) }
+        }
+        "mine" -> {
+            Text(tr("uxAdmin.myRewards"), style = MaterialTheme.typography.titleLarge)
+            val history = data.rows("redemptions").filterNot { activeRewardCode(it, now) }
+            if (history.isEmpty()) Empty(tr("loyalty.emptyCodes"), tr("loyalty.emptyCodesBody"))
+            history.forEach { Redemption(it, language, reload) }
+        }
+        "activity" -> {
+        Action(tr("uxAdmin.claimBonusXp"), secondary = true) { go("claims") }
+        Action(tr("uxAdmin.myClaims"), secondary = true) { go("claims/history") }
+        Text(tr("uxAdmin.claimBonusBody"))
+        Action(tr("loyalty.leaderboard"), secondary = true) { go("leaderboard") }
         data.rows("expiring").forEach { row -> Text(tr("phase5.xpExpiry", "xp" to count(row.number("xp")), "date" to dateTime(row.text("expiresAt"), language)), style = MaterialTheme.typography.bodySmall) }
         Text(tr("loyalty.ledger"), style = MaterialTheme.typography.titleLarge)
         if (data.rows("ledger").isEmpty()) Empty(tr("loyalty.emptyLedger"), tr("loyalty.emptyLedgerBody"))
         data.rows("ledger").forEach { row -> Tile { Text((if (row.number("delta") > 0) "+" else "") + count(row.number("delta")) + " XP · " + tr("loyalty." + row.text("reason"))); Text(dateTime(row.text("createdAt"), language), style = MaterialTheme.typography.bodySmall) } }
+        }
+        }
+        issued?.let { initial ->
+            val current = data.rows("redemptions").find { it.text("id") == initial.text("id") } ?: initial
+            Dialog(onDismissRequest = { issued = null }) {
+                Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.background) {
+                    Column(Modifier.fillMaxWidth().heightIn(max = 640.dp).verticalScroll(rememberScrollState()).padding(Space.page), verticalArrangement = Arrangement.spacedBy(Space.gap)) {
+                        Text(tr("uxAdmin.rewardCodeReady"), style = MaterialTheme.typography.titleLarge)
+                        Text(issuedEvent, style = MaterialTheme.typography.titleMedium)
+                        Text(tr("uxAdmin.xpSpent", "cost" to count(issuedCost)))
+                        Redemption(current, language, reload)
+                        Action(tr("common.close"), secondary = true) { issued = null }
+                    }
+                }
+            }
+        }
     }
 }
 @Composable fun Redemption(r: JsonObject, language: String, reload: () -> Unit) {
-    var seconds by remember(r) { mutableIntStateOf(0) }
+    var seconds by remember(r) { mutableIntStateOf(runCatching { ((Instant.parse(r.text("expiresAt")).toEpochMilli() - System.currentTimeMillis()) / 1000).toInt().coerceAtLeast(0) }.getOrDefault(0)) }
     LaunchedEffect(r) {
         if (r.text("status") == "ISSUED") {
             do { seconds = runCatching { ((Instant.parse(r.text("expiresAt")).toEpochMilli() - System.currentTimeMillis()) / 1000).toInt().coerceAtLeast(0) }.getOrDefault(0); if (seconds > 0) delay(1000) } while (seconds > 0)
@@ -63,12 +108,27 @@ import java.time.Instant
     }
 }
 @Composable fun Draw(session: Session, api: Api, id: String, language: String) {
-    val mutation = rememberMutation(); MutationStatus(mutation)
     val live = liveVersion(api, "draw", id)
-    Remote(api, "/api/loyalty/draw?eventId=${query(id)}", refresh = live, pollMs = 15000) { d, reload ->
-        Remote(api, "/api/events/$id") { eventState, _ ->
-        val ended = eventState.obj("event").text("phase") == "ended"
+    val staffSource = LocalAdminMode.current || !hasPersonalMembership(session)
+    val admin = LocalAdminMode.current && hasCapability(session, "draw.manage")
+    if (staffSource) {
+        if (!hasCapability(session, "draw.manage")) { Notice(tr("errors.forbidden"), true); return }
+        Remote(api, "/api/admin/draw?eventId=${query(id)}", refresh = live, pollMs = 15000) { state, reload ->
+            DrawContent(api, id, language, state.obj("event"), state.obj("draw"), true, admin, state.flag("canRun"), reload)
+        }
+    } else Remote(api, "/api/loyalty/draw?eventId=${query(id)}", refresh = live, pollMs = 15000) { draw, reload ->
+        Remote(api, "/api/events/$id", pollMs = 15000) { state, _ ->
+            DrawContent(api, id, language, state.obj("event"), draw, false, false, false, reload)
+        }
+    }
+}
+@Composable private fun DrawContent(api: Api, id: String, language: String, event: JsonObject, d: JsonObject, staffSource: Boolean, admin: Boolean, serverCanRun: Boolean, reload: () -> Unit) {
+    val mutation = rememberMutation(); MutationStatus(mutation)
+    val now = adminNow()
+    val runReady = canRunStaffDraw(body("event" to event, "draw" to d, "canRun" to serverCanRun), now)
+        val ended = runCatching { now >= Instant.parse(event.text("endsAt")) }.getOrDefault(true)
         Title(tr("phase5.draw"), tr(if(ended) "native.endedDraw" else "phase5.drawHint"))
+        if (staffSource) AdminEventContext(event, language)
         if(ended) {
             Tile {
                 CardHeading(d.text("prize", tr("phase5.notConfigured")))
@@ -87,15 +147,13 @@ import java.time.Instant
             if (d.rows("entries").isEmpty()) Notice(tr("phase5.drawEmpty"))
             d.rows("entries").forEach { entry -> Text("${count(entry.number("position"))}. ${entry.text("name")}", style = MaterialTheme.typography.titleMedium) }
             d.rows("entries").find { it.text("id") == d.text("winnerEntryId") }?.let { Notice(tr("phase5.drawWinner", "name" to it.text("name"))) }
-            val admin = hasCapability(session, "draw.manage")
-            if (!ended && d.text("startedAt").isEmpty()) Decide(tr(if (admin) "phase5.drawRun" else "phase5.drawEnter"), tr(if (admin) "phase5.drawConfirm" else "phase5.drawHint"), !mutation.busy && if (admin) d.text("prize").isNotBlank() && d.rows("entries").size == d.number("capacity") else canEnterDraw(d), maroon = true) {
+            if (admin && !runReady && d.text("startedAt").isEmpty()) Notice(tr("uxAdmin.drawNotReady"))
+            if (!ended && d.text("startedAt").isEmpty() && (admin || !staffSource)) Decide(tr(if (admin) "phase5.drawRun" else "phase5.drawEnter"), tr(if (admin) "phase5.drawConfirm" else "phase5.drawHint"), !mutation.busy && if (admin) runReady else event.text("status") == "OPEN" && event.obj("myCheckIn").isNotEmpty() && canEnterDraw(d, now), maroon = true) {
                 mutation.run { api.request("POST", if (admin) "/api/admin/draw" else "/api/loyalty/spin", if (admin) body("eventId" to id, "action" to "run") else body("eventId" to id)); reload() }
             }
         }
-    }
 }
-}
-@Composable fun Leaderboard(api: Api, language: String, homeCityId: String) {
+@Composable fun Leaderboard(api: Api, language: String, homeCityId: String = "") {
     Title(tr("loyalty.leaderboard"), tr("loyalty.earned"))
     var city by remember(homeCityId) { mutableStateOf(homeCityId) }; var national by remember(homeCityId) { mutableStateOf(homeCityId.isBlank()) }
     var month by remember { mutableStateOf("") }; var appliedMonth by remember { mutableStateOf("") }; var event by remember { mutableStateOf("") }
@@ -118,19 +176,23 @@ import java.time.Instant
         Action(tr("common.retry"), secondary = true) { reload() }
     }
 }
-@Composable fun Claims(session: Session, api: Api) {
-    Title(tr("phase5.claimTitle"), tr("phase5.claimBody"))
-    var claimTab by remember { mutableStateOf("pending") }
-    var eventId by remember { mutableStateOf("") }; var form by remember { mutableStateOf("MEMBER") }; var editing by remember { mutableStateOf<JsonObject?>(null) }
+@Composable fun Claims(session: Session, api: Api, initialEventId: String = "", go: (String) -> Unit = {}, initialClaimId: String = "") {
+    val statusOnly = initialEventId == "history" || initialClaimId.isNotBlank()
+    Title(tr(if (statusOnly) "uxAdmin.myClaims" else "uxAdmin.claimBonusXp"), tr("uxAdmin.claimBonusBody"))
+    if (statusOnly) Action(tr("uxAdmin.claimBonusXp"), secondary = true) { go("claims") }
+    var claimTab by remember(initialEventId) { mutableStateOf(if (initialEventId == "history") "history" else "pending") }
+    var eventId by remember(initialEventId) { mutableStateOf(if (initialEventId == "history") "" else initialEventId) }; var form by remember { mutableStateOf("MEMBER") }; var editing by remember { mutableStateOf<JsonObject?>(null) }
     var guests by remember { mutableStateOf("0") }; var reservations by remember { mutableStateOf("0") }; var notes by remember { mutableStateOf("") }; var receipt by remember { mutableStateOf("") }
     val mutation = rememberMutation(); MutationStatus(mutation)
     val live = liveVersion(api, "wallet", session.me.obj("member").text("id"))
     fun clear() { editing = null; guests = "0"; reservations = "0"; notes = ""; receipt = "" }
     Remote(api, "/api/loyalty/claims", refresh = live) { data, reload ->
+        LaunchedEffect(initialClaimId, data) { data.rows("claims").find { it.text("id") == initialClaimId }?.let { claimTab = if (it.text("status") == "PENDING") "pending" else "history" } }
         LaunchedEffect(data.flag("isPromoter")) { if (!data.flag("isPromoter") && form == "PR") { form = "MEMBER"; clear() } }
-        val event = data.rows("events").find { it.text("id") == eventId } ?: data.rows("events").firstOrNull()
-        if (event == null) Notice(tr("loyalty.noPastEvents")) else {
-            Choices(tr("loyalty.event"), data.rows("events").map { it.text("id") to it.text("title") }, event.text("id")) { eventId = it; clear() }
+        val event = data.rows("events").find { it.text("id") == eventId } ?: if (eventId.isBlank()) data.rows("events").firstOrNull() else null
+        if (!statusOnly || editing != null) {
+        Choices(tr("loyalty.event"), data.rows("events").map { it.text("id") to it.text("title") }, event?.text("id").orEmpty()) { eventId = it; clear() }
+        if (event == null) Notice(tr(if (eventId.isNotBlank() && data.rows("events").isNotEmpty()) "uxAdmin.claimEventUnavailable" else "loyalty.noPastEvents")) else {
             if (data.flag("isPromoter")) Choices(tr("phase5.claimForm"), listOf("MEMBER" to tr("phase5.claimMember"), "PR" to tr("phase5.claimPr")), form) { form = it; clear() }
             val existing = data.rows("claims").find { it.text("eventId") == event.text("id") && it.text("formType") == form }
             if (existing == null || (existing.text("status") == "PENDING" && existing.text("id") == editing?.text("id"))) Tile {
@@ -138,14 +200,16 @@ import java.time.Instant
                 Field(tr("phase5.reservationCount"), reservations, { reservations = it }, KeyboardType.Number)
                 Field(tr("phase5.reason"), notes, { notes = it }, multiline = true)
                 ReceiptCapture(api, receipt) { receipt = it }
-                Action(tr(if (editing == null) "phase5.claimSubmit" else "common.save"), !mutation.busy && validCount(guests) && validCount(reservations) && notes.length <= 2000) {
-                    mutation.run { var payload = body("eventId" to event.text("id"), "formType" to form, "guestCount" to if (form == "PR" || data.flag("allowMemberGl")) guests.toInt() else 0, "reservationCount" to reservations.toInt(), "receiptUrl" to receipt, "notes" to notes); editing?.let { payload = JsonObject(payload + ("id" to JsonPrimitive(it.text("id")))) }; api.request(if (editing == null) "POST" else "PATCH", "/api/loyalty/claims", payload); clear(); mutation.notice = "phase5.claimPending"; reload() }
+                Action(tr(if (editing == null) "phase5.claimSubmit" else "common.save"), !mutation.busy && ((form != "PR" && !data.flag("allowMemberGl")) || validCount(guests)) && validCount(reservations) && notes.length <= 2000) {
+                    mutation.run { var payload = body("eventId" to event.text("id"), "formType" to form, "reservationCount" to reservations.toInt(), "receiptUrl" to receipt, "notes" to notes); if (form == "PR" || data.flag("allowMemberGl")) payload = JsonObject(payload + ("guestCount" to JsonPrimitive(guests.toInt()))); editing?.let { payload = JsonObject(payload + ("id" to JsonPrimitive(it.text("id")))) }; api.request(if (editing == null) "POST" else "PATCH", "/api/loyalty/claims", payload); clear(); mutation.notice = "phase5.claimPending"; reload() }
                 }
                 if (editing != null) Action(tr("common.cancel"), secondary = true) { clear() }
             }
         }
+        }
+        if (!statusOnly) Text(tr("uxAdmin.myClaims"), style = MaterialTheme.typography.titleLarge)
         Tabs(listOf("pending" to tr("native.pending"), "history" to tr("native.history")), claimTab, mapOf("pending" to data.rows("claims").count { it.text("status") == "PENDING" })) { claimTab = it }
-        val visibleClaims = data.rows("claims").filter { (it.text("status") == "PENDING") == (claimTab == "pending") }
+        val visibleClaims = data.rows("claims").filter { (initialClaimId.isBlank() || it.text("id") == initialClaimId) && (it.text("status") == "PENDING") == (claimTab == "pending") }
         if(visibleClaims.isEmpty()) Empty(tr("phase5.claimEmpty"), tr("phase5.claimBody"))
         visibleClaims.forEach { c -> Tile {
             Text(c.obj("event").text("title"), style = MaterialTheme.typography.titleMedium); Text(tr(if (c.text("formType") == "PR") "phase5.claimPr" else "phase5.claimMember") + " · " + tr("social." + c.text("status")))
