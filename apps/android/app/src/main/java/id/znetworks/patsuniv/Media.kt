@@ -33,10 +33,34 @@ import kotlinx.coroutines.*
 import kotlinx.serialization.json.JsonObject
 import java.io.File
 
+// Camera JPEGs can store landscape pixels with an EXIF rotation. BitmapFactory alone
+// ignores that metadata, making receipts and shared photos appear sideways.
+fun decodeMediaBitmap(bytes: ByteArray): android.graphics.Bitmap? {
+    val original = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return null
+    val orientation = runCatching {
+        android.media.ExifInterface(java.io.ByteArrayInputStream(bytes))
+            .getAttributeInt(android.media.ExifInterface.TAG_ORIENTATION, 1)
+    }.getOrDefault(1)
+    val matrix = android.graphics.Matrix().apply {
+        when (orientation) {
+            2 -> setScale(-1f, 1f)
+            3 -> setRotate(180f)
+            4 -> setScale(1f, -1f)
+            5 -> { setRotate(90f); postScale(-1f, 1f) }
+            6 -> setRotate(90f)
+            7 -> { setRotate(270f); postScale(-1f, 1f) }
+            8 -> setRotate(270f)
+        }
+    }
+    if (matrix.isIdentity) return original
+    return android.graphics.Bitmap.createBitmap(original, 0, 0, original.width, original.height, matrix, true)
+        .also { if (it !== original) original.recycle() }
+}
+
 @Composable fun NetworkImage(api: Api, url: String) {
     var bitmap by remember(url) { mutableStateOf<android.graphics.Bitmap?>(null) }
     var failed by remember(url) { mutableStateOf(false) }
-    LaunchedEffect(url) { try { val bytes = api.media(url); bitmap = withContext(Dispatchers.Default) { BitmapFactory.decodeByteArray(bytes, 0, bytes.size) }; failed = bitmap == null } catch(e: CancellationException) { throw e } catch (_: Exception) { failed = true } }
+    LaunchedEffect(url) { try { val bytes = api.media(url); bitmap = withContext(Dispatchers.Default) { decodeMediaBitmap(bytes) }; failed = bitmap == null } catch(e: CancellationException) { throw e } catch (_: Exception) { failed = true } }
     bitmap?.let { Image(it.asImageBitmap(), tr("social.photo"), Modifier.fillMaxWidth().heightIn(max = Space.qr)) }
     if (failed) Notice(tr("errors.network"), true)
 }
