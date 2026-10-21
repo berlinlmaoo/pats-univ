@@ -108,16 +108,25 @@ import java.time.Instant
     }
 }
 @Composable fun Draw(session: Session, api: Api, id: String, language: String) {
-    val mutation = rememberMutation(); MutationStatus(mutation)
     val live = liveVersion(api, "draw", id)
-    val staffSource = hasCapability(session, "city.operations")
+    val staffSource = LocalAdminMode.current || !hasPersonalMembership(session)
     val admin = LocalAdminMode.current && hasCapability(session, "draw.manage")
+    if (staffSource) {
+        if (!hasCapability(session, "draw.manage")) { Notice(tr("errors.forbidden"), true); return }
+        Remote(api, "/api/admin/draw?eventId=${query(id)}", refresh = live, pollMs = 15000) { state, reload ->
+            DrawContent(api, id, language, state.obj("event"), state.obj("draw"), true, admin, state.flag("canRun"), reload)
+        }
+    } else Remote(api, "/api/loyalty/draw?eventId=${query(id)}", refresh = live, pollMs = 15000) { draw, reload ->
+        Remote(api, "/api/events/$id", pollMs = 15000) { state, _ ->
+            DrawContent(api, id, language, state.obj("event"), draw, false, false, false, reload)
+        }
+    }
+}
+@Composable private fun DrawContent(api: Api, id: String, language: String, event: JsonObject, d: JsonObject, staffSource: Boolean, admin: Boolean, serverCanRun: Boolean, reload: () -> Unit) {
+    val mutation = rememberMutation(); MutationStatus(mutation)
     val now = adminNow()
-    Remote(api, "/api/loyalty/draw?eventId=${query(id)}", refresh = live, pollMs = 15000) { d, reload ->
-        // The current draw-state endpoint already accepts crew; metadata must use the staff event API.
-        Remote(api, if (staffSource) "/api/admin/events/$id" else "/api/events/$id", pollMs = 15000) { eventState, _ ->
-        val event = eventState.obj("event")
-        val ended = event.text("phase") == "ended" || runCatching { now >= Instant.parse(event.text("endsAt")) }.getOrDefault(true)
+    val runReady = canRunStaffDraw(body("event" to event, "draw" to d, "canRun" to serverCanRun), now)
+        val ended = runCatching { now >= Instant.parse(event.text("endsAt")) }.getOrDefault(true)
         Title(tr("phase5.draw"), tr(if(ended) "native.endedDraw" else "phase5.drawHint"))
         if (staffSource) AdminEventContext(event, language)
         if(ended) {
@@ -138,13 +147,11 @@ import java.time.Instant
             if (d.rows("entries").isEmpty()) Notice(tr("phase5.drawEmpty"))
             d.rows("entries").forEach { entry -> Text("${count(entry.number("position"))}. ${entry.text("name")}", style = MaterialTheme.typography.titleMedium) }
             d.rows("entries").find { it.text("id") == d.text("winnerEntryId") }?.let { Notice(tr("phase5.drawWinner", "name" to it.text("name"))) }
-            if (admin && !canRunAdminDraw(event, d, now) && d.text("startedAt").isEmpty()) Notice(tr("uxAdmin.drawNotReady"))
-            if (!ended && d.text("startedAt").isEmpty() && (admin || !staffSource)) Decide(tr(if (admin) "phase5.drawRun" else "phase5.drawEnter"), tr(if (admin) "phase5.drawConfirm" else "phase5.drawHint"), !mutation.busy && if (admin) canRunAdminDraw(event, d, now) else canEnterDraw(d, now), maroon = true) {
+            if (admin && !runReady && d.text("startedAt").isEmpty()) Notice(tr("uxAdmin.drawNotReady"))
+            if (!ended && d.text("startedAt").isEmpty() && (admin || !staffSource)) Decide(tr(if (admin) "phase5.drawRun" else "phase5.drawEnter"), tr(if (admin) "phase5.drawConfirm" else "phase5.drawHint"), !mutation.busy && if (admin) runReady else event.text("status") == "OPEN" && event.obj("myCheckIn").isNotEmpty() && canEnterDraw(d, now), maroon = true) {
                 mutation.run { api.request("POST", if (admin) "/api/admin/draw" else "/api/loyalty/spin", if (admin) body("eventId" to id, "action" to "run") else body("eventId" to id)); reload() }
             }
         }
-    }
-}
 }
 @Composable fun Leaderboard(api: Api, language: String, homeCityId: String = "") {
     Title(tr("loyalty.leaderboard"), tr("loyalty.earned"))
@@ -169,8 +176,10 @@ import java.time.Instant
         Action(tr("common.retry"), secondary = true) { reload() }
     }
 }
-@Composable fun Claims(session: Session, api: Api, initialEventId: String = "") {
-    Title(tr("uxAdmin.claimBonusXp"), tr("uxAdmin.claimBonusBody"))
+@Composable fun Claims(session: Session, api: Api, initialEventId: String = "", go: (String) -> Unit = {}, initialClaimId: String = "") {
+    val statusOnly = initialEventId == "history" || initialClaimId.isNotBlank()
+    Title(tr(if (statusOnly) "uxAdmin.myClaims" else "uxAdmin.claimBonusXp"), tr("uxAdmin.claimBonusBody"))
+    if (statusOnly) Action(tr("uxAdmin.claimBonusXp"), secondary = true) { go("claims") }
     var claimTab by remember(initialEventId) { mutableStateOf(if (initialEventId == "history") "history" else "pending") }
     var eventId by remember(initialEventId) { mutableStateOf(if (initialEventId == "history") "" else initialEventId) }; var form by remember { mutableStateOf("MEMBER") }; var editing by remember { mutableStateOf<JsonObject?>(null) }
     var guests by remember { mutableStateOf("0") }; var reservations by remember { mutableStateOf("0") }; var notes by remember { mutableStateOf("") }; var receipt by remember { mutableStateOf("") }
@@ -178,8 +187,10 @@ import java.time.Instant
     val live = liveVersion(api, "wallet", session.me.obj("member").text("id"))
     fun clear() { editing = null; guests = "0"; reservations = "0"; notes = ""; receipt = "" }
     Remote(api, "/api/loyalty/claims", refresh = live) { data, reload ->
+        LaunchedEffect(initialClaimId, data) { data.rows("claims").find { it.text("id") == initialClaimId }?.let { claimTab = if (it.text("status") == "PENDING") "pending" else "history" } }
         LaunchedEffect(data.flag("isPromoter")) { if (!data.flag("isPromoter") && form == "PR") { form = "MEMBER"; clear() } }
         val event = data.rows("events").find { it.text("id") == eventId } ?: if (eventId.isBlank()) data.rows("events").firstOrNull() else null
+        if (!statusOnly || editing != null) {
         Choices(tr("loyalty.event"), data.rows("events").map { it.text("id") to it.text("title") }, event?.text("id").orEmpty()) { eventId = it; clear() }
         if (event == null) Notice(tr(if (eventId.isNotBlank() && data.rows("events").isNotEmpty()) "uxAdmin.claimEventUnavailable" else "loyalty.noPastEvents")) else {
             if (data.flag("isPromoter")) Choices(tr("phase5.claimForm"), listOf("MEMBER" to tr("phase5.claimMember"), "PR" to tr("phase5.claimPr")), form) { form = it; clear() }
@@ -189,15 +200,16 @@ import java.time.Instant
                 Field(tr("phase5.reservationCount"), reservations, { reservations = it }, KeyboardType.Number)
                 Field(tr("phase5.reason"), notes, { notes = it }, multiline = true)
                 ReceiptCapture(api, receipt) { receipt = it }
-                Action(tr(if (editing == null) "phase5.claimSubmit" else "common.save"), !mutation.busy && validCount(guests) && validCount(reservations) && notes.length <= 2000) {
-                    mutation.run { var payload = body("eventId" to event.text("id"), "formType" to form, "guestCount" to if (form == "PR" || data.flag("allowMemberGl")) guests.toInt() else 0, "reservationCount" to reservations.toInt(), "receiptUrl" to receipt, "notes" to notes); editing?.let { payload = JsonObject(payload + ("id" to JsonPrimitive(it.text("id")))) }; api.request(if (editing == null) "POST" else "PATCH", "/api/loyalty/claims", payload); clear(); mutation.notice = "phase5.claimPending"; reload() }
+                Action(tr(if (editing == null) "phase5.claimSubmit" else "common.save"), !mutation.busy && ((form != "PR" && !data.flag("allowMemberGl")) || validCount(guests)) && validCount(reservations) && notes.length <= 2000) {
+                    mutation.run { var payload = body("eventId" to event.text("id"), "formType" to form, "reservationCount" to reservations.toInt(), "receiptUrl" to receipt, "notes" to notes); if (form == "PR" || data.flag("allowMemberGl")) payload = JsonObject(payload + ("guestCount" to JsonPrimitive(guests.toInt()))); editing?.let { payload = JsonObject(payload + ("id" to JsonPrimitive(it.text("id")))) }; api.request(if (editing == null) "POST" else "PATCH", "/api/loyalty/claims", payload); clear(); mutation.notice = "phase5.claimPending"; reload() }
                 }
                 if (editing != null) Action(tr("common.cancel"), secondary = true) { clear() }
             }
         }
-        Text(tr("uxAdmin.myClaims"), style = MaterialTheme.typography.titleLarge)
+        }
+        if (!statusOnly) Text(tr("uxAdmin.myClaims"), style = MaterialTheme.typography.titleLarge)
         Tabs(listOf("pending" to tr("native.pending"), "history" to tr("native.history")), claimTab, mapOf("pending" to data.rows("claims").count { it.text("status") == "PENDING" })) { claimTab = it }
-        val visibleClaims = data.rows("claims").filter { (it.text("status") == "PENDING") == (claimTab == "pending") }
+        val visibleClaims = data.rows("claims").filter { (initialClaimId.isBlank() || it.text("id") == initialClaimId) && (it.text("status") == "PENDING") == (claimTab == "pending") }
         if(visibleClaims.isEmpty()) Empty(tr("phase5.claimEmpty"), tr("phase5.claimBody"))
         visibleClaims.forEach { c -> Tile {
             Text(c.obj("event").text("title"), style = MaterialTheme.typography.titleMedium); Text(tr(if (c.text("formType") == "PR") "phase5.claimPr" else "phase5.claimMember") + " · " + tr("social." + c.text("status")))

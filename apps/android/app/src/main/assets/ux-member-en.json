@@ -48,6 +48,11 @@
     "checkInCloses": "Check-in closes",
     "otherCityAdmission": "This event is outside your city. Attendance access requires crew approval; a reservation alone does not grant admission.",
     "yourJourney": "Your event journey",
+    "journeyUnavailable": "The event journey is unavailable. Open the event or refresh to try again.",
+    "reservationSkipped": "You chose not to reserve for this event.",
+    "completionWait": "Your check-in is confirmed. This journey is completed after the event ends.",
+    "nationalNextEvent": "There is no upcoming event in your city. This next event is in another active city; attendance access still requires approval.",
+    "homeNoOpenBody": "Browse events to review the schedule and prepare the next check-in window.",
     "steps": {
       "nextEvent": "Next event",
       "poster": "Blast poster",

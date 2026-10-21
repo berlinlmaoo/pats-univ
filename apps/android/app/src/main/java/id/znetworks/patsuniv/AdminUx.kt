@@ -20,3 +20,14 @@ import java.time.Instant
         Badge(tr("eventPhase." + event.text("phase")), event.text("phase"))
     }
 }
+@Composable fun AdminScanUnavailable(workspace: JsonObject, language: String, now: Instant = Instant.now()) {
+    val event = workspace.obj("event")
+    val lifecycle = workspace.obj("lifecycle")
+    val zone = event.obj("city").text("timezone", "Asia/Jakarta")
+    val ended = lifecycle.text("scanUnavailable") == "checkInEnded" || runCatching { now >= Instant.parse(lifecycle.text("checkInClosesAt")) }.getOrDefault(true)
+    if (ended) Notice(tr("ux.workspace.checkInEnded", "time" to dateTime(lifecycle.text("checkInClosesAt"), language, zone)))
+    else {
+        Notice(tr("ux.reason.checkInNotOpen"))
+        Text(tr("uxAdmin.checkInOpens") + ": " + dateTime(lifecycle.text("checkInOpensAt"), language, zone))
+    }
+}

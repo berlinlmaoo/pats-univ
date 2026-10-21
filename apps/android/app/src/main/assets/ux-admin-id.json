@@ -40,6 +40,8 @@
     "claims": "Pengajuan",
     "draw": "Undian",
     "recap": "Rekap",
+    "manualRecap": "Rekap kru",
+    "manualRecapBody": "Angka ini diisi oleh kru. Penjualan reservasi terkonfirmasi ditampilkan terpisah di atas.",
     "viewRecap": "Lihat rekap event",
     "eventUnavailable": "Event ini tidak tersedia dalam cakupan tugas kamu. Kembali ke daftar event untuk memilih event lain.",
     "archivedEvents": "Event & arsip",

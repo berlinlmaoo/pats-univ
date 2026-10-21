@@ -20,6 +20,8 @@ class UxNavigationTest {
         assertEquals("checkin.scan", operationalCapability("scan/event-id"))
         assertEquals("hq.manage", operationalCapability("hub-access/city-id"))
         assertEquals("hq.manage", operationalCapability("hq-web"))
+        assertEquals("hq.manage", operationalCapability("content-approvals/submission-id"))
+        assertEquals("city.operations", operationalCapability("event-content/event-id"))
         assertNull(operationalCapability("card"))
         assertNull(operationalCapability("event/member-event"))
     }
@@ -28,5 +30,8 @@ class UxNavigationTest {
         assertFalse(hasPersonalMembership(Session(token, body("user" to body("role" to "SUPER_ADMIN")))))
         assertFalse(hasPersonalMembership(Session(token, body("user" to body("role" to "MEMBER")))))
         assertTrue(hasPersonalMembership(Session(token, body("user" to body("role" to "MEMBER"), "member" to body("id" to "member-id")))))
+        assertTrue(hasPersonalMembership(Session(token, body("user" to body("role" to "SUPER_ADMIN", "membership" to "member"), "member" to body("id" to "member-id")))))
+        assertFalse(hasPersonalMembership(Session(token, body("user" to body("role" to "SUPER_ADMIN", "membership" to "staffOnly"), "member" to body("id" to "stale-member")))))
+        assertTrue(isStaff(Session(token, body("user" to body("adminScope" to body("kind" to "HQ"))))))
     }
 }

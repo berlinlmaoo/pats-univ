@@ -53,4 +53,30 @@ class AdminEligibilityTest {
         assertFalse(rejected.containsKey("reservationCount"))
         assertEquals(3, claimReviewPayload("claim", "APPROVED", "2", "3", "").number("reservationCount"))
     }
+    @Test fun workspaceServerDenialOverridesLocallyOpenEventAndEarlyOpenUsesLifecycle() {
+        val lifecycle = body("canScan" to false, "canPublish" to false, "canOpen" to true, "canClose" to false, "checkInClosesAt" to event.text("checkInClosesAt"))
+        val workspace = body("event" to event, "lifecycle" to lifecycle)
+        assertFalse(canScanAdminWorkspace(workspace, now))
+        assertEquals(listOf("open"), adminWorkspaceActions(workspace, now))
+        assertTrue(adminWorkspaceActions(workspace, Instant.parse(event.text("checkInClosesAt"))).isEmpty())
+        assertTrue(canScanAdminWorkspace(body("event" to event, "lifecycle" to body("canScan" to true)), now))
+        assertFalse(canScanAdminWorkspace(body("event" to event, "lifecycle" to body("canScan" to true)), Instant.parse(event.text("checkInClosesAt"))))
+    }
+    @Test fun staffDrawRequiresServerPermissionEvenWhenLocallyEligible() {
+        val draw = body("prize" to "Gift", "capacity" to 1, "entries" to JsonArray(listOf(body("id" to "entry"))))
+        assertFalse(canRunStaffDraw(body("event" to event, "draw" to draw, "canRun" to false), now))
+        assertTrue(canRunStaffDraw(body("event" to event, "draw" to draw, "canRun" to true), now))
+        assertFalse(canRunStaffDraw(body("event" to event, "draw" to draw, "canRun" to true), Instant.parse(event.text("endsAt"))))
+    }
+    @Test fun disallowedClaimFieldsAreHiddenAndOmittedEvenWithStaleGuestValues() {
+        val noGl = body("glAllowed" to false, "editableFields" to JsonArray(listOf(JsonPrimitive("reservationCount"))))
+        assertFalse(claimFieldEditable(noGl, "guestCount"))
+        assertTrue(claimFieldEditable(noGl, "reservationCount"))
+        assertFalse(claimFieldEditable(body("glAllowed" to true), "guestCount"))
+        assertFalse(claimFieldEditable(body("glAllowed" to false, "editableFields" to JsonArray(listOf(JsonPrimitive("guestCount")))), "guestCount"))
+        val payload = claimReviewPayload("claim", "APPROVED", "invalid stale value", "4", "", allowGuests = false)
+        assertFalse(payload.containsKey("guestCount"))
+        assertEquals(4, payload.number("reservationCount"))
+        assertFalse(claimReviewPayload("claim", "APPROVED", "", "", "", false, false).containsKey("reservationCount"))
+    }
 }

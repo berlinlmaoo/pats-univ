@@ -7,7 +7,7 @@
   "fields": [
     { "key": "fullName", "x": 0.0495, "y": 0.385, "width": 0.61, "height": 0.12, "lines": 2 },
     { "key": "favoriteDrink", "x": 0.0495, "y": 0.614, "width": 0.60, "height": 0.12, "lines": 2 },
-    { "key": "quotes", "x": 0.0495, "y": 0.831, "width": 0.60, "height": 0.13, "lines": 3 }
+    { "key": "quotes", "x": 0.0495, "y": 0.831, "width": 0.60, "height": 0.15, "lines": 2 }
   ],
   "qr": { "x": 0.704, "y": 0.543, "width": 0.233 }
 }

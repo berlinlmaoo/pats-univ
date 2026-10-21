@@ -5,6 +5,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.platform.LocalContext
+import kotlinx.serialization.json.JsonObject
 
 @Composable fun MemberHome(session: Session, api: Api, go: (String) -> Unit) {
     val member = session.me.obj("member")
@@ -16,15 +17,28 @@ import androidx.compose.ui.platform.LocalContext
         Notice(tr("uxShell.staffWelcome"))
         Action(tr("uxShell.account")) { go("profile") }
         Action(tr("uxShell.events"), secondary = true) { go("events") }
+        Action(tr("uxShell.notifications"), secondary = true) { go("notifications") }
         return
     }
-    Remote(api, "/api/events", pollMs = 15_000) { data, _ ->
-        val events = data.rows("upcoming")
-        val event = events.firstOrNull { it.text("phase") == "open" } ?: events.firstOrNull()
-        if (event == null) {
-            Empty(tr("app.eventsEmptyTitle"), tr("app.eventsEmptyBody", "city" to member.obj("city").text("name")))
+    var unread by remember(session.me.obj("user").text("id")) { mutableIntStateOf(0) }
+    Remote(api, "/api/me/home", pollMs = 15_000) { data, reload ->
+        SideEffect { unread = data.number("unreadNotifications") }
+        val next = data.obj("next")
+        val event = next.obj("event")
+        if (event.isEmpty()) {
+            Empty(tr("app.eventsEmptyTitle"), tr("ux.home.noEvent", "city" to data.obj("homeCity").text("name", member.obj("city").text("name"))))
             Action(tr("uxShell.events"), secondary = true) { go("events") }
-        } else EventJourney(session, api, event, go)
+        } else {
+            if (next.flag("national")) Notice(tr("uxMember.nationalNextEvent"))
+            EventJourney(session, api, event, go, next.rows("journey"), next.obj("myReservation"), reload)
+        }
+        val blocking = data.obj("blockingReservation")
+        if (blocking.isNotEmpty()) Tile {
+            Notice(tr("ux.reservation.blocked", "event" to blocking.obj("event").text("title")))
+            Text(blocking.text("slotCode"))
+            Action(tr("ux.reservation.openBlocking"), secondary = true) { go(if (blocking.text("conversationId").isNotBlank()) "conversation/" + blocking.text("conversationId") else "booking/" + blocking.obj("event").text("id") + "/" + blocking.text("id")) }
+        }
+        if (data.obj("card").obj("digital").flag("ready")) Badge(tr("ux.card.digitalReady"), "ACTIVE")
     }
     Action(tr("uxShell.card"), maroon = true) { go("card") }
     Remote(api, "/api/loyalty/wallet", refresh = liveVersion(api, "wallet", member.text("id"))) { data, _ ->
@@ -34,6 +48,7 @@ import androidx.compose.ui.platform.LocalContext
             Action(tr("uxShell.xpRewards"), secondary = true) { go("wallet") }
         }
     }
+    if (unread > 0) Text(tr("app.notificationsUnread", "count" to count(unread)), style = MaterialTheme.typography.bodySmall)
     Action(tr("uxShell.notifications"), secondary = true) { go("notifications") }
 }
 
@@ -55,34 +70,40 @@ import androidx.compose.ui.platform.LocalContext
 
 @Composable private fun StaffHome(session: Session, api: Api, go: (String) -> Unit) {
     SectionLabel(tr("uxShell.todayWork"))
-    Remote(api, "/api/admin/events", pollMs = 30_000) { data, _ ->
-        val events = data.rows("upcoming") + data.rows("past")
-        var selectedCity by rememberSaveable(session.me.obj("user").text("id")) { mutableStateOf(session.me.obj("user").obj("city").text("id")) }
-        if (hasCapability(session, "hq.manage")) {
-            val cities = events.map { it.obj("city") }.distinctBy { it.text("id") }
-            Choices(tr("uxShell.scope"), cities.map { it.text("id") to it.text("name") }, selectedCity) { selectedCity = it }
-            if (selectedCity.isBlank()) Notice(tr("uxShell.chooseCity"))
-        }
-        val scoped = events.filter { it.obj("city").text("id") == selectedCity }
-        val event = scoped.firstOrNull { it.text("phase") == "open" } ?: scoped.firstOrNull { it.text("phase") != "ended" }
-        if (event != null) Tile {
+    Remote(api, "/api/admin/home", pollMs = 15_000) { data, _ ->
+        val scope = data.obj("scope")
+        Text(tr(if (scope.text("kind") == "HQ") "ux.adminMode.scopeHq" else "ux.adminMode.scopeCity", "city" to scope.obj("city").text("name")))
+        val openEvents = data.rows("openEvents")
+        openEvents.forEach { event -> Tile {
             Text(event.text("title"), style = MaterialTheme.typography.titleLarge)
-            Text(event.obj("city").text("name")); Text(dateTime(event.text("startsAt"), LocalLanguage.current, event.obj("city").text("timezone", "Asia/Jakarta")))
+            Text(event.obj("city").text("name")); Text(dateTime(eventTime(event, "startsAt"), LocalLanguage.current, eventZone(event)))
             Badge(tr("eventPhase." + event.text("phase")), event.text("phase"))
-            if (event.text("phase") == "open") Action(tr("app.adminScan")) { go("scan/" + event.text("id")) }
+            if (event.text("phase") == "open" && hasCapability(session, "checkin.scan")) Action(tr("app.adminScan")) { go("scan/" + event.text("id")) }
             Action(tr("uxShell.manageEvent"), secondary = true) { go("city-event/" + event.text("id")) }
-        } else if (selectedCity.isNotBlank()) Empty(tr("uxShell.noStaffEvent"), tr("uxShell.noStaffEventBody"))
+        } }
+        if (openEvents.isEmpty()) {
+            Empty(tr("ux.workspace.noOpenEvent"), tr("uxMember.homeNoOpenBody"))
+            val next = data.obj("nextEvent")
+            if (next.isNotEmpty()) Tile {
+                CardHeading(next.text("title"))
+                Text(next.obj("city").text("name"))
+                Detail(tr("uxMember.checkInOpens"), dateTime(eventTime(next, "checkInOpensAt"), LocalLanguage.current, eventZone(next)))
+                Action(tr("uxShell.manageEvent"), secondary = true) { go("city-event/" + next.text("id")) }
+            }
+        }
         Action(tr("uxShell.events"), secondary = true) { go("events") }
-    }
-    if (hasCapability(session, "promoter.manage")) Remote(api, "/api/admin/loyalty/claims", pollMs = 30_000) { data, _ ->
-        Action(tr("uxShell.pendingClaims", "count" to count(data.rows("claims").count { it.text("status") == "PENDING" })), secondary = true) { go("claims-review") }
-    }
-    Remote(api, "/api/social/operations", pollMs = 30_000) { data, _ ->
         SectionLabel(tr("uxShell.recentQueues"))
-        if (hasCapability(session, "hq.manage")) Notice(tr("uxShell.queuesAllCities"))
-        Action(tr("uxShell.pendingBookings", "count" to count(data.rows("reservations").count { it.text("status") == "PENDING" })), secondary = true) { go("event-reservations") }
-        Action(tr("uxShell.pendingAttendance", "count" to count(data.rows("roaming").count { it.text("status") == "PENDING" && it.text("type") == "ATTENDANCE" })), secondary = true) { go("event-roaming") }
-        if (hasCapability(session, "hq.manage")) Action(tr("uxShell.pendingHub", "count" to count(data.rows("roaming").count { it.text("status") == "PENDING" && it.text("type") == "SOCIAL_HUB" })), secondary = true) { go("hub-access") }
+        data.obj("pending").forEach { (key, value) ->
+            val queue = value as? JsonObject ?: return@forEach
+            val target = queue.obj("target")
+            val route = when (key) {
+                "hubAccess" -> "hub-access"
+                "myContent" -> "city-events"
+                "regionChanges" -> "notifications"
+                else -> notificationTargetDestination(target, session, true)
+            }
+            if (route != null) Action(tr("ux.workspace.pending.$key") + " · " + count(queue.number("count")), secondary = true) { go(route) }
+        }
     }
     Action(tr("uxShell.staffTools"), secondary = true) { go("tools") }
 }

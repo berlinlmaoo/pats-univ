@@ -69,6 +69,33 @@ class Api(private val store: SessionStore, private val base: String = BuildConfi
         val response = request("POST", "/api/auth/otp/verify", body("email" to email.trim(), "code" to code, "client" to "app"), false)
         store.save(Session(PatsJson.decodeFromJsonElement<Tokens>(response), response.obj("me")))
     }
+    suspend fun saveEventContent(eventId: String, description: String, poster: ByteArray?, contentType: String): JsonObject {
+        if (poster == null) return request("POST", "/api/admin/events/${query(eventId)}/content", body("description" to description))
+        require(poster.isNotEmpty() && poster.size <= 5 * 1024 * 1024 && contentType in setOf("image/jpeg", "image/png", "image/webp"))
+        val token = accessToken()
+        return withContext(Dispatchers.IO) {
+            val form = MultipartBody.Builder().setType(MultipartBody.FORM).addFormDataPart("description", description)
+                .addFormDataPart("poster", "poster." + if (contentType == "image/png") "png" else if (contentType == "image/webp") "webp" else "jpg", poster.toRequestBody(contentType.toMediaType())).build()
+            val request = Request.Builder().url(base.trimEnd('/') + "/api/admin/events/${query(eventId)}/content").header("Authorization", "Bearer $token").post(form).build()
+            try { http.newCall(request).execute().use { response ->
+                val parsed = runCatching { PatsJson.parseToJsonElement(response.body.string()).jsonObject }.getOrDefault(body())
+                if (!response.isSuccessful) throw ApiFailure(parsed.obj("error").text("code", "INTERNAL"), parsed)
+                parsed
+            } } catch (e: ApiFailure) { throw e } catch (e: IOException) { throw ApiFailure("NETWORK") }
+        }
+    }
+    /** Only this same-origin, staff-only route receives bearer auth; signed media stays credential-free. */
+    suspend fun staffPoster(path: String): ByteArray {
+        require(Regex("/api/admin/content-submissions/[A-Za-z0-9-]+/poster").matches(path))
+        val token = accessToken()
+        return withContext(Dispatchers.IO) {
+            val request = Request.Builder().url(base.trimEnd('/') + path).header("Authorization", "Bearer $token").build()
+            try { http.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) throw ApiFailure(if (response.code == 403) "FORBIDDEN" else "MEDIA_INVALID")
+                response.body.bytes()
+            } } catch (e: ApiFailure) { throw e } catch (e: IOException) { throw ApiFailure("NETWORK") }
+        }
+    }
     suspend fun reload() {
         val original = store.current ?: return
         val fresh = request("GET", "/api/me")

@@ -30,7 +30,10 @@ import java.time.*
             allowed.forEach { (route, key, _) -> Action(tr(key), secondary = true) { go(route) } }
         }
     }
-    if (hasCapability(session, "hq.manage")) Action(tr("uxShell.dashboard"), secondary = true) { go("hq-web") }
+    if (hasCapability(session, "hq.manage")) {
+        Action(tr("ux.content.queueTitle"), secondary = true) { go("content-approvals") }
+        Action(tr("uxShell.dashboard"), secondary = true) { go("hq-web") }
+    }
 }
 @Composable fun Who(api: Api, member: JsonObject) {
     Tile {
@@ -52,16 +55,16 @@ import java.time.*
 @Composable fun Scan(api: Api, reader: CardReader, eventId: String, manual: Boolean, go: (String) -> Unit) {
     Title(tr(if (manual) "app.manualTitle" else "app.adminScan"))
     val now = adminNow()
-    Remote(api, "/api/admin/events/$eventId", pollMs = 10000) { eventData, _ ->
+    Remote(api, "/api/admin/events/$eventId/workspace", pollMs = 10000) { eventData, _ ->
     val currentEvent = eventData.obj("event")
     AdminEventContext(currentEvent, LocalLanguage.current)
-    if (!canScanAdminEvent(currentEvent, now)) {
-        Notice(tr("uxAdmin.scanClosed"))
-        Text(tr("uxAdmin.checkInCloses") + ": " + dateTime(currentEvent.text("checkInClosesAt"), LocalLanguage.current, currentEvent.obj("city").text("timezone", "Asia/Jakarta")))
+    if (!canScanAdminWorkspace(eventData, now)) {
+        AdminScanUnavailable(eventData, LocalLanguage.current, now)
         Action(tr("uxAdmin.backToEvent"), secondary = true) { go("city-event/$eventId") }
     } else {
     var subject by remember { mutableStateOf<JsonObject?>(null) }; var preview by remember { mutableStateOf<JsonObject?>(null) }; var result by remember { mutableStateOf<JsonObject?>(null) }; var reason by remember { mutableStateOf("") }; var search by remember { mutableStateOf("") }; var scanCycle by remember { mutableIntStateOf(0) }
     val mutation = rememberMutation(); MutationStatus(mutation)
+    StaffTaskGuard(mutation.busy)
     fun identify(input: JsonObject) { mutation.run { subject = input; preview = api.request("POST", "/api/admin/check-in/preview", JsonObject(input + ("eventId" to JsonPrimitive(eventId)))) } }
     if (result != null) { Notice(tr("app.resultCheckedIn")); Who(api, result!!.obj("checkIn").obj("member")); Action(tr("app.resultNext")) { result = null; subject = null; preview = null; reason = ""; scanCycle++ } }
     else if (preview != null) {
@@ -101,6 +104,7 @@ import java.time.*
 @Composable fun Handover(api: Api, reader: CardReader, go: (String) -> Unit = {}) {
     Title(tr("app.handoverTitle"), tr("app.handoverBody"))
     val mutation = rememberMutation(); MutationStatus(mutation)
+    StaffTaskGuard(mutation.busy)
     var input by remember { mutableStateOf<JsonObject?>(null) }; var preview by remember { mutableStateOf<JsonObject?>(null) }; var done by remember { mutableStateOf(false) }
     if (done) { Notice(tr("app.handoverDone")); Who(api, preview!!.obj("member")); Action(tr("app.handoverNext")) { done = false; preview = null; input = null } }
     else if (preview != null) {
@@ -158,7 +162,7 @@ import java.time.*
             if (request.text("grantExpiresAt").isNotBlank()) Text(tr("uxAdmin.repairExpiry", "time" to dateTime(request.text("grantExpiresAt"), language)))
             if (usableRepairGrant(request, now)) Action(tr("app.reencodeNow")) { go("reencode/${request.text("id")}/${data.obj("member").text("nim")}") }
         }
-        CardReplacementFees(session, api, id, language)
+        CardReplacementFees(session, api, data.rows("cards"), language, reload)
         Action(tr("uxAdmin.technicalDetails"), secondary = true) { technical = !technical }
         data.rows("cards").forEach { c -> Tile {
             Text(tr("cardStatus." + c.text("status")), style = MaterialTheme.typography.titleMedium)
@@ -167,26 +171,25 @@ import java.time.*
         } }
     }
 }
-@Composable fun CardReplacementFees(session: Session, api: Api, memberId: String, language: String) {
-    Remote(api, "/api/admin/payments", pollMs = 15000) { data, reload ->
-        data.rows("cards").filter { it.text("memberId") == memberId }.forEach { fee -> Tile {
+@Composable fun CardReplacementFees(session: Session, api: Api, cards: List<JsonObject>, language: String, reload: () -> Unit) {
+        cards.filter { it.obj("replacementFee").isNotEmpty() }.forEach { card -> key(card.text("id")) { Tile {
+            val fee = card.obj("replacementFee")
             Text(tr("uxAdmin.replacementFee"), style = MaterialTheme.typography.titleMedium)
-            Text(money(fee.number("replacementFee")))
-            Notice(tr(if (fee.text("feePaidAt").isBlank()) "uxAdmin.feeUnpaid" else "uxAdmin.feePaid"))
+            Text(money(fee.number("amount")))
+            Notice(tr(if (fee.text("paidAt").isBlank()) "uxAdmin.feeUnpaid" else "uxAdmin.feePaid"))
             Text(tr("uxAdmin.offAppPayment"))
-            if (fee.text("feePaidAt").isNotBlank()) Text(dateTime(fee.text("feePaidAt"), language))
+            if (fee.text("paidAt").isNotBlank()) Text(dateTime(fee.text("paidAt"), language))
             else if (hasCapability(session, "card.reportLost")) {
                 val payment = rememberMutation(); MutationStatus(payment)
-                Decide(tr("uxAdmin.recordFee"), tr("uxAdmin.confirmFee", "amount" to money(fee.number("replacementFee"))), !payment.busy, secondary = true) { payment.run { api.request("POST", "/api/admin/payments", body("kind" to "card", "id" to fee.text("id"))); reload() } }
+                Decide(tr("uxAdmin.recordFee"), tr("uxAdmin.confirmFee", "amount" to money(fee.number("amount"))), !payment.busy, secondary = true) { payment.run { api.request("POST", "/api/admin/payments", body("kind" to "card", "id" to card.text("id"))); reload() } }
             }
-        } }
-    }
+        } } }
 }
 @Composable fun AdminEventDetail(session: Session, api: Api, id: String, language: String, go: (String) -> Unit) {
     val mutation = rememberMutation(); MutationStatus(mutation); val live = liveVersion(api, "attendance", id)
     var selected by androidx.compose.runtime.saveable.rememberSaveable(id) { mutableStateOf("overview") }
     val now = adminNow()
-    Remote(api, "/api/admin/events/$id", refresh = live) { data, reload ->
+    Remote(api, "/api/admin/events/$id/workspace", refresh = live, pollMs = 15000) { data, reload ->
         val e = data.obj("event")
         Title(tr("uxAdmin.eventWorkspace"))
         AdminEventContext(e, language)
@@ -198,23 +201,34 @@ import java.time.*
             if (hasCapability(session, "draw.manage")) add("draw" to tr("uxAdmin.draw"))
             if (hasCapability(session, "city.operations")) add("recap" to tr("uxAdmin.recap"))
         }
-        Tabs(tabs, selected) { selected = it }
+        val pendingCounts = mapOf("claims" to data.obj("claims").obj("byStatus").number("PENDING"), "reservations" to data.obj("reservations").obj("byStatus").number("PENDING"), "attendance" to data.obj("roaming").number("pending"))
+        Tabs(tabs, selected, pendingCounts) { selected = it }
         when (selected) {
             "overview" -> {
                 val zone = e.obj("city").text("timezone", "Asia/Jakarta")
                 listOf("startsAt" to "starts", "endsAt" to "ends", "checkInOpensAt" to "checkInOpens", "checkInClosesAt" to "checkInCloses").forEach { (field, label) -> Text(tr("uxAdmin.$label") + ": " + dateTime(e.text(field), language, zone)) }
                 if (e.text("description").isNotBlank()) Text(e.text("description"))
+                Action(tr("ux.content.title"), secondary = true) { go("event-content/$id") }
                 if (session.me.obj("user").obj("city").isNotEmpty()) Action(tr("common.edit"), secondary = true) { go("event-edit/$id") }
-                if (hasCapability(session, "checkin.scan")) adminEventActions(e, now).forEach { action ->
-                    val key = when (action) { "publish" -> "events.actionPublish"; "open" -> "events.actionOpen"; else -> "events.actionClose" }
-                    Decide(tr(key), tr(if (action == "close") "events.closeBody" else if (action == "publish") "events.publishBody" else "events.openBody", "city" to e.obj("city").text("name"), "time" to dateTime(e.text("checkInClosesAt"), language)), !mutation.busy, true, title = tr("events.${action}Title")) { mutation.run { api.request("POST", "/api/admin/events/$id/actions", body("action" to action)); reload() } }
+                Tile {
+                    Text(tr("app.attendanceCount", "count" to count(data.obj("attendance").number("count"))))
+                    Text(tr("ux.workspace.pending.reservations") + ": " + count(data.obj("reservations").obj("byStatus").number("PENDING")))
+                    Text(tr("ux.workspace.pending.deposits") + ": " + count(data.obj("reservations").number("unpaidDeposits")))
+                    Text(tr("ux.workspace.pending.claims") + ": " + count(data.obj("claims").obj("byStatus").number("PENDING")))
                 }
-                if (canScanAdminEvent(e, now)) Action(tr("app.adminScan")) { go("scan/$id") }
-                else Notice(tr("uxAdmin.scanClosed"))
+                if (hasCapability(session, "checkin.scan")) adminWorkspaceActions(data, now).forEach { action ->
+                    val key = when (action) { "publish" -> "events.actionPublish"; "open" -> "events.actionOpen"; else -> "events.actionClose" }
+                    val early = action == "open" && data.obj("lifecycle").flag("openEarly")
+                    val label = tr(if (early) "ux.workspace.openEarly" else key)
+                    val message = if (early) tr("ux.workspace.openEarlyBody", "time" to dateTime(data.obj("lifecycle").text("checkInOpensAt"), language, zone)) else tr(if (action == "close") "events.closeBody" else if (action == "publish") "events.publishBody" else "events.openBody", "city" to e.obj("city").text("name"), "time" to dateTime(e.text("checkInClosesAt"), language, zone))
+                    Decide(label, message, !mutation.busy, true, title = label) { mutation.run { api.request("POST", "/api/admin/events/$id/actions", body("action" to action)); reload() } }
+                }
+                if (canScanAdminWorkspace(data, now)) Action(tr("app.adminScan")) { go("scan/$id") }
+                else AdminScanUnavailable(data, language, now)
                 if (e.text("phase") == "ended") Action(tr("uxAdmin.viewRecap"), secondary = true) { selected = "recap" }
             }
             "attendance" -> {
-                if (canScanAdminEvent(e, now)) Action(tr("app.adminScan")) { go("scan/$id") } else Notice(tr("uxAdmin.scanClosed"))
+                if (canScanAdminWorkspace(data, now)) Action(tr("app.adminScan")) { go("scan/$id") } else AdminScanUnavailable(data, language, now)
                 AdminEventAttendance(api, id, language, live)
                 if (hasCapability(session, "city.operations")) SocialOperations(session, api, language, go, mode = "attendance-access", eventId = id)
             }
@@ -222,7 +236,7 @@ import java.time.*
             "claims" -> ClaimsReview(api, eventId = id)
             "rewards" -> RewardValidation(api, initialEventId = id)
             "draw" -> Draw(session, api, id, language)
-            "recap" -> EventRecap(api, id)
+            "recap" -> EventRecap(api, id, data, reload)
         }
     }
 }

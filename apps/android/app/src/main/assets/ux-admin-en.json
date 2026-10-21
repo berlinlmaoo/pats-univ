@@ -40,6 +40,8 @@
     "claims": "Claims",
     "draw": "Draw",
     "recap": "Recap",
+    "manualRecap": "Crew recap",
+    "manualRecapBody": "These figures are entered by crew. Confirmed reservation sales are shown separately above.",
     "viewRecap": "View event recap",
     "eventUnavailable": "This event is unavailable in your current staff scope. Return to the event list to choose another.",
     "archivedEvents": "Events & archives",

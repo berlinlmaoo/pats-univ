@@ -48,6 +48,11 @@
     "checkInCloses": "Check-in ditutup",
     "otherCityAdmission": "Event ini di luar kotamu. Akses kehadiran memerlukan persetujuan kru; reservasi saja tidak memberikan izin masuk.",
     "yourJourney": "Langkah event kamu",
+    "journeyUnavailable": "Langkah event belum tersedia. Buka event atau tarik untuk menyegarkan dan mencoba lagi.",
+    "reservationSkipped": "Kamu memilih tidak melakukan reservasi pada event ini.",
+    "completionWait": "Check-in kamu terkonfirmasi. Langkah event tuntas setelah event berakhir.",
+    "nationalNextEvent": "Belum ada event mendatang di kotamu. Event berikut ini ada di kota aktif lain; akses kehadiran tetap memerlukan persetujuan.",
+    "homeNoOpenBody": "Buka daftar event untuk meninjau jadwal dan menyiapkan waktu check-in berikutnya.",
     "steps": {
       "nextEvent": "Event berikutnya",
       "poster": "Sebarkan poster",

@@ -69,6 +69,7 @@
     "pendingAttendance": "{count} pending event-access requests",
     "pendingHub": "{count} pending community-access requests",
     "dashboard": "Open HQ dashboard",
-    "recentQueues": "Recent pending work"
+    "recentQueues": "Recent pending work",
+    "allStatuses": "All statuses"
   }
 }

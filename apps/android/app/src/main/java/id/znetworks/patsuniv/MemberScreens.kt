@@ -28,10 +28,10 @@ import java.time.Instant
     }
 }
 @Composable fun CheckInWindow(event: JsonObject, language: String) {
-    if (event.text("checkInOpensAt").isNotBlank() || event.text("checkInClosesAt").isNotBlank()) {
+    if (eventTime(event, "checkInOpensAt").isNotBlank() || eventTime(event, "checkInClosesAt").isNotBlank()) {
         SectionLabel(tr("events.window"))
         listOf("checkInOpensAt", "checkInClosesAt").forEach { key ->
-            if (event.text(key).isNotBlank()) Text(dateTime(event.text(key), language, event.obj("city").text("timezone", "Asia/Jakarta")))
+            if (eventTime(event, key).isNotBlank()) Detail(tr(if (key == "checkInOpensAt") "uxMember.checkInOpens" else "uxMember.checkInCloses"), dateTime(eventTime(event, key), language, eventZone(event)))
         }
     }
 }
@@ -71,7 +71,7 @@ import java.time.Instant
             Empty(tr("uxMember.noOpenScanEvent"), tr("uxMember.noOpenScanBody"))
             upcoming.firstOrNull { it.text("phase") == "upcoming" }?.let { next -> Tile {
                 CardHeading(next.text("title"))
-                Detail(tr("uxMember.checkInOpens"), dateTime(next.text("checkInOpensAt"), language, next.obj("city").text("timezone", "Asia/Jakarta")))
+                Detail(tr("uxMember.checkInOpens"), dateTime(eventTime(next, "checkInOpensAt"), language, eventZone(next)))
                 Text(next.obj("city").text("name") + " · " + next.obj("venue").text("name"))
                 Action(tr("uxMember.viewEvent"), secondary = true) { go("city-event/" + next.text("id")) }
             } }
@@ -83,7 +83,7 @@ import java.time.Instant
                 EventPoster(api, event)
                 CardHeading(event.text("title"))
                 Text(event.obj("city").text("name") + " · " + event.obj("venue").text("name"))
-                Detail(tr("uxMember.starts"), dateTime(event.text("startsAt"), language, event.obj("city").text("timezone", "Asia/Jakarta")))
+                Detail(tr("uxMember.starts"), dateTime(eventTime(event, "startsAt"), language, eventZone(event)))
                 Badge(tr("eventPhase." + event.text("phase")), event.text("phase"))
                 if (event.obj("myCheckIn").isNotEmpty()) Badge(tr("app.resultCheckedIn"), "OPEN")
                 Action(tr(if (scan) "app.adminScan" else "uxMember.viewEvent"), secondary = true) { go((if (scan) "scan/" else if (admin) "city-event/" else "event/") + event.text("id")) }
@@ -95,26 +95,39 @@ import java.time.Instant
 }
 @Composable fun EventDetail(api: Api, id: String, language: String, go: (String) -> Unit, session: Session? = null) {
     val staffBrowse = session != null && hasCapability(session, "city.operations") && !canParticipateInEvent(session)
-    Remote(api, (if (staffBrowse) "/api/admin/events/" else "/api/events/") + id, pollMs = 15_000) { data, _ ->
+    Remote(api, (if (staffBrowse) "/api/admin/events/" else "/api/events/") + id, pollMs = 15_000) { data, reload ->
         val e = data.obj("event")
-        val zone = e.obj("city").text("timezone", "Asia/Jakarta")
+        val zone = eventZone(e)
         Title(e.text("title"), e.obj("city").text("name"))
         EventPoster(api, e)
         Tile {
             CardHeading(tr("uxMember.whenWhere"))
-            Detail(tr("uxMember.starts"), dateTime(e.text("startsAt"), language, zone))
-            Detail(tr("uxMember.ends"), dateTime(e.text("endsAt"), language, zone))
+            Detail(tr("uxMember.starts"), dateTime(eventTime(e, "startsAt"), language, zone))
+            Detail(tr("uxMember.ends"), dateTime(eventTime(e, "endsAt"), language, zone))
+            if (e.obj("timing").flag("overnight")) Text(tr("ux.timing.overnight"), style = MaterialTheme.typography.bodySmall)
             Detail(tr("uxMember.venue"), e.obj("venue").text("name"))
             if (e.obj("venue").text("address").isNotBlank()) Text(e.obj("venue").text("address"))
-            if (e.text("description").isNotBlank()) Text(e.text("description"))
+            if (e.obj("poster").text("description", e.text("description")).isNotBlank()) Text(e.obj("poster").text("description", e.text("description")))
             Badge(tr("eventPhase." + e.text("phase")), e.text("phase"))
         }
         Tile { EventAttendance(session, e, go) }
         if (canParticipateInEvent(session)) {
-            EventJourney(session!!, api, e, go)
+            EventJourney(session!!, api, e, go, data.rows("journey"), data.obj("myReservation"), reload)
             if (e.text("phase") != "ended") {
-                Action(tr("uxMember.reservation"), maroon = true) { go("reservation/$id") }
-                if (eventIsOtherCity(session, e)) Action(tr("uxMember.visitAnotherCity"), secondary = true) { go("roaming/$id") }
+                val reservation = data.obj("myReservation")
+                if (reservation.isNotEmpty()) Tile {
+                    CardHeading(tr("uxMember.reservation"))
+                    Badge(tr("social." + reservation.text("status")), reservation.text("status"))
+                    Text(reservation.text("slotCode"))
+                    if (reservation.text("conversationId").isNotBlank()) Action(tr("uxMember.openBooking"), secondary = true) { go("conversation/" + reservation.text("conversationId")) }
+                } else {
+                    Action(tr("uxMember.reservation"), enabled = canUseEventAction(e, "reserve"), maroon = true) { go("reservation/$id") }
+                    eventAction(e, "reserve").text("reason").takeIf { it.isNotBlank() }?.let { Notice(tr("ux.reason.$it")) }
+                }
+                if (eventIsOtherCity(session, e)) {
+                    Action(tr("uxMember.visitAnotherCity"), enabled = canUseEventAction(e, "roaming"), secondary = true) { go("roaming/$id") }
+                    eventAction(e, "roaming").text("reason").takeIf { it.isNotBlank() }?.let { Notice(tr("ux.reason.$it")) }
+                }
             } else {
                 Tile {
                     CardHeading(tr("uxMember.bonusXp"))
@@ -122,13 +135,17 @@ import java.time.Instant
                     Remote(api, "/api/loyalty/claims") { claims, _ ->
                         val mine = claims.rows("claims").filter { it.text("eventId") == id }
                         mine.forEach { claim -> Badge(tr("social." + claim.text("status")), claim.text("status")) }
-                        if (claims.rows("events").any { it.text("id") == id }) Action(tr(if (mine.isEmpty()) "uxMember.claimBonusXp" else "uxMember.myClaims"), secondary = true) { go("claims/$id") }
-                        else Notice(tr("uxMember.claimNotEligible"))
+                        if (mine.isNotEmpty()) Action(tr("uxMember.myClaims"), secondary = true) { go("claims/$id") }
+                        else {
+                            Action(tr("uxMember.claimBonusXp"), enabled = canUseEventAction(e, "claimXp"), secondary = true) { go("claims/$id") }
+                            eventAction(e, "claimXp").text("reason").takeIf { it.isNotBlank() }?.let { Notice(tr("ux.reason.$it")) }
+                        }
                     }
                 }
             }
         } else if (staffBrowse) Action(tr("uxMember.openWorkspace"), secondary = true) { go("city-event/$id") }
-        Action(tr(if (e.text("phase") == "ended") "uxMember.drawResult" else "phase5.draw"), secondary = true) { go("draw/$id") }
+        if (staffBrowse || canUseEventAction(e, "draw")) Action(tr(if (e.text("phase") == "ended") "uxMember.drawResult" else "phase5.draw"), secondary = true) { go("draw/$id") }
+        else eventAction(e, "draw").text("reason").takeIf { it.isNotBlank() }?.let { Notice(tr("ux.reason.$it")) }
     }
 }
 @Composable fun History(api: Api, language: String) {
@@ -154,6 +171,51 @@ fun notificationDestination(data: JsonObject, session: Session?, adminMode: Bool
         else -> notificationRoute(data)
     }
 }
+
+/** Server targets carry task context; permissions still come from the signed-in account. */
+fun notificationTargetDestination(target: JsonObject, session: Session?, adminMode: Boolean = false): String? {
+    if (session == null) return null
+    val eventId = target.text("eventId")
+    val member = canParticipateInEvent(session)
+    val staff = isStaff(session)
+    val need = when (target.text("screen")) {
+        "adminReservations" -> "reservation.manage"
+        "adminRoaming", "adminEvent", "adminEventContent" -> "city.operations"
+        "adminClaims" -> "promoter.manage"
+        "adminMemberCard" -> "card.reportLost"
+        "adminContentQueue" -> "hq.manage"
+        else -> null
+    }
+    if (need != null && !hasCapability(session, need)) return null
+    if (target.flag("requiresAdminMode") && !staff) return null
+    return when (target.text("screen")) {
+        "event" -> eventId.takeIf { it.isNotBlank() }?.let { if (staff && (adminMode || !member)) "city-event/$it" else if (member) "event/$it" else null }
+        "attendance" -> if (member) "history" else null
+        "card" -> "card"
+        "reservation" -> when {
+            target.text("reservationId").isNotBlank() && member -> "booking/" + (if (eventId.isBlank()) "" else "$eventId/") + target.text("reservationId")
+            target.text("conversationId").isNotBlank() && member -> "conversation/" + target.text("conversationId")
+            member -> "my-reservations"
+            staff -> "event-reservations/$eventId"
+            else -> null
+        }
+        "conversation" -> target.text("conversationId").takeIf { it.isNotBlank() }?.let { "conversation/$it" }
+        "hub" -> target.text("channelId").takeIf { it.isNotBlank() }?.let { "channel/$it" } ?: "hub"
+        "roaming" -> if (member) "my-access" else null
+        "claims" -> if (member) "claims/$eventId" + target.text("claimId").takeIf { it.isNotBlank() }?.let { "/$it" }.orEmpty() else null
+        "adminReservations" -> "event-reservations/$eventId"
+        "adminRoaming" -> if (target.text("requestId").isNotBlank()) "access-review/$eventId/" + target.text("requestId") else "event-roaming/$eventId"
+        "adminClaims" -> "claims-review/$eventId"
+        "adminMemberCard" -> if (target.text("memberId").isNotBlank()) "member-card/" + target.text("memberId") else "member-cards"
+        "adminEventContent" -> eventId.takeIf { it.isNotBlank() }?.let { "event-content/$it" }
+        "adminContentQueue" -> "content-approvals/" + target.text("submissionId")
+        "adminEvent" -> if (eventId.isNotBlank()) "city-event/$eventId" else "city-events"
+        else -> null
+    }
+}
+
+fun notificationOpenRoute(destination: String, enterAdmin: Boolean, notificationId: String) =
+    if (enterAdmin) "admin-open-notification/$notificationId/$destination" else destination
 
 fun notificationActionKey(route: String?, enterAdmin: Boolean): String = when {
     enterAdmin -> "uxMember.enterAdminNotification"
@@ -192,15 +254,20 @@ fun notificationActionKey(route: String?, enterAdmin: Boolean): String = when {
             Text(dateTime(n.text("sentAt"), language), style = MaterialTheme.typography.bodySmall)
             val isUnread = n.text("readAt").isBlank() && n.text("id") !in readIds
             if (isUnread) Badge(tr("app.notificationUnread"))
-            val destination = notificationDestination(n.obj("data"), session, adminMode, n.text("kind"))
-            val enterAdmin = !adminMode && destination?.substringBefore('/') in setOf("city-event", "claims-review", "member-card", "tools", "event-reservations", "event-roaming")
-            Action(tr(notificationActionKey(destination, enterAdmin)), enabled = !mutation.busy, secondary = true) {
+            val target = n.obj("target")
+            val destination = if (target.isNotEmpty()) notificationTargetDestination(target, session, adminMode) else notificationDestination(n.obj("data"), session, adminMode, n.text("kind"))
+            val enterAdmin = destination != null && !adminMode && (target.flag("requiresAdminMode") || operationalCapability(destination) != null) && session != null && isStaff(session)
+            val actionKey = if (destination == null) "uxMember.readNotification" else if (enterAdmin) "ux.adminMode.openIn" else target.text("actionKey").takeIf { it.startsWith("ux.notifAction.") } ?: notificationActionKey(destination, false)
+            Action(tr(actionKey), enabled = !mutation.busy, secondary = true) {
                 mutation.run {
-                    if (isUnread) {
-                        api.request("POST", "/api/me/notifications/read", body("ids" to JsonArray(listOf(JsonPrimitive(n.text("id"))))))
+                    var resolved = destination
+                    if (target.text("screen") == "adminRoaming" && target.text("requestId").isNotBlank()) resolved = resolveSocialAccessRoute(api, target.text("requestId"), target.text("eventId"))
+                    if (isUnread && !(enterAdmin && resolved != null)) {
+                        api.request("POST", "/api/me/notifications/" + query(n.text("id")) + "/read")
                         readIds = readIds + n.text("id")
                     }
-                    if (destination == null) opened = n else go(destination)
+                    reload()
+                    if (resolved == null) opened = n else go(notificationOpenRoute(resolved, enterAdmin, n.text("id")))
                 }
             }
         } }

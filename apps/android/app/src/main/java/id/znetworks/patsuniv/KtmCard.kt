@@ -47,13 +47,14 @@ fun qrMatrix(value: String, onTile: Boolean = false) = QRCodeWriter().encode(val
 /** Geometry comes directly from shared tokens; values are measured in artwork coordinates. */
 @Composable fun KtmCard(member: JsonObject, qr: String? = null, thumbnail: Boolean = false, onOpen: (() -> Unit)? = null) = KtmArtwork(member, qr, thumbnail, onOpen)
 
-@Composable fun QrEnlarge(value: String, member: JsonObject? = null) {
+@Composable fun QrEnlarge(value: String, member: JsonObject? = null, remainingSeconds: Int? = null) {
     var open by remember { mutableStateOf(false) }
     Action(tr("uxShell.qrDoor"), maroon = true) { open = true }
     if(open) Dialog(onDismissRequest = { open = false }) {
         Column(Modifier.fillMaxWidth().background(tone("band"), MaterialTheme.shapes.large).padding(Space.page), verticalArrangement = Arrangement.spacedBy(Space.page)) {
             Text(tr("uxShell.digital"), color = tone("bandText"), style = MaterialTheme.typography.titleMedium)
             if (member != null) Text(member.text("fullName"), color = tone("bandText"))
+            if (remainingSeconds != null) Text(tr("app.cardQrRefreshIn", "seconds" to remainingSeconds.toString()), color = tone("bandText"), style = MaterialTheme.typography.bodySmall)
             Text(tr("uxShell.qrPurpose"), color = tone("bandText"), style = MaterialTheme.typography.bodySmall)
             Box(Modifier.fillMaxWidth().aspectRatio(1f).background(MaterialTheme.colorScheme.secondary).padding(Space.large)) { TileQr(value, Modifier.fillMaxSize()) }
             Action(tr("common.close"), secondary = true) { open = false }

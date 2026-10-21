@@ -19,6 +19,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 
 @Composable fun Shell(model: AppModel, session: Session, language: String, setLanguage: (String) -> Unit, offline: Boolean) {
     val activity = LocalContext.current as Activity
@@ -29,28 +30,46 @@ import androidx.compose.ui.unit.dp
     var route by rememberSaveable(accountId) { mutableStateOf("home") }
     var selectedHubChannel by rememberSaveable(accountId) { mutableStateOf("") }
     var pendingAdminRoute by rememberSaveable(accountId) { mutableStateOf<String?>(null) }
+    var pendingNotificationId by rememberSaveable(accountId) { mutableStateOf<String?>(null) }
+    var staffTaskBusy by remember(accountId) { mutableStateOf(false) }
+    var navigationBlocked by remember(accountId) { mutableStateOf(false) }
+    val publishStaffBusy = remember(accountId) { { busy: Boolean -> staffTaskBusy = busy } }
+    val coroutine = rememberCoroutineScope()
+    LaunchedEffect(staffTaskBusy) { if (!staffTaskBusy) navigationBlocked = false }
     val stack = remember(accountId) { mutableStateListOf<String>() }
     val tabLocations = remember(accountId) { mutableStateMapOf<String, String>() }
     val tabStacks = remember(accountId) { mutableStateMapOf<String, List<String>>() }
     val screenState = rememberSaveableStateHolder()
     val visited = remember(accountId) { mutableSetOf<String>() }
     val reader = remember(activity) { AndroidCardReader(activity) }
-    val city = session.me.obj("user").obj("city").text("name")
-    val scope = if (hasCapability(session, "hq.manage")) "HQ · " + tr("uxShell.allCities") else tr("uxShell.adminMode") + " · " + city
+    val adminScope = session.me.obj("user").obj("adminScope")
+    val city = adminScope.obj("city").text("name", session.me.obj("user").obj("city").text("name"))
+    val scope = if (adminScope.text("kind") == "HQ") tr("ux.adminMode.scopeHq") else tr("ux.adminMode.scopeCity", "city" to city)
     LaunchedEffect(accountId, staff) {
         if (preferences.getString("activeAccount", "") != accountId || !staff) adminMode = false
         preferences.edit().putString("activeAccount", accountId).putBoolean("adminMode", adminMode).apply()
     }
     fun navigate(next: String) {
-        val need = operationalCapability(next)
-        if (need != null && staff && hasCapability(session, need) && !adminMode) { pendingAdminRoute = next; return }
-        if (next != route) { stack.add(route); tabLocations[routeTab(route)] = route; route = next }
+        if (staffTaskBusy) { navigationBlocked = true; return }
+        val notificationOpen = next.startsWith("admin-open-notification/")
+        val notificationRest = next.removePrefix("admin-open-notification/")
+        val forceAdmin = next.startsWith("admin-open/") || notificationOpen
+        val target = when { notificationOpen -> notificationRest.substringAfter('/'); forceAdmin -> next.removePrefix("admin-open/"); else -> next }
+        val need = operationalCapability(target)
+        if (forceAdmin && (!staff || (need != null && !hasCapability(session, need)))) return
+        if ((forceAdmin || need != null) && staff && (need == null || hasCapability(session, need)) && !adminMode) {
+            pendingNotificationId = if (notificationOpen) notificationRest.substringBefore('/') else null
+            pendingAdminRoute = target; return
+        }
+        if (target != route) { stack.add(route); tabLocations[routeTab(route)] = route; route = target }
     }
-    fun back() { route = if (stack.isEmpty()) "home" else stack.removeAt(stack.lastIndex) }
+    fun back() { if (staffTaskBusy) { navigationBlocked = true; return }; route = if (stack.isEmpty()) "home" else stack.removeAt(stack.lastIndex) }
     fun setMode(value: Boolean) {
+        if (!value && staffTaskBusy) { navigationBlocked = true; return }
         adminMode = value && staff
         preferences.edit().putString("activeAccount", accountId).putBoolean("adminMode", adminMode).apply()
         pendingAdminRoute = null
+        pendingNotificationId = null
         if (!adminMode) {
             fun staffLocation(value: String) = operationalCapability(value) != null || (staff && value.substringBefore('/') in setOf("conversation", "draw"))
             visited.filter(::staffLocation).forEach { screenState.removeState(it) }
@@ -62,7 +81,7 @@ import androidx.compose.ui.unit.dp
     LaunchedEffect(model.requestedRoute) { model.requestedRoute?.let { navigate(it); model.requestedRoute = null } }
     BackHandler(route != "home" || stack.isNotEmpty()) { back() }
     val tabs = listOf("home" to "uxShell.home", "events" to "uxShell.events", "card" to "uxShell.card", "hub" to "uxShell.community", "profile" to "uxShell.account")
-    CompositionLocalProvider(LocalAdminMode provides (adminMode && staff)) {
+    CompositionLocalProvider(LocalAdminMode provides (adminMode && staff), LocalStaffTaskBusy provides publishStaffBusy) {
         Column(Modifier.background(MaterialTheme.colorScheme.background)) {
             Row(Modifier.fillMaxWidth().background(tone("band")).padding(horizontal = Space.page, vertical = Space.small), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.gap)) {
                 Image(painterResource(R.drawable.official_crest), tr("common.appName"), Modifier.size(40.dp))
@@ -70,6 +89,7 @@ import androidx.compose.ui.unit.dp
                 LanguageToggle(language, true, setLanguage)
             }
             Box(Modifier.fillMaxWidth().height(3.dp).background(tone("gold")))
+            if (navigationBlocked && staffTaskBusy) Notice(tr("ux.adminMode.finishFirst"))
             if (adminMode && staff) Row(Modifier.fillMaxWidth().background(tone("band")).padding(horizontal = Space.page), verticalAlignment = Alignment.CenterVertically) {
                 Text(scope, Modifier.weight(1f), color = tone("bandText"), style = MaterialTheme.typography.bodySmall)
                 TextButton({ setMode(false) }) { Text(tr("uxShell.exitAdmin"), color = tone("bandText")) }
@@ -82,7 +102,7 @@ import androidx.compose.ui.unit.dp
                         if (offline) Notice(tr("errors.network"))
                         val kind = route.substringBefore('/'); val id = route.substringAfter('/', "")
                         val need = operationalCapability(route)
-                        val personalOnly = kind in setOf("wallet", "claims", "promoter", "region-change", "roaming", "reservation", "history", "profile-edit", "membership-settings")
+                        val personalOnly = kind in setOf("wallet", "claims", "promoter", "region-change", "roaming", "reservation", "booking", "history", "profile-edit", "membership-settings")
                         val denied = (need != null && (!hasCapability(session, need) || !adminMode || !staff)) || (personalOnly && !hasPersonalMembership(session))
                         if (denied) Notice(tr("errors.forbidden"), true) else when (kind) {
                             "home" -> MemberHome(session, model.api, ::navigate)
@@ -92,7 +112,7 @@ import androidx.compose.ui.unit.dp
                             "history" -> History(model.api, language)
                             "wallet" -> Wallet(session, model.api, language, ::navigate, initialTab = id)
                             "leaderboard" -> Leaderboard(model.api, language, session.me.obj("member").obj("city").text("id"))
-                            "claims", "promoter" -> Claims(session, model.api, initialEventId = id)
+                            "claims", "promoter" -> Claims(session, model.api, initialEventId = id.substringBefore('/'), go = ::navigate, initialClaimId = id.substringAfter('/', ""))
                             "draw" -> Draw(session, model.api, id, language)
                             "region-change" -> RegionChange(model.api)
                             "roaming" -> Roaming(session, model.api, id, ::navigate)
@@ -100,9 +120,11 @@ import androidx.compose.ui.unit.dp
                             "hub", "social-hub" -> Hub(session, model.api, { next -> if (next.startsWith("channel/")) selectedHubChannel = next.substringAfter('/'); navigate(next) }, selectedChannel = selectedHubChannel, language = language, allowCapture = BuildConfig.DEBUG && model.qaCapture)
                             "channel", "conversation" -> Channel(session, model.api, id, kind == "conversation", language, BuildConfig.DEBUG && model.qaCapture)
                             "social-operations", "my-reservations" -> SocialOperations(session, model.api, language, ::navigate, mode = "my-reservations")
+                            "booking" -> SocialOperations(session, model.api, language, ::navigate, mode = "my-reservations", eventId = if ('/' in id) id.substringBefore('/') else "", reservationId = id.substringAfter('/', id))
                             "my-access" -> SocialOperations(session, model.api, language, ::navigate, mode = "my-access")
                             "event-reservations" -> SocialOperations(session, model.api, language, ::navigate, mode = "reservations", eventId = id)
                             "event-roaming" -> SocialOperations(session, model.api, language, ::navigate, mode = "attendance-access", eventId = id)
+                            "access-review" -> SocialAccessReview(session, model.api, id.substringAfter('/', ""), language, ::navigate, eventId = id.substringBefore('/'))
                             "hub-access" -> SocialOperations(session, model.api, language, ::navigate, mode = "hub-access", cityId = id)
                             "moderation" -> SocialOperations(session, model.api, language, ::navigate, mode = "moderation", cityId = id)
                             "community-tools" -> {
@@ -136,6 +158,8 @@ import androidx.compose.ui.unit.dp
                             "city-event" -> AdminEventDetail(session, model.api, id, language, ::navigate)
                             "event-new" -> EventEditor(model.api, "", ::navigate)
                             "event-edit" -> EventEditor(model.api, id, ::navigate)
+                            "event-content" -> EventContent(model.api, id, language, ::navigate)
+                            "content-approvals" -> ContentApprovals(session, model.api, language, ::navigate, selectedSubmission = id)
                             "handover" -> Handover(model.api, reader, ::navigate)
                             "member-cards" -> MemberCards(model.api, ::navigate)
                             "member-card" -> MemberCardDetail(session, model.api, id, language, ::navigate)
@@ -154,6 +178,7 @@ import androidx.compose.ui.unit.dp
                 tabs.forEach { (target, label) ->
                     val selected = routeTab(route) == target
                     Column(Modifier.weight(1f).selectable(selected, role = Role.Tab, onClick = {
+                        if (staffTaskBusy) { navigationBlocked = true; return@selectable }
                         val previous = routeTab(route); tabLocations[previous] = route; tabStacks[previous] = stack.toList()
                         stack.clear()
                         if (previous == target) { route = target; tabLocations[target] = target }
@@ -166,6 +191,10 @@ import androidx.compose.ui.unit.dp
                 }
             }
         }
-        pendingAdminRoute?.let { target -> Confirm(tr("uxShell.adminEntry"), tr("uxShell.adminEntryBody"), { pendingAdminRoute = null }) { setMode(true); navigate(target) } }
+        pendingAdminRoute?.let { target -> Confirm(tr("uxShell.adminEntry"), tr("uxShell.adminEntryBody"), { pendingAdminRoute = null; pendingNotificationId = null }) {
+            val notificationId = pendingNotificationId
+            setMode(true); navigate(target)
+            if (!notificationId.isNullOrBlank()) coroutine.launch { runCatching { model.api.request("POST", "/api/me/notifications/${query(notificationId)}/read", body()) } }
+        } }
     }
 }

@@ -69,6 +69,7 @@
     "pendingAttendance": "{count} permintaan akses event menunggu",
     "pendingHub": "{count} permintaan akses komunitas menunggu",
     "dashboard": "Buka dashboard HQ",
-    "recentQueues": "Tugas terbaru yang menunggu"
+    "recentQueues": "Tugas terbaru yang menunggu",
+    "allStatuses": "Semua status"
   }
 }

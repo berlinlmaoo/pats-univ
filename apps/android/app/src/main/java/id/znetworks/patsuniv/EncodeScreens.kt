@@ -5,6 +5,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import kotlinx.coroutines.*
 import kotlinx.serialization.json.*
+import java.util.concurrent.atomic.AtomicBoolean
 
 fun validCardLookup(value: String) = cardToken(value) != null || Regex("^[A-Za-z0-9_-]{32}$").matches(value.trim()) || Regex("^[A-Z]{3}[0-9]{7}$").matches(value.uppercase().replace(Regex("\\s"), ""))
 @Composable fun EncodeHome(api: Api, go: (String) -> Unit) {
@@ -24,6 +25,9 @@ fun validCardLookup(value: String) = cardToken(value) != null || Regex("^[A-Za-z
     val context = androidx.compose.ui.platform.LocalContext.current
     val station = remember { val prefs = context.getSharedPreferences("station", 0); val id = prefs.getString("id", null) ?: java.util.UUID.randomUUID().toString().take(8).also { prefs.edit().putString("id", it).apply() }; (android.os.Build.MODEL.take(40) + " · " + id).take(60) }
     val mutation = rememberMutation(); MutationStatus(mutation)
+    StaffTaskGuard(mutation.busy)
+    // Protect the lease through the blocking write and persisted-but-unreported result.
+    val writingTag = remember { AtomicBoolean(false) }
     val reports = remember(api.origin, api.userId) { PendingEncodeStore(context.noBackupFilesDir, api.origin, api.userId, KeystoreSessionCipher()) }
     val restored = remember(reports) { reports.load() }
     var support by remember(reader) { mutableStateOf(reader.support()) }
@@ -39,8 +43,8 @@ fun validCardLookup(value: String) = cardToken(value) != null || Regex("^[A-Za-z
         claim = api.request("POST", "/api/hq/cards/prepare", JsonObject(fields + (if (batchId.isNotBlank()) mapOf("batchId" to JsonPrimitive(batchId)) else emptyMap()) + (if (grantId.isNotBlank()) mapOf("grantId" to JsonPrimitive(grantId)) else emptyMap())))
         scanning = false
     } }
-    suspend fun report(held: JsonObject, data: JsonObject) { result = api.request("POST", "/api/hq/cards/${held.obj("card").text("id")}/encoded", data); reports.clear(); pending = null }
-    DisposableEffect(Unit) { onDispose { val held = latestClaim; if (held != null && latestPending == null && latestResult == null) scope.launch(NonCancellable + Dispatchers.IO) { release(held) } } }
+    suspend fun report(held: JsonObject, data: JsonObject) { result = api.request("POST", "/api/hq/cards/${held.obj("card").text("id")}/encoded", data); reports.clear(); pending = null; writingTag.set(false) }
+    DisposableEffect(Unit) { onDispose { val held = latestClaim; if (held != null && latestPending == null && latestResult == null && !writingTag.get()) scope.launch(NonCancellable + Dispatchers.IO) { release(held) } } }
     LaunchedEffect(initialLookup, support) { if (initialLookup.isNotBlank() && claim == null && support == NfcSupport.READY) identify(initialLookup) }
     val held = claim
     if (held == null) {
@@ -73,8 +77,12 @@ fun validCardLookup(value: String) = cardToken(value) != null || Regex("^[A-Za-z
                         val existing = cardToken(inspection.url.orEmpty())
                         if (existing != null && !held.text("url").endsWith(existing) && !reencode) throw ApiFailure("UID_IN_USE")
                         val key = api.request("POST", "/api/hq/cards/${held.obj("card").text("id")}/key", body("leaseId" to held.obj("lease").text("id"), "nfcUid" to inspection.uid))
-                        val write = Ntag.encode(io, inspection, key.text("url"), unhex(key.text("pwd")), unhex(key.text("pack")))
-                        body("leaseId" to held.obj("lease").text("id"), "nfcUid" to inspection.uid, "protectedNow" to write.protectedNow, "chipType" to inspection.chip.name).also { pending = it; reports.save(held, it) }
+                        writingTag.set(true)
+                        try {
+                            currentCoroutineContext().ensureActive()
+                            val write = Ntag.encode(io, inspection, key.text("url"), unhex(key.text("pwd")), unhex(key.text("pack")))
+                            body("leaseId" to held.obj("lease").text("id"), "nfcUid" to inspection.uid, "protectedNow" to write.protectedNow, "chipType" to inspection.chip.name).also { pending = it; reports.save(held, it) }
+                        } finally { if (pending == null) writingTag.set(false) }
                     }
                     report(held, data)
                 } catch(e: CancellationException) { throw e }
