@@ -146,16 +146,27 @@ struct EventPanel: View {
 struct EventDetailView: View {
     let eventID: String
     var admin = false
+    var initialProofID = ""
     @EnvironmentObject private var store: AppStore
     private var managing: Bool { admin && store.managing }
     var body: some View {
         DataPage(title: managing ? "ux.workspace.title" : "events.details", path: managing ? "/api/admin/events/\(eventID)/workspace" : "/api/events/\(eventID)", room: managing ? Room(kind: "attendance", id: eventID) : nil, poll: !managing, pinLoadedEvent: managing) { data, reload in
             let e = data["event"]
+            let relatedPoster = data["journey"].rows.first { $0["key"].text == "poster" } ?? .null
             if managing { AdminEventWorkspace(workspace: data, reload: reload) }
             else {
+                if !initialProofID.isEmpty {
+                    Panel {
+                        EventContextHeader(event: e)
+                        if relatedPoster["proof"].id == initialProofID {
+                            Notice(text: L.t("ux.posterProof.related"))
+                            PosterProofStep(event: e, step: relatedPoster, focusProof: true) { _ in await reload() }
+                        } else { Notice(text: L.t("ux.posterProof.relatedUnavailable")) }
+                    }
+                }
                 EventPanel(event: e)
                 EventTiming(event: e)
-                MemberJourneyView(event: e, initialJourney: data["journey"], initialReservation: data["myReservation"])
+                MemberJourneyView(event: e, initialJourney: data["journey"], initialReservation: data["myReservation"], showsPosterStep: initialProofID.isEmpty || relatedPoster["proof"].id != initialProofID)
                 Panel {
                     Text(L.t("ux.events.attendance")).font(Theme.title(20))
                     AttendanceOutcome(event: e)
@@ -496,26 +507,11 @@ struct EventPosterDetailView: View {
         }.toolbar { ToolbarItem(placement: .topBarTrailing) { Button(L.t("common.close")) { dismiss() } } }
     }
 }
-/// Deliberately isolated until the owner defines sharing destinations and rewards.
-struct PosterBlastStep: View {
-    let event: JSON
-    let continueJourney: () -> Void
-    @State private var placeholder = false
-    var body: some View {
-        VStack(alignment: .leading, spacing: Theme.gap) {
-            EventPosterHighlight(event: event)
-            Text(L.t("ux.journey.posterPending")).font(Theme.body(14)).foregroundStyle(Theme.muted)
-            Button(L.t("ux.journey.sharePoster"), systemImage: "square.and.arrow.up") { placeholder = true }.buttonStyle(PATSButtonStyle(variant: .maroon))
-        }.alert(L.t("ux.journey.sharePoster"), isPresented: $placeholder) {
-            Button(L.t("ux.journey.continue")) { continueJourney() }
-            Button(L.t("common.cancel"), role: .cancel) { }
-        } message: { Text(L.t("ux.journey.posterPending")) }
-    }
-}
 struct MemberJourneyView: View {
     let event: JSON
     var initialJourney: JSON = .null
     var initialReservation: JSON = .null
+    var showsPosterStep = true
     @EnvironmentObject private var store: AppStore
     @Environment(\.scenePhase) private var phase
     @StateObject private var detail = Resource()
@@ -523,7 +519,7 @@ struct MemberJourneyView: View {
     private var currentEvent: JSON { detail.data["event"].exists ? detail.data["event"] : event }
     private var steps: [JSON] { detail.data["journey"].exists ? detail.data["journey"].rows : initialJourney.rows }
     private var reservation: JSON { detail.data.exists ? detail.data["myReservation"] : initialReservation }
-    private var current: JSON { steps.first { $0["state"].text == "current" } ?? .null }
+    private var current: JSON { EventJourneyPolicy.currentRequiredStep(steps) }
     var body: some View {
         Panel {
             Text(L.t("ux.journey.title")).font(Theme.title(20))
@@ -535,12 +531,20 @@ struct MemberJourneyView: View {
                     Image(systemName: step["state"].text == "done" ? "checkmark.circle.fill" : step["state"].text == "current" ? "circle.inset.filled" : "circle").foregroundStyle(step["state"].text == "upcoming" ? Theme.muted : Theme.accent)
                     Text(L.t("ux.journey." + step["key"].text)).fontWeight(step["state"].text == "current" ? .bold : .regular)
                     Spacer()
+                    if EventJourneyPolicy.optional(step) { Text(L.t("ux.journey.optional")).font(Theme.body(12)).foregroundStyle(Theme.muted) }
                     if step["state"].text == "done" { Text(L.t("ux.journey.done")).font(Theme.body(12)).foregroundStyle(Theme.muted) }
                 }.accessibilityElement(children: .combine)
             }
             if !store.member.exists { StaffMemberState() }
             else if !steps.isEmpty {
                 currentStep.disabled(mutation.busy || detail.error != nil)
+                if showsPosterStep, let poster = steps.first(where: { $0["key"].text == "poster" }) {
+                    Divider()
+                    PosterProofStep(event: currentEvent, step: poster) { result in
+                        detail.data = result; detail.error = nil
+                        await load()
+                    }
+                }
             }
         }
         .task(id: event.id) {
@@ -557,8 +561,6 @@ struct MemberJourneyView: View {
         switch current["key"].text {
         case "event":
             Button(L.t("ux.journey.chooseEvent")) { Task { await record("event") } }.buttonStyle(PATSButtonStyle(variant: .maroon))
-        case "poster":
-            PosterBlastStep(event: currentEvent) { Task { await record("poster") } }
         case "reservation":
             if current["bonusXp"].exists { Text(L.t("ux.journey.reservationBonus", ["xp": L.count(current["bonusXp"].int)])).font(Theme.body(14)).foregroundStyle(Theme.muted) }
             if reservation.exists {
@@ -586,7 +588,7 @@ struct MemberJourneyView: View {
             AttendanceOutcome(event: currentEvent)
             Text(L.t("ux.journey.waitForEnd")).font(Theme.body(14)).foregroundStyle(Theme.muted)
         default:
-            if !steps.isEmpty && steps.allSatisfy({ $0["state"].text == "done" }) { Label(L.t("ux.journey.completed"), systemImage: "checkmark.seal.fill").font(Theme.title(17)) }
+            if EventJourneyPolicy.requiredStepsComplete(steps) { Label(L.t("ux.journey.completed"), systemImage: "checkmark.seal.fill").font(Theme.title(17)) }
             AttendanceOutcome(event: currentEvent)
         }
         // Skipping a journey step never removes an onward action the server still permits.

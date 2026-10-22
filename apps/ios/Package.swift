@@ -6,7 +6,7 @@ let package = Package(
     products: [.library(name: "PATSCore", targets: ["PATSCore"])],
     targets: [
         .target(name: "PATSCore", path: "Sources", exclude: [
-            "KTMCard.swift", "ProfileEditor.swift", "DateTimeField.swift", "AdminCards.swift", "AdminEvents.swift", "AdminLoyalty.swift", "AdminToolsView.swift",
+            "KTMCard.swift", "ProfileEditor.swift", "DateTimeField.swift", "AdminCards.swift", "AdminEvents.swift", "AdminLoyalty.swift", "AdminToolsView.swift", "EventReportViews.swift", "PosterProofViews.swift", "PosterProofReviewViews.swift",
             "AppStore.swift", "CardReader.swift", "ClaimsViews.swift", "FeatureComponents.swift",
             "Info.plist", "MediaViews.swift", "MemberViews.swift", "PATSApp.swift", "RealtimeRoom.swift",
             "Resources", "CommunityOperationViews.swift", "ScannerViews.swift", "SocialViews.swift", "Theme.swift", "PrizeWheel.swift"

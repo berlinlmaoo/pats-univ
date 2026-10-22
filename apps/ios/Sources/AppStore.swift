@@ -143,7 +143,7 @@ enum AppLink: Identifiable {
     var id: String {
         switch self {
         case .dashboard(let path, _): return "dashboard:" + path
-        case .task(let p): return "task:" + ["screen", "eventId", "reservationId", "claimId", "memberId", "requestId", "conversationId", "channelId"].map { p[$0].text }.joined(separator: ":")
+        case .task(let p): return "task:" + ["screen", "eventId", "proofId", "reservationId", "claimId", "memberId", "requestId", "conversationId", "channelId", "onlyDue"].map { p[$0].text }.joined(separator: ":")
         case .personalReservation(let event, let reservation): return "personalReservation:" + event + ":" + reservation
         case .card(let s): return "card:" + s
         case .event(let s): return "event:" + s

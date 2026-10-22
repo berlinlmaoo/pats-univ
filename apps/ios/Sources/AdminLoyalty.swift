@@ -282,8 +282,8 @@ struct RecapEditor: View {
             LabeledContent(L.t("ux.recap.soldTable"), value: reservationsSold["table"].exists ? L.count(reservationsSold["table"].int) : "—")
             LabeledContent(L.t("ux.recap.soldSofa"), value: reservationsSold["sofa"].exists ? L.count(reservationsSold["sofa"].int) : "—")
             Text(L.t("ux.recap.soldHint")).font(Theme.body(13)).foregroundStyle(Theme.muted)
-            LabeledContent(L.t("ux.recap.fdcSold"), value: fdcSold["status"].text == "definitionPending" || !fdcSold["value"].exists ? "—" : L.count(fdcSold["value"].int))
-            if fdcSold["status"].text == "definitionPending" || !fdcSold["value"].exists { Text(L.t("ux.recap.fdcPending")).font(Theme.body(13)).foregroundStyle(Theme.muted) }
+            LabeledContent(L.t("ux.recap.fdcSold"), value: EventReportFDC.value(fdcSold).map(L.count) ?? L.t("ux.report.notFilled"))
+            Text(L.t("ux.report.fdcHint")).font(Theme.body(13)).foregroundStyle(Theme.muted)
             Text(L.t("ux.recap.manualCounts")).font(Theme.title(20))
             Text(L.t("ux.recap.manualCountsHint")).font(Theme.body(13)).foregroundStyle(Theme.muted)
             ForEach(["tableCount", "sofaCount", "fdcCount"], id: \.self) { key in Field(key: "loyalty.\(key)", value: binding(key), keyboard: .numberPad).disabled(recap["lockedAt"].exists) }

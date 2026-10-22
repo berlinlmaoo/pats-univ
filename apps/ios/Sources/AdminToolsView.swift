@@ -14,6 +14,8 @@ struct AdminToolsView: View {
                     NavigationRow(title: "social.operations", icon: "list.bullet.rectangle") { SocialOperationsView() }
                     if store.can("reward.validate") { NavigationRow(title: "loyalty.validateReward", icon: "gift") { RewardValidationView() } }
                     if store.can("promoter.manage") { NavigationRow(title: "phase5.claimReview", icon: "doc.text.magnifyingglass") { ClaimsReviewView() } }
+                    if store.can("promoter.manage") { NavigationRow(title: "ux.posterProof.queueTitle", icon: "photo.badge.checkmark") { PosterProofReviewView() } }
+                    if store.can("city.operations") { NavigationRow(title: "ux.report.dashboardTitle", icon: "doc.text") { EventReportListView() } }
                     if store.can("city.operations") { NavigationRow(title: "loyalty.operations", icon: "chart.bar") { CrewOperationsView() } }
                 }
                 Panel {

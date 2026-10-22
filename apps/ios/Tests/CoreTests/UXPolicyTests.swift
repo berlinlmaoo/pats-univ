@@ -70,5 +70,14 @@ final class UXPolicyTests: XCTestCase {
             XCTAssertEqual(target["screen"].text, "event"); XCTAssertFalse(target["requiresAdminMode"].bool)
         }
     }
+    func testProofDecisionKeepsExactProofInPersonalEventContext() {
+        let payload: JSON = .object(["kind": .str("posterProofDecided"), "eventId": .str("e"), "proofId": .str("p")])
+        guard case .task(let target) = UXNotificationTarget.resolve(payload) else { return XCTFail("Missing proof task") }
+        XCTAssertEqual(target["screen"].text, "event"); XCTAssertEqual(target["proofId"].text, "p")
+        XCTAssertEqual(target["eventId"].text, "e"); XCTAssertFalse(target["requiresAdminMode"].bool)
+        let staff: JSON = .object(["screen": .str("adminPosterProofs"), "proofId": .str("p"), "requiresAdminMode": .bool(false)])
+        guard case .task(let queue) = UXNotificationTarget.resolve(staff) else { return XCTFail("Missing staff proof task") }
+        XCTAssertTrue(queue["requiresAdminMode"].bool); XCTAssertEqual(queue["proofId"].text, "p")
+    }
 
 }
