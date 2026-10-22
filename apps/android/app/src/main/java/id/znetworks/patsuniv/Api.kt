@@ -85,6 +85,46 @@ class Api(private val store: SessionStore, private val base: String = BuildConfi
             } } catch (e: ApiFailure) { clearRejectedSession(token, e); throw e } catch (e: IOException) { throw ApiFailure("NETWORK") }
         }
     }
+    suspend fun submitPosterProof(eventId: String, image: ByteArray, contentType: String): JsonObject {
+        require(eventId.isNotBlank() && validPosterProofImage(image.size, contentType))
+        val token = accessToken()
+        return withContext(Dispatchers.IO) {
+            val extension = when (contentType) { "image/png" -> "png"; "image/webp" -> "webp"; else -> "jpg" }
+            val form = MultipartBody.Builder().setType(MultipartBody.FORM)
+                .addFormDataPart("eventId", eventId)
+                .addFormDataPart("image", "proof.$extension", image.toRequestBody(contentType.toMediaType())).build()
+            val request = Request.Builder().url(base.trimEnd('/') + "/api/me/poster-proof")
+                .header("Authorization", "Bearer $token").post(form).build()
+            try { http.newCall(request).execute().use { response ->
+                val parsed = runCatching { PatsJson.parseToJsonElement(response.body.string()).jsonObject }.getOrDefault(body())
+                if (!response.isSuccessful) throw ApiFailure(parsed.obj("error").text("code", "INTERNAL"), parsed)
+                parsed
+            } } catch (e: ApiFailure) { clearRejectedSession(token, e); throw e } catch (e: IOException) { throw ApiFailure("NETWORK") }
+        }
+    }
+    /** Private screenshots receive credentials only on this exact same-origin route. */
+    suspend fun posterProofImage(path: String): ByteArray {
+        require(isPosterProofImagePath(path))
+        return authenticatedFile(path, "image/*")
+    }
+    suspend fun eventReportsCsv(path: String): ByteArray {
+        require(path.substringBefore('?') == "/api/admin/event-reports" && !path.contains('#'))
+        return authenticatedFile(path, "text/csv")
+    }
+    private suspend fun authenticatedFile(path: String, accept: String): ByteArray {
+        val token = accessToken()
+        return withContext(Dispatchers.IO) {
+            val request = Request.Builder().url(base.trimEnd('/') + path)
+                .header("Authorization", "Bearer $token").header("Accept", accept).build()
+            try { http.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    val parsed = runCatching { PatsJson.parseToJsonElement(response.body.string()).jsonObject }.getOrDefault(body())
+                    throw ApiFailure(parsed.obj("error").text("code", "MEDIA_INVALID"), parsed)
+                }
+                response.body.bytes()
+            } } catch (e: ApiFailure) { clearRejectedSession(token, e); throw e } catch (e: IOException) { throw ApiFailure("NETWORK") }
+        }
+    }
     /** Only this same-origin, staff-only route receives bearer auth; signed media stays credential-free. */
     suspend fun staffPoster(path: String): ByteArray {
         require(Regex("/api/admin/content-submissions/[A-Za-z0-9-]+/poster").matches(path))

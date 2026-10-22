@@ -815,6 +815,10 @@
         "label": "Reservation check-in bonus",
         "hint": "Requires a confirmed reservation for the same event."
       },
+      "posterShareXp": {
+        "label": "Blast poster share",
+        "hint": "Shared an event poster (proof approved by crew)."
+      },
       "xpExpiryMonths": {
         "label": "XP lifetime",
         "hint": "Calendar months after each earning; changes apply to new earnings."
@@ -1447,6 +1451,10 @@
     "contentDecided": {
       "title": "Poster update",
       "body": "{event}: {status}."
+    },
+    "posterProofDecided": {
+      "title": "Poster proof",
+      "body": "{event}: {status}."
     }
   },
   "nfc": {
@@ -1662,6 +1670,7 @@
     "WELCOME": "Welcome bonus",
     "RESERVATION_BONUS": "Reservation check-in bonus",
     "MEMBER_CLAIM": "Member claim",
+    "POSTER_SHARE": "Poster share",
     "EXPIRE": "Expired XP",
     "CHECK_IN": "Check-in",
     "REDEEM": "Reward redemption",
@@ -1749,9 +1758,11 @@
       "browseNational": "Browse other cities"
     },
     "journey": {
+      "optional": "Optional",
+      "posterBody": "Share the event poster, then upload a screenshot as proof. +{xp} XP after the crew approves.",
+      "posterSkip": "Skip",
       "event": "Check the next event",
       "poster": "Blast the poster",
-      "posterPending": "Details coming soon from HQ.",
       "reservation": "Reserve a table or sofa",
       "reservationBonus": "+{xp} XP at check-in with a confirmed reservation",
       "reservationSkip": "Not this time",
@@ -1857,6 +1868,7 @@
       "statusWITHDRAWN": "Replaced"
     },
     "workspace": {
+      "report": "Report",
       "title": "Event workspace",
       "overview": "Overview",
       "attendance": "Attendance",
@@ -1874,6 +1886,8 @@
       "manageInDashboard": "Manage in dashboard",
       "pendingWork": "Pending work",
       "pending": {
+        "reportsDue": "Event reports to fill",
+        "posterProofs": "Poster proofs to review",
         "claims": "Claims to review",
         "reservations": "Reservations to decide",
         "deposits": "Deposits to record",
@@ -1891,13 +1905,13 @@
       "soldTable": "Tables sold",
       "soldSofa": "Sofas sold",
       "soldHint": "Confirmed reservations at this event, by slot type in the floor plan.",
-      "fdcSold": "FDC sold",
-      "fdcPending": "Waiting for HQ to define FDC"
+      "fdcSold": "FDC sold"
     },
     "notif": {
       "markAllRead": "Mark all read"
     },
     "notifAction": {
+      "viewProof": "View proof",
       "viewEvent": "View event",
       "viewAttendance": "View attendance",
       "openCard": "Open card",
@@ -1925,6 +1939,60 @@
     "archive": {
       "prReports": "PR reports · archive (read only)",
       "prReportsBody": "Old PR reports are kept for reference. New bonus XP goes through Claims."
+    },
+    "posterProof": {
+      "upload": "Upload proof",
+      "replace": "Send a new proof",
+      "hint": "A screenshot of your post or story with the poster (JPG, PNG or WebP, up to 5 MB).",
+      "submitted": "Proof sent. The crew reviews it.",
+      "statusPENDING": "Waiting for crew review",
+      "statusAPPROVED": "Approved · +{xp} XP",
+      "statusREJECTED": "Rejected: {reason}",
+      "noPoster": "This event has no poster to share yet.",
+      "alreadyApproved": "Your proof for this event is already approved.",
+      "queueTitle": "Poster shares",
+      "queueEmpty": "No poster proofs waiting",
+      "queueEmptyBody": "Screenshots members send after sharing an event poster appear here.",
+      "approve": "Approve (+{xp} XP)",
+      "reject": "Reject",
+      "reason": "Reason (the member sees it)",
+      "approved": "Approved. XP added.",
+      "rejected": "Rejected."
+    },
+    "report": {
+      "title": "Event report",
+      "body": "One report per event. Fill in what happened; system numbers are shown for reference only.",
+      "tablesSold": "Tables sold",
+      "sofasSold": "Sofas sold",
+      "fdcSold": "FDC sold",
+      "fdcHint": "FDC = First Drink Charge / Free Drink Coupon",
+      "paxTotal": "Pax (total guests)",
+      "membersAttended": "Members attended",
+      "nonMembersAttended": "Non-members attended",
+      "newMembers": "New members registered",
+      "reference": "System: {value}",
+      "save": "Save report",
+      "saved": "Report saved.",
+      "notFilled": "Not filled yet",
+      "lastEdit": "Last edited by {name} · {date}",
+      "history": "Edit history",
+      "dashboardTitle": "Event reports",
+      "dashboardBody": "Every event's numbers over time, with totals and the monthly trend per city.",
+      "colEvent": "Event",
+      "colCity": "City",
+      "colDate": "Date",
+      "totals": "Totals per city",
+      "trend": "Monthly trend",
+      "month": "Month",
+      "events": "Events",
+      "reported": "Reported",
+      "exportCsv": "Download CSV",
+      "empty": "No events in this period",
+      "emptyBody": "Change the city or dates, or create an event first.",
+      "allCities": "All cities",
+      "from": "From",
+      "to": "To",
+      "apply": "Apply"
     }
   }
 }

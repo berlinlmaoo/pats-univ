@@ -66,7 +66,10 @@ import kotlinx.serialization.json.*
         Text(tr("uxAdmin.archivedEvents"), style = MaterialTheme.typography.titleLarge)
         val event = data.rows("events").find { it.text("id") == eventId } ?: data.rows("events").firstOrNull()
         Choices(tr("loyalty.event"), data.rows("events").map { it.text("id") to it.text("title") }, event?.text("id").orEmpty()) { eventId = it }
-        if (event != null) Action(tr("uxAdmin.openWorkspace"), secondary = true) { go("city-event/${event.text("id")}") }
+        if (event != null) {
+            Text(tr("ux.report.fdcSold") + ": " + (reportedFdcValue(event.obj("fdcSold"))?.let(::count) ?: tr("ux.report.notFilled")))
+            Action(tr("uxAdmin.openWorkspace"), secondary = true) { go("city-event/${event.text("id")}") }
+        }
         Text(tr("loyalty.promoterFlag"), style = MaterialTheme.typography.titleLarge); Field(tr("loyalty.member"), search, { search = it })
         data.rows("members").filter { (it.text("fullName") + it.text("nim")).contains(search, true) }.take(20).forEach { m -> Tile {
             Text(m.text("fullName") + " · " + m.text("nim"))
@@ -88,8 +91,7 @@ import kotlinx.serialization.json.*
             Tile {
                 Text(tr("ux.recap.soldTable") + ": " + if (sold.isEmpty()) "—" else count(sold.number("table")))
                 Text(tr("ux.recap.soldSofa") + ": " + if (sold.isEmpty()) "—" else count(sold.number("sofa")))
-                Text(tr("uxAdmin.fdcSold") + ": —")
-                Text(tr("ux.recap.fdcPending"), style = MaterialTheme.typography.bodySmall)
+                Text(tr("ux.report.fdcSold") + ": " + (reportedFdcValue(recapState.obj("fdcSold"))?.let(::count) ?: tr("ux.report.notFilled")))
             }
             if (runCatching { java.time.Instant.parse(event.text("endsAt")) <= java.time.Instant.now() }.getOrDefault(false)) key(eventId, recap) { RecapForm(api, eventId, recap, reload) }
             else Notice(tr("uxAdmin.recapAfterEvent"))
@@ -105,7 +107,6 @@ import kotlinx.serialization.json.*
         val locked = recap.text("lockedAt").isNotBlank()
         if (locked) Notice(tr("loyalty.locked"))
         fields.forEach { key -> Field(tr("loyalty.$key"), values.getValue(key), { if (!locked) values[key] = it }, KeyboardType.Number, moneyInput = key.startsWith("revenue")) }
-        Text(tr("uxAdmin.fdcSold") + ": —")
         listOf("personInCharge", "accountablePerson").forEach { key -> Field(tr("phase5.$key"), values.getValue(key), { if (!locked) values[key] = it.take(120) }) }
         Field(tr("loyalty.note"), values.getValue("note"), { if (!locked) values["note"] = it.take(2000) }, multiline = true)
         MutationStatus(mutation)

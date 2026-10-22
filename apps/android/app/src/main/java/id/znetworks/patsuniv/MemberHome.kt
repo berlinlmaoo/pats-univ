@@ -100,6 +100,7 @@ import kotlinx.serialization.json.JsonObject
                 "hubAccess" -> "hub-access"
                 "myContent" -> "city-events"
                 "regionChanges" -> "notifications"
+                "reportsDue" -> if (hasCapability(session, "city.operations")) "event-reports/due" else null
                 else -> notificationTargetDestination(target, session, true)
             }
             if (route != null) Action(tr("ux.workspace.pending.$key") + " · " + count(queue.number("count")), secondary = true) { go(route) }

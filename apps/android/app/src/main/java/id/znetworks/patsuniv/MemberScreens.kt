@@ -93,7 +93,7 @@ import java.time.Instant
         Action(tr("common.retry"), secondary = true) { reload() }
     }
 }
-@Composable fun EventDetail(api: Api, id: String, language: String, go: (String) -> Unit, session: Session? = null) {
+@Composable fun EventDetail(api: Api, id: String, language: String, go: (String) -> Unit, session: Session? = null, initialStep: String? = null) {
     val staffBrowse = session != null && hasCapability(session, "city.operations") && !canParticipateInEvent(session)
     Remote(api, (if (staffBrowse) "/api/admin/events/" else "/api/events/") + id, pollMs = 15_000) { data, reload ->
         val e = data.obj("event")
@@ -112,7 +112,7 @@ import java.time.Instant
         }
         Tile { EventAttendance(session, e, go) }
         if (canParticipateInEvent(session)) {
-            EventJourney(session!!, api, e, go, data.rows("journey"), data.obj("myReservation"), reload)
+            EventJourney(session!!, api, e, go, data.rows("journey"), data.obj("myReservation"), reload, initialStep = initialStep)
             if (e.text("phase") != "ended") {
                 val reservation = data.obj("myReservation")
                 if (reservation.isNotEmpty()) Tile {
@@ -181,7 +181,8 @@ fun notificationTargetDestination(target: JsonObject, session: Session?, adminMo
     val need = when (target.text("screen")) {
         "adminReservations" -> "reservation.manage"
         "adminRoaming", "adminEvent", "adminEventContent" -> "city.operations"
-        "adminClaims" -> "promoter.manage"
+        "adminClaims", "adminPosterProofs" -> "promoter.manage"
+        "adminReports" -> "city.operations"
         "adminMemberCard" -> "card.reportLost"
         "adminContentQueue" -> "hq.manage"
         else -> null
@@ -189,7 +190,10 @@ fun notificationTargetDestination(target: JsonObject, session: Session?, adminMo
     if (need != null && !hasCapability(session, need)) return null
     if (target.flag("requiresAdminMode") && !staff) return null
     return when (target.text("screen")) {
-        "event" -> eventId.takeIf { it.isNotBlank() }?.let { if (staff && (adminMode || !member)) "city-event/$it" else if (member) "event/$it" else null }
+        "event" -> eventId.takeIf { it.isNotBlank() }?.let {
+            if (target.text("proofId").isNotBlank() && member) "event/$it/proof"
+            else if (staff && (adminMode || !member)) "city-event/$it" else if (member) "event/$it" else null
+        }
         "attendance" -> if (member) "history" else null
         "card" -> "card"
         "reservation" -> when {
@@ -206,6 +210,8 @@ fun notificationTargetDestination(target: JsonObject, session: Session?, adminMo
         "adminReservations" -> "event-reservations/$eventId"
         "adminRoaming" -> if (target.text("requestId").isNotBlank()) "access-review/$eventId/" + target.text("requestId") else "event-roaming/$eventId"
         "adminClaims" -> "claims-review/$eventId"
+        "adminPosterProofs" -> "poster-proofs/$eventId"
+        "adminReports" -> "event-reports"
         "adminMemberCard" -> if (target.text("memberId").isNotBlank()) "member-card/" + target.text("memberId") else "member-cards"
         "adminEventContent" -> eventId.takeIf { it.isNotBlank() }?.let { "event-content/$it" }
         "adminContentQueue" -> "content-approvals/" + target.text("submissionId")

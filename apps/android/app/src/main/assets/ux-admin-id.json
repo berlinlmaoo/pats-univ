@@ -51,7 +51,6 @@
     "tablesSold": "Meja terjual",
     "sofasSold": "Sofa terjual",
     "fdcSold": "FDC terjual",
-    "fdcPending": "Data FDC menunggu penetapan sumber. Jumlah meja dan sofa dicatat dalam rekap event.",
     "recapAfterEvent": "Rekap dapat dicatat setelah event ini selesai.",
     "drawNotReady": "Jalankan undian saat event terbuka dan berlangsung, setelah hadiah diatur dan seluruh slot undian terisi.",
     "currentPhysicalCard": "Kartu fisik saat ini",

@@ -120,7 +120,7 @@ import kotlinx.serialization.json.JsonObject
                             "home" -> MemberHome(session, model.api, ::navigate)
                             "card" -> MemberCard(session, model.api, ::navigate)
                             "events" -> Events(model.api, ::navigate, language, admin = adminMode, onCreate = if (adminMode && city.isNotBlank()) ({ navigate("event-new") }) else null, session = session)
-                            "event" -> EventDetail(model.api, id, language, ::navigate, session = session)
+                            "event" -> EventDetail(model.api, id.substringBefore('/'), language, ::navigate, session = session, initialStep = if (id.substringAfter('/', "") == "proof") "poster" else null)
                             "history" -> History(model.api, language)
                             "wallet" -> Wallet(session, model.api, language, ::navigate, initialTab = id)
                             "leaderboard" -> Leaderboard(model.api, language, session.me.obj("member").obj("city").text("id"))
@@ -167,11 +167,13 @@ import kotlinx.serialization.json.JsonObject
                                 if (hasCapability(session, "hq.manage")) Action(tr("uxShell.dashboard"), secondary = true) { activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(model.api.origin.trimEnd('/') + "/events"))) }
                                 Events(model.api, ::navigate, language, admin = true, onCreate = if (city.isNotBlank()) ({ navigate("event-new") }) else null, session = session)
                             }
-                            "city-event" -> AdminEventDetail(session, model.api, id, language, ::navigate)
+                            "city-event" -> AdminEventDetail(session, model.api, id.substringBefore('/'), language, ::navigate, initialTab = if (id.substringAfter('/', "") == "recap") "recap" else "overview")
                             "event-new" -> EventEditor(model.api, "", ::navigate)
                             "event-edit" -> EventEditor(model.api, id, ::navigate)
                             "event-content" -> EventContent(model.api, id, language, ::navigate)
                             "content-approvals" -> ContentApprovals(session, model.api, language, ::navigate, selectedSubmission = id)
+                            "poster-proofs" -> PosterProofReviews(model.api, eventId = id.takeIf { it.isNotBlank() }, go = ::navigate)
+                            "event-reports" -> EventReports(model.api, ::navigate, language = language, hq = hasCapability(session, "hq.manage"), dueOnly = id == "due")
                             "handover" -> Handover(model.api, reader, ::navigate)
                             "member-cards" -> MemberCards(model.api, ::navigate)
                             "member-card" -> MemberCardDetail(session, model.api, id, language, ::navigate)
