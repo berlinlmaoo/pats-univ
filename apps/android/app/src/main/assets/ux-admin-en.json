@@ -51,7 +51,6 @@
     "tablesSold": "Tables sold",
     "sofasSold": "Sofas sold",
     "fdcSold": "FDC sold",
-    "fdcPending": "FDC data is awaiting its defined source. Table and sofa counts are recorded in the event recap.",
     "recapAfterEvent": "The recap can be recorded after this event ends.",
     "drawNotReady": "Run the draw while the event is open and in progress, after the prize is configured and every draw slot is filled.",
     "currentPhysicalCard": "Current physical card",

@@ -36,7 +36,7 @@ fun eventIsOtherCity(session: Session?, event: JsonObject): Boolean {
 fun canCompleteEventJourney(event: JsonObject) = event.obj("myCheckIn").isNotEmpty() && event.text("phase") == "ended"
 
 fun visibleJourneyStep(journey: List<JsonObject>, selected: String? = null): JsonObject? =
-    journey.find { it.text("key") == selected && it.text("state") in setOf("done", "current") }
+    journey.find { it.text("key") == selected && canSelectJourneyStep(it) }
         ?: journey.find { it.text("state") == "current" } ?: journey.lastOrNull()
 
 fun mayTapJourneyStep(step: JsonObject) = step.text("key") in setOf("event", "poster", "reservation") &&
@@ -81,13 +81,6 @@ fun mayTapJourneyStep(step: JsonObject) = step.text("key") in setOf("event", "po
     if (failed) Notice(tr("errors.network"), true)
 }
 
-/** Isolated until the owner defines sharing destinations and any award rules. */
-@Composable fun PosterShareStep(api: Api, event: JsonObject, enabled: Boolean = true, onContinue: () -> Unit) {
-    EventPoster(api, event)
-    Notice(tr("uxMember.posterPending"))
-    Action(tr("uxMember.sharePoster"), enabled = enabled, onClick = onContinue)
-}
-
 @Composable fun EventAttendance(session: Session?, event: JsonObject, go: (String) -> Unit) {
     val zone = eventZone(event)
     SectionLabel(tr("uxMember.yourAttendance"))
@@ -117,18 +110,18 @@ fun mayTapJourneyStep(step: JsonObject) = step.text("key") in setOf("event", "po
     if (eventIsOtherCity(session, event) && event.text("phase") != "ended") Notice(tr("uxMember.otherCityAdmission"))
 }
 
-@Composable fun EventJourney(session: Session, api: Api, event: JsonObject, go: (String) -> Unit, journey: List<JsonObject> = emptyList(), myReservation: JsonObject = body(), reload: () -> Unit = {}) {
+@Composable fun EventJourney(session: Session, api: Api, event: JsonObject, go: (String) -> Unit, journey: List<JsonObject> = emptyList(), myReservation: JsonObject = body(), reload: () -> Unit = {}, initialStep: String? = null) {
     if (!canParticipateInEvent(session)) return
     val eventId = event.text("id")
     var refreshed by remember(eventId) { mutableStateOf<JsonObject?>(null) }
-    var selected by remember(eventId) { mutableStateOf<String?>(null) }
+    var selected by remember(eventId, initialStep) { mutableStateOf(initialStep) }
     LaunchedEffect(event, journey, myReservation) { refreshed = null }
     val currentEvent = refreshed?.obj("event")?.takeIf { it.isNotEmpty() } ?: event
     val steps = refreshed?.rows("journey") ?: journey
     val reservation = refreshed?.obj("myReservation") ?: myReservation
     val mutation = rememberMutation()
     fun tap(step: JsonObject) {
-        if (!mayTapJourneyStep(step)) return
+        if (!mayTapJourneyStep(step) && !maySkipPosterStep(step)) return
         mutation.run {
             refreshed = api.request("POST", "/api/me/journey", body("eventId" to eventId, "step" to step.text("key")))
             selected = null
@@ -141,11 +134,16 @@ fun mayTapJourneyStep(step: JsonObject) = step.text("key") in setOf("event", "po
     val step = visibleJourneyStep(steps, selected) ?: return
     Column(verticalArrangement = Arrangement.spacedBy(Space.small)) {
         steps.forEachIndexed { index, item ->
-            Row(Modifier.fillMaxWidth().clickable(enabled = item.text("state") in setOf("done", "current")) { selected = item.text("key") }, horizontalArrangement = Arrangement.spacedBy(Space.small)) {
+            Row(Modifier.fillMaxWidth().clickable(enabled = !mutation.busy && canSelectJourneyStep(item)) { selected = item.text("key") }, horizontalArrangement = Arrangement.spacedBy(Space.small)) {
                 Text((index + 1).toString(), style = MaterialTheme.typography.labelLarge)
                 Text(tr("ux.journey." + item.text("key")), Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
                 if (item.text("state") == "current") Text(tr("uxMember.currentStep"), style = MaterialTheme.typography.labelSmall)
                 else if (item.text("state") == "done") Text(tr("ux.journey.done"), style = MaterialTheme.typography.labelSmall)
+                else if (item.text("state") == "optional") Text(tr("ux.journey.optional"), style = MaterialTheme.typography.labelSmall)
+            }
+            if (item.text("key") == "poster" && item.obj("proof").isNotEmpty()) {
+                val proof = item.obj("proof")
+                Text(tr("ux.posterProof.status" + proof.text("status"), "xp" to count(proof.number("xpAwarded")), "reason" to proof.text("rejectReason")), style = MaterialTheme.typography.bodySmall)
             }
         }
     }
@@ -160,7 +158,7 @@ fun mayTapJourneyStep(step: JsonObject) = step.text("key") in setOf("event", "po
                 if (mayTapJourneyStep(step)) Action(tr("uxMember.chooseEvent"), enabled = !mutation.busy) { tap(step) }
                 Action(tr("uxMember.viewEvent"), secondary = true) { go("event/$eventId") }
             }
-            "poster" -> if (mayTapJourneyStep(step)) PosterShareStep(api, currentEvent, !mutation.busy) { tap(step) } else { EventPoster(api, currentEvent); Notice(tr("uxMember.posterPending")) }
+            "poster" -> PosterShareStep(api, currentEvent, step, mutation, onUpdated = { refreshed = it; reload() }, onSkip = { tap(step) })
             "reservation" -> {
                 Text(tr("ux.journey.reservationBonus", "xp" to count(step.number("bonusXp"))))
                 if (reservation.isNotEmpty()) {

@@ -17,8 +17,8 @@ import java.time.*
 @Composable fun AdminTools(session: Session, go: (String) -> Unit) {
     Title(tr("app.adminTitle"), if (hasCapability(session, "hq.manage")) tr("app.adminSubtitleHq") else tr("app.adminSubtitle", "city" to session.me.obj("user").obj("city").text("name")))
     val groups = listOf(
-        "eventWork" to listOf(Triple("city-events", "app.adminEvents", "checkin.scan"), Triple("scan", "app.adminScan", "checkin.scan")),
-        "crossEventQueues" to listOf(Triple("claims-review", "phase5.claimReview", "promoter.manage"), Triple("reward-validation", "loyalty.validateReward", "reward.validate")),
+        "eventWork" to listOf(Triple("city-events", "app.adminEvents", "checkin.scan"), Triple("scan", "app.adminScan", "checkin.scan"), Triple("event-reports", "ux.report.dashboardTitle", "city.operations")),
+        "crossEventQueues" to listOf(Triple("claims-review", "phase5.claimReview", "promoter.manage"), Triple("poster-proofs", "ux.posterProof.queueTitle", "promoter.manage"), Triple("reward-validation", "loyalty.validateReward", "reward.validate")),
         "cardService" to listOf(Triple("member-cards", "uxAdmin.cardSupport", "card.reportLost"), Triple("handover", "app.adminHandover", "card.handover"), Triple("encode", "app.adminEncode", "card.encode")),
         "peopleCommunity" to listOf(Triple("operations", "uxAdmin.peopleReports", "city.operations"), Triple("community-tools", "uxAdmin.communityTools", "city.operations"))
     )
@@ -195,9 +195,9 @@ import java.time.*
             }
         } } }
 }
-@Composable fun AdminEventDetail(session: Session, api: Api, id: String, language: String, go: (String) -> Unit) {
+@Composable fun AdminEventDetail(session: Session, api: Api, id: String, language: String, go: (String) -> Unit, initialTab: String = "overview") {
     val mutation = rememberMutation(); MutationStatus(mutation); val live = liveVersion(api, "attendance", id)
-    var selected by androidx.compose.runtime.saveable.rememberSaveable(id) { mutableStateOf("overview") }
+    var selected by androidx.compose.runtime.saveable.rememberSaveable(id, initialTab) { mutableStateOf(initialTab) }
     val now = adminNow()
     Remote(api, "/api/admin/events/$id/workspace", refresh = live, pollMs = 15000) { data, reload ->
         val e = data.obj("event")
@@ -207,11 +207,12 @@ import java.time.*
             add("overview" to tr("uxAdmin.overview")); add("attendance" to tr("uxAdmin.checkInAttendance"))
             if (hasCapability(session, "city.operations")) add("reservations" to tr("uxAdmin.reservations"))
             if (hasCapability(session, "promoter.manage")) add("claims" to tr("uxAdmin.claims"))
+            if (hasCapability(session, "promoter.manage")) add("proofs" to tr("ux.posterProof.queueTitle"))
             if (hasCapability(session, "reward.validate")) add("rewards" to tr("uxAdmin.rewards"))
             if (hasCapability(session, "draw.manage")) add("draw" to tr("uxAdmin.draw"))
             if (hasCapability(session, "city.operations")) add("recap" to tr("uxAdmin.recap"))
         }
-        val pendingCounts = mapOf("claims" to data.obj("claims").obj("byStatus").number("PENDING"), "reservations" to data.obj("reservations").obj("byStatus").number("PENDING"), "attendance" to data.obj("roaming").number("pending"))
+        val pendingCounts = mapOf("claims" to data.obj("claims").obj("byStatus").number("PENDING"), "reservations" to data.obj("reservations").obj("byStatus").number("PENDING"), "attendance" to data.obj("roaming").number("pending"), "proofs" to data.obj("posterProofs").obj("byStatus").number("PENDING"), "recap" to if (data.obj("recap").flag("reportDue")) 1 else 0)
         Tabs(tabs, selected, pendingCounts) { selected = it }
         when (selected) {
             "overview" -> {
@@ -225,6 +226,8 @@ import java.time.*
                     Text(tr("ux.workspace.pending.reservations") + ": " + count(data.obj("reservations").obj("byStatus").number("PENDING")))
                     Text(tr("ux.workspace.pending.deposits") + ": " + count(data.obj("reservations").number("unpaidDeposits")))
                     Text(tr("ux.workspace.pending.claims") + ": " + count(data.obj("claims").obj("byStatus").number("PENDING")))
+                    if (hasCapability(session, "promoter.manage")) Action(tr("ux.workspace.pending.posterProofs") + ": " + count(data.obj("posterProofs").obj("byStatus").number("PENDING")), secondary = true) { selected = "proofs" }
+                    if (hasCapability(session, "city.operations")) Action(tr("ux.report.title") + " · " + tr(if (data.obj("recap").flag("reportDue")) "ux.report.notFilled" else if (data.obj("report").obj("report").isNotEmpty()) "ux.report.reported" else "ux.report.notFilled"), secondary = true) { selected = "recap" }
                 }
                 if (hasCapability(session, "checkin.scan")) adminWorkspaceActions(data, now).forEach { action ->
                     val key = when (action) { "publish" -> "events.actionPublish"; "open" -> "events.actionOpen"; else -> "events.actionClose" }
@@ -244,9 +247,13 @@ import java.time.*
             }
             "reservations" -> SocialOperations(session, api, language, go, mode = "reservations", eventId = id)
             "claims" -> ClaimsReview(api, eventId = id)
+            "proofs" -> PosterProofReviews(api, eventId = id, go = go)
             "rewards" -> RewardValidation(api, initialEventId = id)
             "draw" -> Draw(session, api, id, language)
-            "recap" -> EventRecap(api, id, data, reload)
+            "recap" -> {
+                EventReport(api, id, language = language, timezone = e.obj("city").text("timezone", "Asia/Jakarta"), onSaved = reload)
+                EventRecap(api, id, data, reload)
+            }
         }
     }
 }

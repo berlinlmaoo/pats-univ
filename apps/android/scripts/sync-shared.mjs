@@ -8,6 +8,10 @@ for (const language of ['en', 'id']) {
   const source = fs.readFileSync(path.join(root, `packages/shared/src/i18n/${language}.ts`), 'utf8');
   const object = source.slice(source.indexOf('{', source.indexOf(`export const ${language}`)), source.lastIndexOf('}') + 1);
   const strings = vm.runInNewContext(`(${object})`, Object.create(null));
+  // The 22 Oct contract supersedes these compatibility labels. Native screens use
+  // the optional proof journey and reported/notReported FDC state instead.
+  delete strings.ux.journey.posterPending;
+  delete strings.ux.recap.fdcPending;
   fs.writeFileSync(path.join(assets, `${language}.json`), JSON.stringify(strings, null, 2) + '\n');
 }
 fs.copyFileSync(path.join(root, 'packages/shared/src/colors.json'), path.join(assets, 'colors.json'));

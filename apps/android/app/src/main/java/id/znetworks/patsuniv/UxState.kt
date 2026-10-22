@@ -17,7 +17,7 @@ fun isStaff(session: Session): Boolean = session.me.obj("user").obj("adminScope"
 
 fun routeTab(route: String): String = when (route.substringBefore('/')) {
     "home", "wallet", "leaderboard" -> "home"
-    "events", "event", "reservation", "draw", "roaming", "city-events", "city-event", "event-new", "event-edit", "event-content", "content-approvals", "access-review", "scan", "manual", "event-reservations", "event-roaming", "social-operations", "my-reservations", "booking" -> "events"
+    "events", "event", "reservation", "draw", "roaming", "city-events", "city-event", "event-new", "event-edit", "event-content", "content-approvals", "poster-proofs", "event-reports", "access-review", "scan", "manual", "event-reservations", "event-roaming", "social-operations", "my-reservations", "booking" -> "events"
     "card" -> "card"
     "hub", "social-hub", "channel", "moderation", "hub-access", "community-tools" -> "hub"
     "conversation" -> "events"
@@ -34,6 +34,8 @@ fun operationalCapability(route: String): String? = when (route.substringBefore(
     "reencode" -> "card.requestReencode"
     "reward-validation" -> "reward.validate"
     "claims-review" -> "promoter.manage"
+    "poster-proofs" -> "promoter.manage"
+    "event-reports" -> "city.operations"
     "tools", "operations", "crew", "event-reservations", "event-roaming", "moderation", "community-tools" -> "city.operations"
     "hub-access" -> "hq.manage"
     "hq-web" -> "hq.manage"

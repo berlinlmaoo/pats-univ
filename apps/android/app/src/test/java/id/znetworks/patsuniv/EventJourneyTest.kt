@@ -9,6 +9,16 @@ class EventJourneyTest {
     @Test fun claimNotificationKeepsTheExactClaim() {
         assertEquals("claims/event-42/claim-7", notificationTargetDestination(body("screen" to "claims", "eventId" to "event-42", "claimId" to "claim-7"), session("MEMBER")))
     }
+    @Test fun proofNotificationOpensPersonalProofAndAdminQueueChecksPermission() {
+        val target = body("screen" to "event", "eventId" to "event-42", "proofId" to "proof-7")
+        assertEquals("event/event-42/proof", notificationTargetDestination(target, session("MEMBER")))
+        val staff = session("REGIONAL_ADMIN", capabilities = listOf("city.operations", "promoter.manage"))
+        assertEquals("event/event-42/proof", notificationTargetDestination(target, staff, true))
+        assertEquals("poster-proofs/event-42", notificationTargetDestination(body("screen" to "adminPosterProofs", "eventId" to "event-42"), staff))
+        assertNull(notificationTargetDestination(body("screen" to "adminPosterProofs"), session("MEMBER")))
+        assertEquals("promoter.manage", operationalCapability("poster-proofs"))
+        assertEquals("city.operations", operationalCapability("event-reports/due"))
+    }
     private fun session(role: String, member: Boolean = true, capabilities: List<String> = emptyList()) = Session(
         Tokens("", "", ""),
         body("user" to body("id" to "user", "role" to role, "membership" to if (member) "member" else "staffOnly", "adminScope" to if ("city.operations" in capabilities) body("kind" to "CITY") else null, "capabilities" to JsonArray(capabilities.map { JsonPrimitive(it) })),
