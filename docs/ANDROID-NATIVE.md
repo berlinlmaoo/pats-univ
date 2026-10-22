@@ -279,3 +279,25 @@ and local workspace. Read-only access to `pats-univ:~/pats-univ-brand/ktm/exampl
 failed SSH host-key verification. A local source path was requested; no trust setting was
 bypassed. These captures use the real Bima demo account, so they do not establish the requested
 MICHAEL WIBOWO / TEQUILA / HIPHOP, BREAKBEAT overlay within 1% of card width.
+
+## UX update — 22 October 2026
+
+Completed U1–U4 on `feat/android-ux-22oct`, based on supplied DEV `64ce7e9`.
+Optional poster sharing now has native screenshot upload, private proof viewing,
+pending/approved/rejected states, replacement submission and regional/HQ review.
+Event workspace Recap now includes the seven-number event report with system references,
+editable values and audit history. Native reports add city/date filters, totals, monthly
+trend, reports due and document-picker CSV export. Home includes both new pending queues;
+FDC uses reported/not-reported state, including reported zero. Login stays email + OTP.
+
+Tested source: `ebc3d81`. `testDebugUnitTest assembleDebug` passed with 75 tests in 18 suites;
+112 DEV API checks and 22 native runtime assertions passed. The visible Pixel_10_Pro ran
+against PATS DEV for EN/ID member, regional and HQ checks, report saves/history, screenshot
+rejection/resubmission/approval, +2 XP ledger and native CSV verification. Both temporary
+events are now DRAFT; the session is signed out, emulator stopped and build lock released.
+
+Full screen/API map, evidence and limits: [UX-22OCT.md](../apps/android/docs/UX-22OCT.md).
+Delivery: `C:/Users/Berlin/pats-android-ux-22oct.bundle`. No APK publication or push/merge.
+Existing physical NFC, Firebase/FCM and signing owner tasks are unchanged.
+
+ANDROID-NATIVE DONE
