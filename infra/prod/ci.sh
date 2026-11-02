@@ -4,7 +4,7 @@
 # databases, demo OTP, push=log. Never touches dev or prod. Usage: ci.sh <sha>
 set -u
 SHA=${1:?usage: ci.sh <sha>  (images pats-web, pats-web-build, pats-realtime :<sha> must exist; MATRICES="m:db ..." to pick, KEEP=1 keeps the stack)}; N=pats-ci; D="sudo docker"; SRC=${SRC:-$HOME/pats-prod/src}
-cleanup() { $D rm -f $N-web $N-pg $N-rt >/dev/null 2>&1; $D network rm $N >/dev/null 2>&1; $D volume rm $N-storage >/dev/null 2>&1; }
+cleanup() { $D rm -fv $N-web $N-pg $N-rt >/dev/null 2>&1; $D network rm $N >/dev/null 2>&1; $D volume rm $N-storage >/dev/null 2>&1; }
 cleanup; $D network create $N >/dev/null
 PW=$(openssl rand -hex 16); AS=$(openssl rand -hex 32); CK=$(openssl rand -hex 32); CS=$(openssl rand -hex 16); RS=$(openssl rand -hex 32)
 $D run -d --name $N-pg --network $N -e POSTGRES_DB=postgres -e POSTGRES_USER=pats -e POSTGRES_PASSWORD=$PW postgres:16-alpine >/dev/null
