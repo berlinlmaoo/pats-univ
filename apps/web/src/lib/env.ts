@@ -64,6 +64,11 @@ export function env(): Env {
     const problems = parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ');
     throw new Error(`Invalid environment: ${problems}`);
   }
+  // Production (PATS_ENV=production) must never show login codes on screen: demo OTP fails closed,
+  // including when OTP_PROVIDER is unset and falls back to the demo default.
+  if (process.env.PATS_ENV === 'production' && parsed.data.OTP_PROVIDER === 'demo') {
+    throw new Error('Invalid environment: OTP_PROVIDER=demo is not allowed when PATS_ENV=production');
+  }
   if (parsed.data.OTP_PROVIDER === 'email' && !parsed.data.SMTP_HOST) {
     throw new Error('Invalid environment: OTP_PROVIDER=email needs SMTP_HOST');
   }
