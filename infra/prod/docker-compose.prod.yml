@@ -1,0 +1,66 @@
+# PATS University PRODUCTION: the long-lived services. The two web slots (pats-prod-web-blue/green)
+# are NOT in here: deploy-pats-prod.sh starts them with `docker run` on the same network and
+# switches the proxy between them. See PROD-RUNBOOK.md. Never run `docker compose down -v` here.
+#   docker compose -p pats-prod -f infra/prod/docker-compose.prod.yml --env-file ~/.pats-prod-secrets/prod.env up -d
+name: pats-prod
+
+services:
+  postgres:
+    container_name: pats-prod-postgres
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: pats_univ
+      POSTGRES_USER: pats
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks: [prod]
+    shm_size: 128mb
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U pats -d pats_univ']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  realtime:
+    container_name: pats-prod-realtime
+    image: pats-realtime:${PATS_REALTIME_TAG:?set PATS_REALTIME_TAG}
+    restart: unless-stopped
+    environment:
+      # Through the proxy's internal listener, so it always reaches the LIVE web slot.
+      API_URL: http://pats-prod-proxy:8081
+      AUTH_SECRET: ${AUTH_SECRET:?set AUTH_SECRET}
+      REALTIME_SECRET: ${REALTIME_SECRET:?set REALTIME_SECRET}
+      CORS_ORIGINS: https://patsuniv.znetworks.id
+    networks: [prod]
+    healthcheck:
+      test: ['CMD', 'node', '-e', "fetch('http://127.0.0.1:4000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  proxy:
+    container_name: pats-prod-proxy
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    volumes:
+      - ${PATS_PROD_HOME:?set PATS_PROD_HOME}/nginx/pats.conf:/etc/nginx/conf.d/default.conf:ro
+      # live.inc is rewritten by deploy-pats-prod.sh on every switch (then `nginx -s reload`).
+      - ${PATS_PROD_HOME}/bluegreen/nginx:/etc/nginx/bluegreen:ro
+    ports:
+      - '127.0.0.1:3200:8080'   # public: cloudflared -> here
+      - '127.0.0.1:3201:8081'   # internal: live slot, no limits (crons, realtime, scripts)
+      - '127.0.0.1:3202:8082'   # preview: the idle slot (deploy checks)
+    networks: [prod]
+
+volumes:
+  pgdata:
+    name: pats-prod-pgdata
+  # Print files, photos, flyers, receipts. Shared by both web slots. Backed up nightly with the DB.
+  storage:
+    name: pats-prod-storage
+
+networks:
+  prod:
+    name: pats-prod

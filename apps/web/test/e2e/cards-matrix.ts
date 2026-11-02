@@ -312,7 +312,8 @@ async function main() {
 
   // ── Public card page, cron ──
   const page = await api(`/api/c/${cards[2]!.ndefToken}`);
-  check('card page: profile without date of birth', page.status === 200 && page.json.member?.nim === cards[2]!.member.nim && !('dateOfBirth' in (page.json.member ?? {})), `${page.status} ${page.json.state}`);
+  // The digital profile never shows NIM or date of birth (PRODUCT.md §10.3).
+  check('card page: profile without NIM or date of birth', page.status === 200 && page.json.member?.fullName === cards[2]!.member.fullName && !('nim' in (page.json.member ?? {})) && !('dateOfBirth' in (page.json.member ?? {})), `${page.status} ${page.json.state}`);
   const cronNo = await api('/api/cron/notifications', { method: 'POST', body: {} });
   const cronYes = await fetch(`${BASE}/api/cron/notifications`, { method: 'POST', headers: { Authorization: `Bearer ${process.env.CRON_SECRET}` } });
   check('cron: refused without the secret, runs with it', cronNo.status === 401 && cronYes.status === 200, `${cronNo.status} / ${cronYes.status}`);
