@@ -126,7 +126,8 @@ switch_to() {  # slot  (the switch itself: rewrite include + graceful reload)
 
 schedule_finish() {
   local epoch; epoch=$(cat "$BG/epoch")
-  setsid nohup sh -c "sleep $((KEEP_MINUTES * 60)); '$SELF' finish-if $epoch" >> "$BG/finish.log" 2>&1 < /dev/null &
+  # 9>&- : the timer must not inherit the deploy lock (it would block rollbacks for KEEP_MINUTES).
+  setsid nohup sh -c "sleep $((KEEP_MINUTES * 60)); '$SELF' finish-if $epoch" >> "$BG/finish.log" 2>&1 < /dev/null 9>&- &
   echo "   old slot stays warm for rollback for $KEEP_MINUTES min, then is stopped (container kept)"
 }
 
